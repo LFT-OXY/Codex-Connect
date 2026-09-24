@@ -97,3 +97,17 @@ Existing Harness integration and Desktop update audit skills remain applicable t
 - Use concise, imperative commit subjects. Conventional Commit prefixes such as `feat:`, `fix:`, `docs:`, and `test:` are preferred.
 - Pull requests should explain purpose, affected requirements, validation performed, and linked issues. Include screenshots only for visible UI changes.
 - Never commit ignored reference repositories, secrets, logs, downloads, or local environment files.
+
+## Agent skills
+
+### Issue tracker
+
+Work is tracked in the ATW task directory (`.atw/tasks/<task>/`) with no remote mirror; GitHub Issues are disabled for this repo. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default triage roles, each label string equal to its role name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: the glossary is `docs/project/领域术语表.md` and ADRs live in `docs/adr/`. See `docs/agents/domain.md`.
