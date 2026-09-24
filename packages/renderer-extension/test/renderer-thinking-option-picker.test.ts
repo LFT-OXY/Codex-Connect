@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { rendererThinkingCardPlacement } from "../src/renderer-model-picker-positioning.js";
 import {
+  RENDERER_THINKING_FLOW,
   RENDERER_THINKING_GRADIENT,
   RENDERER_THINKING_MAX_STARS,
   rendererThinkingOptionPresentation,
@@ -107,7 +108,13 @@ describe("Renderer Thinking Option presentation", () => {
       selectedIndex: 0,
       readOnly: true,
     });
-    expect(view.visual).toMatchObject({ position: 0, starCount: 0, starOpacity: 0 });
+    expect(view.visual).toMatchObject({
+      position: 0,
+      starCount: 0,
+      starOpacity: 0,
+      sheenSeconds: 0,
+      driftSeconds: 0,
+    });
   });
 
   it("hides the pill when the Model supports only off", () => {
@@ -184,6 +191,8 @@ describe("Renderer Thinking slider visual", () => {
       },
       starCount: 0,
       starOpacity: 0,
+      sheenSeconds: 0,
+      driftSeconds: 0,
     });
   });
 
@@ -196,7 +205,21 @@ describe("Renderer Thinking slider visual", () => {
       },
       starCount: RENDERER_THINKING_MAX_STARS,
       starOpacity: 1,
+      sheenSeconds: RENDERER_THINKING_FLOW.sheen.fastest,
+      driftSeconds: RENDERER_THINKING_FLOW.drift.fastest,
     });
+  });
+
+  it("flows faster as the position grows", () => {
+    const visuals = [1, 2, 3, 4, 5, 6].map((index) => rendererThinkingSliderVisual(index, 7));
+    visuals.slice(1).forEach((visual, index) => {
+      const previous = visuals[index];
+      expect(visual.sheenSeconds).toBeLessThan(previous?.sheenSeconds ?? -Infinity);
+      expect(visual.driftSeconds).toBeLessThan(previous?.driftSeconds ?? -Infinity);
+    });
+    // 与 prd.md「修订 3 实现记录」写回的数值一致。
+    expect(visuals[0]).toMatchObject({ sheenSeconds: 2.9, driftSeconds: 8.08 });
+    expect(visuals[5]).toMatchObject({ sheenSeconds: 1.4, driftSeconds: 3.5 });
   });
 
   it("grows stars and brightness with the relative position", () => {

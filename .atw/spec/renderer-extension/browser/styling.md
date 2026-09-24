@@ -15,6 +15,7 @@
 - **已知例外**：模型列表与思考卡片的外框共用 `renderer-model-picker.ts` 导出的 `MENU_CLASSES`（`bg-token-dropdown-background/90`、`text-token-foreground` 等 Desktop Tailwind 类），这是为了让两个弹层外观一致，经 `split-model-thinking-pills` 任务确认保留。Desktop 改名这些 token 时两者会一起失去底色。不要再把它扩展到新控件；新弹层的配色放进自己的 `data-codexhost-*` 样式表，用自定义常量加 `light-dark()` 跟随宿主 color-scheme（参见 `renderer-thinking-option-style.ts`、`renderer-usage-control.ts#applyRendererPopoverChrome`）。
 - 动画必须在 `@media (prefers-reduced-motion: reduce)` 下关闭（例如思考滑块的星点闪烁与填充过渡）。
 - 需要"拖动时连续跟随、松手后动画吸附"的控件，用状态属性区分按下和移动，只在真正移动时关闭过渡。例如思考滑块：`pointerdown` 设 `data-dragging="pressed"`，保留 `0.2s ease-out` 过渡，所以点击会以动画吸附；`pointermove` 改为 `"moving"`，样式表只对 `[data-dragging="moving"]` 设 `transition: none`；松手时先删除该属性，再写入吸附位置，过渡才会生效。不要在 `pointerdown` 时就关闭过渡，否则点击会瞬间跳到目标位置。
+- 循环动画需要按状态变速时（例如思考滑块的流动速度随档位变化），**不要改 `animation-duration`**。进行中的动画会按新周期重算进度，产生跳帧。正确做法是：CSS 中的周期固定为基准值，用 `element.getAnimations()` 找到对应的 `CSSAnimation`（按 `animationName` 区分），再调用 `updatePlaybackRate(基准时长 / 目标周期)`。要注意两点：一是新速率在下一帧才生效，测试读取 `playbackRate` 前需要先 `await animation.ready`；二是元素隐藏（例如 popover 关闭）时动画对象不存在，显示后要重新设置速率。见 `renderer-thinking-option-picker.ts#syncFlowSpeed`。
 
 ## 设置页 Tailwind 规则（摘自架构文档，均已在代码中落地）
 

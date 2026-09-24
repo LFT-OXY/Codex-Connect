@@ -36,12 +36,24 @@ const RAIL_INSET = 12;
 /** 与样式表中 28px 的拖块一致；填充右端这段被拖块盖住。 */
 const THUMB_RADIUS = 14;
 
+/** 填充内流动动画的周期（秒）：刚离开第 0 位时最慢，最高档最快。 */
+export const RENDERER_THINKING_FLOW = {
+  sheen: { slowest: 3.2, fastest: 1.4 },
+  drift: { slowest: 9, fastest: 3.5 },
+} as const;
+const SHEEN_ANIMATION = "codexhost-thinking-sheen";
+const DRIFT_ANIMATION = "codexhost-thinking-drift";
+
 export interface RendererThinkingSliderVisual {
   /** 相对位置 `index / (n - 1)`，同时是填充比例。 */
   position: number;
   color: { light: string; dark: string };
   starCount: number;
   starOpacity: number;
+  /** 光泽带扫过一次的周期（秒）；第 0 位没有流动，为 0。 */
+  sheenSeconds: number;
+  /** 星点向右漂移一圈的周期（秒）；第 0 位没有流动，为 0。 */
+  driftSeconds: number;
 }
 
 export interface RendererThinkingSliderPointer {
@@ -67,6 +79,7 @@ interface ThinkingSliderParts {
   slider: HTMLElement;
   rail: HTMLElement;
   fill: HTMLElement;
+  stars: HTMLElement;
   track: HTMLElement;
   thumb: HTMLElement;
   dots: HTMLElement[];
@@ -96,6 +109,11 @@ function interpolate(from: Rgb, to: Rgb, position: number): string {
   return `rgb(${channel(0)}, ${channel(1)}, ${channel(2)})`;
 }
 
+function flowSeconds(range: { slowest: number; fastest: number }, position: number): number {
+  if (position === 0) return 0;
+  return Math.round((range.slowest - (range.slowest - range.fastest) * position) * 100) / 100;
+}
+
 function sliderVisualAt(position: number): RendererThinkingSliderVisual {
   return {
     position,
@@ -117,6 +135,8 @@ function sliderVisualAt(position: number): RendererThinkingSliderVisual {
         ? 0
         : Math.max(1, Math.round(position * position * RENDERER_THINKING_MAX_STARS)),
     starOpacity: position === 0 ? 0 : Math.round((0.4 + 0.6 * position) * 100) / 100,
+    sheenSeconds: flowSeconds(RENDERER_THINKING_FLOW.sheen, position),
+    driftSeconds: flowSeconds(RENDERER_THINKING_FLOW.drift, position),
   };
 }
 
@@ -176,37 +196,68 @@ function popoverOpen(element: HTMLElement): boolean {
 function sliderParts(control: RendererThinkingOptionPickerControl): ThinkingSliderParts {
   const rail = control.slider.querySelector<HTMLElement>("[data-codexhost-thinking-rail]");
   const fill = control.slider.querySelector<HTMLElement>("[data-codexhost-thinking-fill]");
+  const stars = control.slider.querySelector<HTMLElement>("[data-codexhost-thinking-stars]");
   const track = control.slider.querySelector<HTMLElement>("[data-codexhost-thinking-track]");
   const thumb = control.slider.querySelector<HTMLElement>("[data-codexhost-thinking-thumb]");
-  if (!rail || !fill || !track || !thumb) {
+  if (!rail || !fill || !stars || !track || !thumb) {
     throw new Error("Thinking slider structure is unavailable");
   }
   return {
     slider: control.slider,
     rail,
     fill,
+    stars,
     track,
     thumb,
     dots: [...track.querySelectorAll<HTMLElement>("[data-codexhost-thinking-dot]")],
   };
 }
 
-function createStar(index: number): HTMLElement {
+function createStar(index: number, half: 0 | 1): HTMLElement {
   const star = document.createElement("span");
   star.dataset.codexhostThinkingStar = "true";
-  // 黄金分割序列让星点在填充段内稳定、均匀地散开；右端留出拖块盖住的部分。
+  // 黄金分割序列让星点稳定、均匀地散开。星点层是填充的两倍宽，
+  // 左右两半各放一份，向右平移半层后正好首尾相接，漂移才能无缝循环；
+  // 每半只铺到拖块之前，静止（减少动态效果）时星点也不会藏在拖块下。
   const spread = ((index * 0.618034 + 0.31) % 1) * 0.92 + 0.04;
-  star.style.left = `calc((100% - ${THUMB_RADIUS}px) * ${spread.toFixed(4)})`;
+  star.style.left = `calc(${half * 50}% + (50% - ${THUMB_RADIUS}px) * ${spread.toFixed(4)})`;
   star.style.top = `${(((index * 0.381966 + 0.17) % 1) * 60 + 20).toFixed(2)}%`;
   star.style.animationDelay = `${((index * 0.73) % 2.8).toFixed(2)}s`;
+  // 每 3 颗放大一颗，在较粗的填充上更显眼。
+  if (index % 3 === 2) {
+    star.style.width = "3px";
+    star.style.height = "3px";
+  }
   return star;
 }
 
-function syncStars(fill: HTMLElement, count: number): void {
-  const stars = fill.querySelectorAll("[data-codexhost-thinking-star]");
+function syncStars(layer: HTMLElement, count: number): void {
+  const stars = layer.querySelectorAll("[data-codexhost-thinking-star]");
   // 拖动时星点数连续变化，只增删差额，已有星点的闪烁不被重置。
-  for (let index = stars.length; index < count; index += 1) fill.append(createStar(index));
-  for (let index = stars.length - 1; index >= count; index -= 1) stars[index]?.remove();
+  for (let index = stars.length / 2; index < count; index += 1) {
+    layer.append(createStar(index, 0), createStar(index, 1));
+  }
+  for (let index = stars.length - 1; index >= count * 2; index -= 1) stars[index]?.remove();
+}
+
+/**
+ * 按档位调整流动速度。改 `animation-duration` 会让进行中的动画按新周期重算进度而跳帧，
+ * 因此只改播放速率：`updatePlaybackRate` 保持当前进度连续。
+ */
+function syncFlowSpeed(fill: HTMLElement, visual: RendererThinkingSliderVisual): void {
+  for (const animation of fill.getAnimations({ subtree: true })) {
+    if (!(animation instanceof CSSAnimation)) continue;
+    const seconds =
+      animation.animationName === SHEEN_ANIMATION
+        ? visual.sheenSeconds
+        : animation.animationName === DRIFT_ANIMATION
+          ? visual.driftSeconds
+          : 0;
+    const baseDuration = animation.effect?.getTiming().duration;
+    if (seconds === 0 || typeof baseDuration !== "number") continue;
+    const rate = baseDuration / (seconds * 1000);
+    if (Math.abs(animation.playbackRate - rate) > 0.001) animation.updatePlaybackRate(rate);
+  }
 }
 
 function applyDisplay(control: RendererThinkingOptionPickerControl): void {
@@ -225,7 +276,8 @@ function applyDisplay(control: RendererThinkingOptionPickerControl): void {
       : `calc(${RAIL_INSET}px + (100% - ${RAIL_INSET * 2}px) * ${position.toFixed(4)})`;
   parts.fill.style.background = `linear-gradient(90deg, light-dark(${origin.light}, ${origin.dark}), ${color})`;
   parts.fill.style.setProperty("--codexhost-thinking-star-opacity", String(visual.starOpacity));
-  syncStars(parts.fill, visual.starCount);
+  syncStars(parts.stars, visual.starCount);
+  syncFlowSpeed(parts.fill, visual);
   parts.thumb.style.left = `${(position * 100).toFixed(4)}%`;
   parts.slider.style.setProperty("--codexhost-thinking-accent", color);
   parts.dots.forEach((dot, dotIndex) => {
@@ -248,6 +300,11 @@ function rebuildSlider(control: RendererThinkingOptionPickerControl): void {
   rail.dataset.codexhostThinkingRail = "true";
   const fill = document.createElement("div");
   fill.dataset.codexhostThinkingFill = "true";
+  const sheen = document.createElement("span");
+  sheen.dataset.codexhostThinkingSheen = "true";
+  const stars = document.createElement("span");
+  stars.dataset.codexhostThinkingStars = "true";
+  fill.append(sheen, stars);
   const track = document.createElement("div");
   track.dataset.codexhostThinkingTrack = "true";
   track.style.left = `${RAIL_INSET}px`;
@@ -426,8 +483,10 @@ export function mountRendererThinkingOptionPicker(
   const open = (): void => {
     if (trigger.disabled || popoverOpen(card)) return;
     control.displayIndex = null;
+    // 先在隐藏状态下写好位置，显示时不会产生过渡；显示后流动动画才存在，再应用一次以设置其速率。
     applyDisplay(control);
     card.showPopover();
+    applyDisplay(control);
     positionCard(control);
     slider.focus();
   };

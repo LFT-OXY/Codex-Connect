@@ -202,6 +202,81 @@ test("reduced motion removes slider transitions", async ({ page }) => {
   }
 });
 
+interface FlowAnimation {
+  id: string;
+  name: string;
+  rate: number;
+  time: number;
+}
+
+async function flowAnimations(page: Page): Promise<FlowAnimation[]> {
+  return page.locator("[data-codexhost-thinking-fill]").evaluate(async (fill) => {
+    const animations = fill
+      .getAnimations({ subtree: true })
+      .filter(
+        (animation): animation is CSSAnimation =>
+          animation instanceof CSSAnimation &&
+          animation.animationName !== "codexhost-thinking-twinkle",
+      );
+    // 速率变更在下一帧才生效，等它落定后再读取。
+    await Promise.all(animations.map((animation) => animation.ready));
+    return animations
+      .map((animation) => {
+        // 用 id 标记动画对象，重建出的新动画没有这个标记。
+        animation.id ||= crypto.randomUUID();
+        return {
+          id: animation.id,
+          name: animation.animationName,
+          rate: animation.playbackRate,
+          time: Number(animation.currentTime),
+        };
+      })
+      .sort((left, right) => left.name.localeCompare(right.name));
+  });
+}
+
+test("the fill flows faster at higher options without restarting while dragging", async ({
+  page,
+}) => {
+  await setup(page, CLAUDE_CODE, "low");
+  const pill = page.locator('[data-codexhost-thinking-control="test-composer"] > button');
+  const slider = page.getByRole("slider", { name: "Thinking" });
+  await pill.click();
+  const low = await flowAnimations(page);
+  expect(low.map(({ name }) => name)).toEqual([
+    "codexhost-thinking-drift",
+    "codexhost-thinking-sheen",
+  ]);
+
+  await slider.press("ArrowRight");
+  await expect(pill).toHaveText("Medium");
+  const medium = await flowAnimations(page);
+  medium.forEach((animation, index) => {
+    expect(animation.rate).toBeGreaterThan(low[index]?.rate ?? Infinity);
+  });
+
+  const start = await railPoint(page, 3, 7);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  const before = await flowAnimations(page);
+  const max = await railPoint(page, 6, 7);
+  await page.mouse.move(max.x, max.y, { steps: 6 });
+  const during = await flowAnimations(page);
+  expect(during.map(({ id }) => id)).toEqual(before.map(({ id }) => id));
+  during.forEach((animation, index) => {
+    expect(animation.rate).toBeGreaterThan(before[index]?.rate ?? Infinity);
+    expect(animation.time).toBeGreaterThanOrEqual(before[index]?.time ?? Infinity);
+  });
+  await page.mouse.up();
+});
+
+test("reduced motion stops the fill from flowing", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await setup(page, CLAUDE_CODE, "high");
+  await page.locator('[data-codexhost-thinking-control="test-composer"] > button').click();
+  expect(await flowAnimations(page)).toEqual([]);
+});
+
 test("a single option is shown read-only", async ({ page }) => {
   await setup(page, ["minimal"], "minimal");
   const pill = page.locator('[data-codexhost-thinking-control="test-composer"] > button');

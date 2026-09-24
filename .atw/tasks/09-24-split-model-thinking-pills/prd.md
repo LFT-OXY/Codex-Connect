@@ -182,8 +182,28 @@
 - **纯函数**：`rendererThinkingSliderPointerAt(clientX, track, count) → { position, index }` **替换**了原 `rendererThinkingSliderIndexAt`，旧函数已删除。它按 track 区间（不含两端内缩）计算连续位置，`index = round(position × (n-1))`，与旧函数对同一输入给出相同下标。展示时，连续位置通过内部的 `sliderVisualAt(position)` 算颜色和星点，`rendererThinkingSliderVisual(index, count)` 也基于它实现。
 - **控件状态**：新增 `dragPosition`。拖动中它等于指针的连续位置，拖块和填充跟随它；其余时间为 null，拖块停在 `displayIndex` 或已选项对应的点上。大字始终显示 `displayIndex` 对应的最近选项。
 - **动画**：填充 `width`、拖块 `left`、未到达点的 `opacity` 都使用 `0.2s ease-out`。按下时只把 `displayIndex` 吸附到最近的点，保留过渡，所以点击也有动画。开始移动后才用 `data-dragging="moving"` 关闭这三项过渡，改为连续跟随。星点数随连续位置变化时只增删差额，已有星点的闪烁不会重来。
-- **参考图细节**：大号选项名使用当前位置的渐变色，和参考图的蓝色标题一致；这个颜色也写入 `--codexhost-thinking-accent`，供焦点描边使用。每第 3 颗星点为 3px，其余为 2px，保证在较粗的填充上看得清。星点横向只分布在填充中不被拖块盖住的部分，即 `(填充宽度 - 14px 拖块半径)` 的 4%–96%。已到达的点隐藏（`data-reached="true"`）。
+- **参考图细节**：大号选项名使用当前位置的渐变色，和参考图的蓝色标题一致；这个颜色也写入 `--codexhost-thinking-accent`，供焦点描边使用。每第 3 颗星点为 3px，其余为 2px，保证在较粗的填充上看得清。星点横向只分布在填充中不被拖块盖住的部分，即 `(填充宽度 - 14px 拖块半径)` 的 4%–96%。修订 3 后这条改为作用在星点漂移层的每一半上，见「修订 3 实现记录」。已到达的点隐藏（`data-reached="true"`）。
 - **测试**：`test/renderer-thinking-option-picker.test.ts` 覆盖连续位置、越界与退化 track，以及吸附下标与最近点位一致。e2e 新增两个用例：一个验证连续跟随、按下时保留过渡、移动后关闭过渡、松手吸附；另一个验证减少动态效果时过渡为 `0s`。尺寸等纯视觉效果不做 e2e 断言。模型列表宽度 360 的断言见 `test/renderer-model-picker.test.ts`。
+
+## 验收反馈修订 3：填充的流动动画（2026-09-25）
+
+用户在真实 Desktop 中目测修订 1 后反馈：蓝条"好像只有拉伸，没有动效"，希望填充内部有**流动感**。截图见 `research/thinking-card-feedback-flow.png`。用户在两组方案中选定：**光泽流动加星点漂移**，**档位越高流得越快**。
+
+- **光泽带**：一道柔和的半透明白色高光带，在填充内从左向右循环扫过，被填充的圆角裁剪。填充末端被拖块盖住的部分不需要看得见。颜色由本项目自定义，不引用 Desktop token。
+- **星点漂移**：星点持续向右缓慢漂移，越过填充右端后从左端重新出现，形成循环，并保留原有的闪烁。星点数量和亮度规则不变（`round(position² × 16)`、`0.4 + 0.6 × position`）。
+- **速度随档位变化**：光泽扫过一次的周期和星点漂移一圈的周期，都随 `position` 单调缩短，即档位越高流得越快。具体数值在实现时按观感确定，需要写回本文件。第 0 位没有填充，也就没有流动。
+- **拖动中**：速度跟随连续位置变化，但不能因此让动画重新开始或跳帧。实现时要验证改周期会不会引起跳变；如果会，要采用不跳变的做法，或者只在吸附后更新速度，并把最终做法写回本文件。
+- **减少动态效果**：`prefers-reduced-motion: reduce` 下关闭光泽带和星点漂移，星点保持静态。这条沿用修订 1 的规则。
+- **展示接口**：在 `RendererThinkingSliderVisual` 中加入流动周期字段（光泽周期和漂移周期，单位为秒），作为测试接缝。单测需要断言：第 0 位没有流动；周期随位置严格递减；首末两档的值与写回的数值一致。
+- **不在本次范围**：流动颜色随主题变化以外的新配色、拖块本身的动画、卡片其他部分的动画。
+
+### 修订 3 实现记录
+
+- **结构**：填充 `[data-codexhost-thinking-fill]` 内有两层。第一层是光泽带 `[data-codexhost-thinking-sheen]`：宽为填充的 40%，白色渐变峰值透明度 0.32，用 `transform: translateX(-100%) → translateX(250%)` 扫过，前 75% 时间扫完，剩余时间停顿。第二层是星点层 `[data-codexhost-thinking-stars]`：宽为填充的 200%，每颗星点在左右两半各放一份，层以 `translateX(-50%) → 0` 线性循环，因此星点向右漂移时首尾无缝衔接。每半中的星点仍只分布在 `(填充宽度 - 14px 拖块半径)` 的 4%–96% 内，这样减少动态效果时星点静止在 `translateX(0)`，也不会藏在拖块下。
+- **数值**：`RENDERER_THINKING_FLOW = { sheen: { slowest: 3.2, fastest: 1.4 }, drift: { slowest: 9, fastest: 3.5 } }`。周期 `= slowest - (slowest - fastest) × position`，保留两位小数，第 0 位为 0。7 档时，光泽周期从第 1 档的 2.9s 降到最高档的 1.4s，漂移周期从 8.08s 降到 3.5s。
+- **不跳帧的做法**：已在 Chromium 中实测（6s 周期、600px 线性位移，播放约 1.5s 后分别处理两个元素）：一个把 `animation-duration` 改为 2s，位移从 149px 跳到 455px，进度从 25% 跳到 76%；另一个调用 `updatePlaybackRate(3)`，位移从 149px 到 153.7px，只是两帧的正常推进。所以直接改周期会跳变，改速率不会。因此 CSS 中的周期固定为基准值（光泽 2.4s、漂移 6s），`syncFlowSpeed` 用 `getAnimations({ subtree: true })` 找到这两个 `CSSAnimation`，通过 `updatePlaybackRate(基准时长 / 目标周期)` 调整速度。当前进度保持连续，拖动中也会随连续位置实时变速。卡片隐藏时动画不存在，所以 `open()` 调用两次 `applyDisplay`：`showPopover()` 前一次，在隐藏状态下写好位置，不产生过渡；之后一次，设置流动速率，此时位置不变，也不会触发过渡。第 0 位时流动动画仍在运行，但填充宽度为 0，看不见。
+- **减少动态效果**：光泽带 `display: none`，星点层和星点都没有动画。
+- **测试**：单测断言第 0 位周期为 0、最高档等于 `fastest`、周期随档位严格递减。e2e 断言三点：档位上升后两个动画的 `playbackRate` 都变大；拖动中动画不重建（用 `Animation.id` 标记同一对象），且 `currentTime` 不回退；减少动态效果时没有流动动画。
 
 ## Acceptance Criteria
 
@@ -204,3 +224,5 @@
 - [ ] （修订 1）滑块轨道约 24px 高、呈胶囊形，拖块为约 28px 的白色圆形并压在轨道上；卡片标题与 Model 名居中；整体与 `research/thinking-card-reference.png` 一致（闪电、重置、`>` 除外）。
 - [ ] （修订 1）拖动时拖块与填充连续跟随指针，松手、点击或按 ←/→ 时带约 200ms 的过渡吸附到选项点；`prefers-reduced-motion` 下没有过渡。
 - [ ] （修订 2）模型列表首选宽度为 360px，窄窗口下收回到视口以内。
+- [ ] （修订 3）填充内有从左向右循环的光泽带，星点持续向右漂移并循环出现；档位越高，两者都流得越快；第 0 位没有流动。
+- [ ] （修订 3）拖动中流动不重启、不跳帧；`prefers-reduced-motion` 下没有光泽扫动和星点漂移。

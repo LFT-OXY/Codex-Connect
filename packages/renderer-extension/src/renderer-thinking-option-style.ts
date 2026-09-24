@@ -46,6 +46,39 @@ export function ensureRendererThinkingOptionStyle(ownerDocument: Document): void
       top: 0;
       bottom: 0;
     }
+    [data-codexhost-thinking-sheen] {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 40%;
+      background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0),
+        rgba(255, 255, 255, 0.32),
+        rgba(255, 255, 255, 0)
+      );
+      transform: translateX(-100%);
+      animation: codexhost-thinking-sheen 2.4s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes codexhost-thinking-sheen {
+      0% { transform: translateX(-100%); }
+      75%, 100% { transform: translateX(250%); }
+    }
+    [data-codexhost-thinking-stars] {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 200%;
+      animation: codexhost-thinking-drift 6s linear infinite;
+      pointer-events: none;
+    }
+    @keyframes codexhost-thinking-drift {
+      from { transform: translateX(-50%); }
+      to { transform: translateX(0); }
+    }
     [data-codexhost-thinking-star] {
       position: absolute;
       width: 2px;
@@ -55,10 +88,6 @@ export function ensureRendererThinkingOptionStyle(ownerDocument: Document): void
       box-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
       opacity: var(--codexhost-thinking-star-opacity, 0);
       animation: codexhost-thinking-twinkle 2.8s ease-in-out infinite;
-    }
-    [data-codexhost-thinking-star]:nth-child(3n) {
-      width: 3px;
-      height: 3px;
     }
     @keyframes codexhost-thinking-twinkle {
       0%, 100% { opacity: var(--codexhost-thinking-star-opacity, 0); }
@@ -102,8 +131,12 @@ export function ensureRendererThinkingOptionStyle(ownerDocument: Document): void
       transition: none;
     }
     @media (prefers-reduced-motion: reduce) {
-      [data-codexhost-thinking-star] {
+      [data-codexhost-thinking-star],
+      [data-codexhost-thinking-stars] {
         animation: none;
+      }
+      [data-codexhost-thinking-sheen] {
+        display: none;
       }
       [data-codexhost-thinking-fill],
       [data-codexhost-thinking-dot],
