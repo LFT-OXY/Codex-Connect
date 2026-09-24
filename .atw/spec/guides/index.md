@@ -17,6 +17,19 @@ These guides help you **ask the right questions before coding**.
 
 ---
 
+## 项目通用约定
+
+各包的 spec 默认以下列约定为基础，只补充本包特有的规则。
+
+| 文档 | 适用范围 |
+|------|----------|
+| [TypeScript Workspace 通用约定](./typescript-workspace.md) | `packages/*`、`packages/adapters/*`：包结构、导入、zod 契约、错误形态、测试和验证命令 |
+| [Rust Workspace 通用约定](./rust-workspace.md) | `crates/*`、`tools/gate-a/native`：职责边界、`PlatformError`、平台分支、测试 |
+
+各包 spec 位于 `.atw/spec/<package>/<layer>/`。层名按实际运行形态划分：`node`（Node.js 包）、`browser`（renderer-extension）、`rust`（Rust crate）。
+
+---
+
 ## Available Guides
 
 | Guide | Purpose | When to Use |
