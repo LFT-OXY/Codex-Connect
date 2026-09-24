@@ -21,39 +21,39 @@ the rest conversationally.
 
 ## Status (update the checkboxes as you complete each item)
 
-- [ ] Fill guidelines for adapters
-- [ ] Fill guidelines for @codexhost/desktop-control
-- [ ] Fill guidelines for @codexhost/harness-adapter
-- [ ] Fill guidelines for @codexhost/harness-broker
-- [ ] Fill guidelines for @codexhost/harness-discovery
-- [ ] Fill guidelines for @codexhost/host-runtime
-- [ ] Fill guidelines for @codexhost/mapping-store
-- [ ] Fill guidelines for @codexhost/protocol-core
-- [ ] Fill guidelines for @codexhost/renderer-extension
-- [ ] Fill guidelines for @codexhost/repository-automation
-- [ ] Fill guidelines for @codexhost/shared-contracts
-- [ ] Fill guidelines for @codexhost/update-manager
-- [ ] Fill guidelines for @codexhost/adapter-antigravity
-- [ ] Fill guidelines for @codexhost/adapter-claude-code
-- [ ] Fill guidelines for @codexhost/adapter-codebuddy
-- [ ] Fill guidelines for @codexhost/adapter-cursor-cli
-- [ ] Fill guidelines for @codexhost/adapter-deepseek-harness
-- [ ] Fill guidelines for @codexhost/adapter-grok
-- [ ] Fill guidelines for @codexhost/adapter-hermes
-- [ ] Fill guidelines for @codexhost/adapter-kimi-code
-- [ ] Fill guidelines for @codexhost/adapter-kiro-cli
-- [ ] Fill guidelines for @codexhost/adapter-omp
-- [ ] Fill guidelines for @codexhost/adapter-opencode
-- [ ] Fill guidelines for @codexhost/adapter-pi
-- [ ] Fill guidelines for @codexhost/adapter-qoder
-- [ ] Fill guidelines for @codexhost/adapter-qoder-cn
-- [ ] Fill guidelines for @codexhost/adapter-workbuddy
-- [ ] Fill guidelines for codexhost-launcher
-- [ ] Fill guidelines for codexhost-platform
-- [ ] Fill guidelines for codexhost-shim
-- [ ] Fill guidelines for codexhost-updater
-- [ ] Fill guidelines for codexhost-gate-a-native
-- [ ] Add code examples
+- [x] Fill guidelines for adapters
+- [x] Fill guidelines for @codexhost/desktop-control
+- [x] Fill guidelines for @codexhost/harness-adapter
+- [x] Fill guidelines for @codexhost/harness-broker
+- [x] Fill guidelines for @codexhost/harness-discovery
+- [x] Fill guidelines for @codexhost/host-runtime
+- [x] Fill guidelines for @codexhost/mapping-store
+- [x] Fill guidelines for @codexhost/protocol-core
+- [x] Fill guidelines for @codexhost/renderer-extension
+- [x] Fill guidelines for @codexhost/repository-automation
+- [x] Fill guidelines for @codexhost/shared-contracts
+- [x] Fill guidelines for @codexhost/update-manager
+- [x] Fill guidelines for @codexhost/adapter-antigravity
+- [x] Fill guidelines for @codexhost/adapter-claude-code
+- [x] Fill guidelines for @codexhost/adapter-codebuddy
+- [x] Fill guidelines for @codexhost/adapter-cursor-cli
+- [x] Fill guidelines for @codexhost/adapter-deepseek-harness
+- [x] Fill guidelines for @codexhost/adapter-grok
+- [x] Fill guidelines for @codexhost/adapter-hermes
+- [x] Fill guidelines for @codexhost/adapter-kimi-code
+- [x] Fill guidelines for @codexhost/adapter-kiro-cli
+- [x] Fill guidelines for @codexhost/adapter-omp
+- [x] Fill guidelines for @codexhost/adapter-opencode
+- [x] Fill guidelines for @codexhost/adapter-pi
+- [x] Fill guidelines for @codexhost/adapter-qoder
+- [x] Fill guidelines for @codexhost/adapter-qoder-cn
+- [x] Fill guidelines for @codexhost/adapter-workbuddy
+- [x] Fill guidelines for codexhost-launcher
+- [x] Fill guidelines for codexhost-platform
+- [x] Fill guidelines for codexhost-shim
+- [x] Fill guidelines for codexhost-updater
+- [x] Fill guidelines for codexhost-gate-a-native
+- [x] Add code examples
 
 ---
 
