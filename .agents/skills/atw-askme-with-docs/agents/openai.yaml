@@ -1,0 +1,5 @@
+interface:
+  display_name: "ATW Ask Me with Docs"
+  short_description: "设计访谈计划并编写其文档"
+policy:
+  allow_implicit_invocation: false

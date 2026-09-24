@@ -1,0 +1,5 @@
+interface:
+  display_name: "ATW Ask Me"
+  short_description: "通过访谈完善计划"
+policy:
+  allow_implicit_invocation: false

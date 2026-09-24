@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>{{TITLE}}</title>
+    <script>
+      // 必须内联且前置：先定主题再渲染，避免首帧闪白/闪黑
+      (() => {
+        const saved = localStorage.getItem("oxy-theme");
+        const sys = window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+        document.documentElement.dataset.theme = saved || sys;
+      })();
+    </script>
+    <link rel="stylesheet" href="{{ASSET_PREFIX}}course.css" />
+  </head>
+  <body>
+    <header class="topbar" data-od-id="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <span class="brand-mark">O</span>Oxy Learning Hub
+          <span class="crumb">{{CRUMB}}</span>
+        </div>
+        <div class="top-right">
+          <button
+            class="theme-toggle"
+            id="theme-toggle"
+            type="button"
+            aria-label="切换到深色主题"
+          >
+            <svg
+              class="icon-sun"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="4.2" />
+              <path
+                d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"
+              />
+            </svg>
+            <svg
+              class="icon-moon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d="M20.5 14.4A8.6 8.6 0 1 1 9.6 3.5a6.9 6.9 0 0 0 10.9 10.9Z"
+              />
+            </svg>
+            <span id="theme-label">深色</span>
+          </button>
+          <div class="status" id="lesson-status" aria-live="polite">
+            <span class="dot"></span>尚未标记完成
+          </div>
+        </div>
+      </div>
+      <div class="progress-track">
+        <div class="progress-line" id="progress-line"></div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <!-- 目录条目由 course.js 依据正文 section[id] 自动生成，课程不需要手写 -->
+      <aside class="toc" data-od-id="toc">
+        <p class="toc-head">本课结构</p>
+        <ol id="toc-list"></ol>
+        <div class="toc-meter">
+          <span id="read-label">已读 0%</span>
+          <div class="bar"><div class="fill" id="read-fill"></div></div>
+        </div>
+      </aside>
+
+      <main data-od-id="lesson">
+        <p class="kicker">{{KICKER}}</p>
+        <h1>{{TITLE}}</h1>
+        <p class="subtitle">{{SUBTITLE}}</p>
+        <div class="facts">{{FACTS}}</div>
+
+        <!--
+          {{CONTENT}}：本课正文，按 teaching-mode.md 的结构写成若干
+          <section id="s-xxx"><h2><span class="n">01</span>小标题</h2>…</section>，
+          编号建议 01–07（目标 / 旧知识提取 / 核心解释 / 示例 / 先预测再揭晓 /
+          练习 / 来源），导航固定为下面的 08。
+        -->
+        {{CONTENT}}
+
+        <section id="s-nav" data-od-id="section-nav">
+          <h2><span class="n">08</span>课程导航</h2>
+          {{NAVIGATION}}
+        </section>
+
+        <div class="note" data-od-id="continue-chat" style="margin-top: 34px">
+          <span class="label">回到对话继续</span>
+          {{CONTINUE}}
+        </div>
+
+        <div class="finish" data-od-id="finish">
+          <button class="btn-primary" id="complete-lesson" type="button">
+            标记本课已完成
+          </button>
+          <p>
+            标记只记录进度，不代表已经掌握——真正的判断依据是你在对话里的表述。
+          </p>
+        </div>
+      </main>
+
+      <!-- {{ASIDE}}：随读卡片，若干个 <div class="aside-card"><h4>…</h4>…</div> -->
+      <aside class="aside-notes" data-od-id="aside-notes">{{ASIDE}}</aside>
+    </div>
+
+    <script defer src="{{ASSET_PREFIX}}course.js"></script>
+  </body>
+</html>

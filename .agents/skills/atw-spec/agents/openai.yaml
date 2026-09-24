@@ -1,0 +1,5 @@
+interface:
+  display_name: "ATW Spec"
+  short_description: "将对话转化为技术规格书"
+policy:
+  allow_implicit_invocation: false

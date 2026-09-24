@@ -1,0 +1,5 @@
+interface:
+  display_name: "ATW Handoff"
+  short_description: "将一次对话浓缩为一次交接"
+policy:
+  allow_implicit_invocation: false

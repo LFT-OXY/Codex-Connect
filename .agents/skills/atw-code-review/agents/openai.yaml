@@ -1,0 +1,3 @@
+interface:
+  display_name: "ATW Code Review"
+  short_description: "审查标准和规范的差异"

@@ -1,0 +1,5 @@
+interface:
+  display_name: "ATW Tickets"
+  short_description: "将计划拆分为“追踪子弹”工单"
+policy:
+  allow_implicit_invocation: false

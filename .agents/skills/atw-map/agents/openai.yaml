@@ -1,0 +1,5 @@
+interface:
+  display_name: "ATW Map"
+  short_description: "将大型工作任务映射为决策工单"
+policy:
+  allow_implicit_invocation: false

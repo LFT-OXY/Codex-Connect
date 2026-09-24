@@ -1,0 +1,5 @@
+interface:
+  display_name: "ATW Improve Codebase Architecture"
+  short_description: "发现并深入访谈架构改进机会"
+policy:
+  allow_implicit_invocation: false

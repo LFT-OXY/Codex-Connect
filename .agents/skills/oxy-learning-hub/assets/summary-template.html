@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>{{TITLE}}</title>
+    <script>
+      // 必须前置设置主题，避免页面首帧闪白或闪黑。
+      (() => {
+        const saved = localStorage.getItem("oxy-theme");
+        const systemDark = window.matchMedia(
+          "(prefers-color-scheme: dark)",
+        ).matches;
+        document.documentElement.dataset.theme =
+          saved || (systemDark ? "dark" : "light");
+      })();
+    </script>
+    <style>
+      :root,
+      :root[data-theme="light"] {
+        --bg: oklch(0.985 0.002 260);
+        --surface: oklch(1 0 0);
+        --raised: oklch(0.968 0.004 260);
+        --fg: oklch(0.22 0.014 265);
+        --muted: oklch(0.53 0.012 265);
+        --border: oklch(0.912 0.006 265);
+        --accent: oklch(0.5 0.15 262);
+        --accent-hover: oklch(0.42 0.15 262);
+        --on-accent: oklch(0.99 0.005 262);
+        --code-bg: oklch(0.19 0.014 265);
+        --code-fg: oklch(0.92 0.01 265);
+        --font-display:
+          system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+        --display-weight: 660;
+        --display-tracking: -0.03em;
+        --shadow:
+          0 1px 2px color-mix(in oklch, var(--fg) 6%, transparent),
+          0 8px 24px -16px color-mix(in oklch, var(--fg) 22%, transparent);
+      }
+
+      :root[data-theme="dark"] {
+        --bg: oklch(0.185 0.014 250);
+        --surface: oklch(0.225 0.016 250);
+        --raised: oklch(0.265 0.018 250);
+        --fg: oklch(0.945 0.008 250);
+        --muted: oklch(0.705 0.014 250);
+        --border: oklch(0.325 0.018 250);
+        --accent: oklch(0.8 0.13 178);
+        --accent-hover: oklch(0.88 0.13 178);
+        --on-accent: oklch(0.2 0.05 178);
+        --code-bg: oklch(0.155 0.014 250);
+        --code-fg: oklch(0.9 0.01 250);
+        --font-display:
+          ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+        --display-weight: 600;
+        --display-tracking: -0.015em;
+        --shadow: 0 1px 2px color-mix(in oklch, black 24%, transparent);
+      }
+
+      :root {
+        --accent-soft: color-mix(in oklch, var(--accent) 12%, var(--surface));
+        --font-body:
+          "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
+          sans-serif;
+        --font-mono:
+          ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+        --radius: 8px;
+        --radius-lg: 12px;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      body {
+        margin: 0;
+        color: var(--fg);
+        background: var(--bg);
+        font-family: var(--font-body);
+        font-size: 16px;
+        line-height: 1.76;
+        -webkit-font-smoothing: antialiased;
+        transition:
+          color 0.2s ease,
+          background 0.2s ease;
+      }
+
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+        text-underline-offset: 0.2em;
+      }
+
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        border-bottom: 1px solid var(--border);
+        background: color-mix(in oklch, var(--bg) 86%, transparent);
+        backdrop-filter: saturate(1.3) blur(12px);
+      }
+
+      .topbar-inner {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        width: min(84rem, 100%);
+        height: 56px;
+        margin-inline: auto;
+        padding: 0 32px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 620;
+        letter-spacing: -0.01em;
+      }
+
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        color: var(--on-accent);
+        background: var(--accent);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .document-type {
+        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        letter-spacing: 0.02em;
+      }
+
+      .document-type::before {
+        content: "/";
+        margin-right: 10px;
+        color: var(--border);
+      }
+
+      .theme-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: 32px;
+        margin-left: auto;
+        padding: 0 12px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--fg);
+        background: var(--surface);
+        font-size: 12.5px;
+      }
+
+      .theme-toggle:hover {
+        border-color: var(--fg);
+        background: var(--raised);
+      }
+
+      .theme-toggle svg {
+        display: block;
+        width: 14px;
+        height: 14px;
+      }
+
+      .theme-toggle .icon-sun {
+        display: none;
+      }
+
+      :root[data-theme="dark"] .theme-toggle .icon-sun {
+        display: block;
+      }
+
+      :root[data-theme="dark"] .theme-toggle .icon-moon {
+        display: none;
+      }
+
+      .progress-track,
+      .progress-line {
+        height: 2px;
+      }
+
+      .progress-line {
+        width: 0;
+        background: var(--accent);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 15rem minmax(0, 48rem);
+        gap: 48px;
+        width: min(72rem, calc(100% - 64px));
+        margin-inline: auto;
+        padding: 48px 0 104px;
+      }
+
+      .toc {
+        position: sticky;
+        top: 88px;
+        align-self: start;
+        max-height: calc(100vh - 112px);
+        overflow: auto;
+      }
+
+      .toc-head,
+      .kicker {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .toc-head {
+        margin: 0 0 14px;
+        color: var(--muted);
+      }
+
+      .toc ul,
+      .toc ol {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .toc ul ul,
+      .toc ol ol,
+      .toc ul ol,
+      .toc ol ul {
+        margin-left: 18px;
+      }
+
+      .toc li {
+        margin: 0;
+      }
+
+      .toc a {
+        display: block;
+        padding: 6px 0;
+        color: var(--muted);
+        font-size: 13.5px;
+        line-height: 1.5;
+        transition: color 0.15s ease;
+      }
+
+      .toc a:hover,
+      .toc a.is-active {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      main {
+        min-width: 0;
+      }
+
+      .document-header {
+        margin-bottom: 48px;
+      }
+
+      .kicker {
+        display: inline-flex;
+        margin: 0 0 20px;
+        padding: 5px 11px;
+        border-radius: 999px;
+        color: var(--accent);
+        background: var(--accent-soft);
+      }
+
+      h1,
+      h2 {
+        font-family: var(--font-display);
+        font-weight: var(--display-weight);
+        letter-spacing: var(--display-tracking);
+        text-wrap: balance;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(32px, 5vw, 48px);
+        line-height: 1.15;
+      }
+
+      .meta {
+        margin: 18px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      h2 {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin: 56px 0 12px;
+        scroll-margin-top: 88px;
+        font-size: 22px;
+        line-height: 1.35;
+      }
+
+      h2::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+
+      h3 {
+        margin: 30px 0 8px;
+        scroll-margin-top: 88px;
+        font-size: 17px;
+        line-height: 1.45;
+      }
+
+      p {
+        margin: 12px 0;
+        text-wrap: pretty;
+      }
+
+      ul,
+      ol {
+        padding-left: 1.25em;
+      }
+
+      li {
+        margin: 7px 0;
+      }
+
+      li::marker {
+        color: var(--muted);
+      }
+
+      blockquote {
+        margin: 22px 0;
+        padding: 14px 18px;
+        border-left: 2px solid var(--accent);
+        border-radius: 0 var(--radius) var(--radius) 0;
+        color: var(--muted);
+        background: var(--surface);
+      }
+
+      blockquote > :first-child {
+        margin-top: 0;
+      }
+
+      blockquote > :last-child {
+        margin-bottom: 0;
+      }
+
+      code {
+        font-family: var(--font-mono);
+      }
+
+      :not(pre) > code {
+        padding: 2px 6px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        background: var(--raised);
+        font-size: 0.87em;
+      }
+
+      pre {
+        overflow-x: auto;
+        margin: 20px 0;
+        padding: 18px 20px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--code-fg);
+        background: var(--code-bg);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        line-height: 1.78;
+      }
+
+      table {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        margin: 22px 0;
+        border-collapse: collapse;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+
+      th,
+      td {
+        padding: 11px 13px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: var(--raised);
+        font-size: 14px;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      details {
+        margin: 18px 0;
+        padding: 14px 18px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      summary {
+        cursor: pointer;
+        font-weight: 620;
+      }
+
+      hr {
+        margin: 48px 0;
+        border: 0;
+        border-top: 1px solid var(--border);
+      }
+
+      img,
+      video {
+        max-width: 100%;
+        height: auto;
+        border-radius: var(--radius-lg);
+      }
+
+      @media (max-width: 900px) {
+        .topbar-inner {
+          padding-inline: 20px;
+        }
+
+        .layout {
+          grid-template-columns: 1fr;
+          gap: 32px;
+          width: min(48rem, calc(100% - 40px));
+          padding-top: 28px;
+        }
+
+        .toc {
+          position: static;
+          max-height: none;
+          padding: 16px 18px;
+          border: 1px solid var(--border);
+          border-radius: var(--radius-lg);
+          background: var(--surface);
+        }
+
+        .toc > ul,
+        .toc > ol {
+          columns: 2;
+          column-gap: 24px;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .document-type {
+          display: none;
+        }
+
+        .theme-toggle span {
+          display: none;
+        }
+
+        .theme-toggle {
+          width: 32px;
+          padding: 0;
+          justify-content: center;
+        }
+
+        .toc > ul,
+        .toc > ol {
+          columns: 1;
+        }
+      }
+
+      @media print {
+        .topbar,
+        .toc {
+          display: none;
+        }
+
+        body {
+          color: black;
+          background: white;
+        }
+
+        .layout {
+          display: block;
+          width: 100%;
+          padding: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <span class="brand-mark">O</span>
+          Oxy Learning Hub
+          <span class="document-type">summary</span>
+        </div>
+        <button
+          class="theme-toggle"
+          id="theme-toggle"
+          type="button"
+          aria-label="切换到深色主题"
+        >
+          <svg
+            class="icon-sun"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="4.2" />
+            <path
+              d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"
+            />
+          </svg>
+          <svg
+            class="icon-moon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M20.5 14.4A8.6 8.6 0 1 1 9.6 3.5a6.9 6.9 0 0 0 10.9 10.9Z"
+            />
+          </svg>
+          <span id="theme-label">深色</span>
+        </button>
+      </div>
+      <div class="progress-track">
+        <div class="progress-line" id="progress-line"></div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="toc" aria-label="目录">
+        <p class="toc-head">内容目录</p>
+        {{TOC}}
+      </aside>
+
+      <main>
+        <header class="document-header">
+          <p class="kicker">结构化总结</p>
+          <h1>{{TITLE}}</h1>
+          <p class="meta">{{META}}</p>
+        </header>
+        {{CONTENT}}
+      </main>
+    </div>
+
+    <script>
+      (() => {
+        const root = document.documentElement;
+        const toggle = document.querySelector("#theme-toggle");
+        const label = document.querySelector("#theme-label");
+        const progress = document.querySelector("#progress-line");
+
+        const renderTheme = () => {
+          const toDark = root.dataset.theme !== "dark";
+          label.textContent = toDark ? "深色" : "浅色";
+          toggle.setAttribute(
+            "aria-label",
+            toDark ? "切换到深色主题" : "切换到浅色主题",
+          );
+        };
+
+        toggle.addEventListener("click", () => {
+          root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+          localStorage.setItem("oxy-theme", root.dataset.theme);
+          renderTheme();
+        });
+
+        window
+          .matchMedia("(prefers-color-scheme: dark)")
+          .addEventListener("change", (event) => {
+            if (localStorage.getItem("oxy-theme")) return;
+            root.dataset.theme = event.matches ? "dark" : "light";
+            renderTheme();
+          });
+
+        const tocLinks = [...document.querySelectorAll('.toc a[href^="#"]')];
+        const headings = tocLinks
+          .map((link) => document.querySelector(link.getAttribute("href")))
+          .filter(Boolean);
+
+        if (headings.length) {
+          const observer = new IntersectionObserver(
+            (entries) => {
+              entries.forEach((entry) => {
+                if (!entry.isIntersecting) return;
+                tocLinks.forEach((link) => {
+                  link.classList.toggle(
+                    "is-active",
+                    link.getAttribute("href") === `#${entry.target.id}`,
+                  );
+                });
+              });
+            },
+            { rootMargin: "-88px 0px -70% 0px" },
+          );
+          headings.forEach((heading) => observer.observe(heading));
+        }
+
+        const renderProgress = () => {
+          const scrollable =
+            document.documentElement.scrollHeight - window.innerHeight;
+          const percent =
+            scrollable > 0
+              ? Math.min(100, (window.scrollY / scrollable) * 100)
+              : 0;
+          progress.style.width = `${percent}%`;
+        };
+
+        window.addEventListener("scroll", renderProgress, { passive: true });
+        renderTheme();
+        renderProgress();
+      })();
+    </script>
+  </body>
+</html>

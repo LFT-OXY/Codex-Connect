@@ -1,0 +1,5 @@
+interface:
+  display_name: "ATW Triage"
+  short_description: "通过分诊角色处理问题"
+policy:
+  allow_implicit_invocation: false

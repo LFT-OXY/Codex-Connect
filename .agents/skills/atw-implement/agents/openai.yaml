@@ -1,0 +1,5 @@
+interface:
+  display_name: "ATW Implement"
+  short_description: "根据规格说明或工单进行开发"
+policy:
+  allow_implicit_invocation: false

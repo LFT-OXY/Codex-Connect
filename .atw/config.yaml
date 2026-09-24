@@ -1,0 +1,235 @@
+# ATW Configuration
+# Project-level settings for the ATW workflow system
+#
+# All values have sensible defaults. Only override what you need.
+
+#-------------------------------------------------------------------------------
+# Session Recording
+#-------------------------------------------------------------------------------
+
+# Commit message used when auto-committing journal/index changes
+# after running add_session.py
+session_commit_message: "chore: record journal"
+
+# Maximum lines per journal file before rotating to a new one
+max_journal_lines: 2000
+
+#-------------------------------------------------------------------------------
+# Session Auto-Commit
+#-------------------------------------------------------------------------------
+
+# Auto-commit behavior for session journal + task archive operations.
+# - true (default): scripts auto-stage and auto-commit journal / task changes
+#   after add_session.py / task.py archive runs.
+# - false: scripts do not touch git. Files (journal-*.md, task archive moves)
+#   are still written to disk; you decide whether to git add / commit.
+#
+# Use `false` if your project's .gitignore intentionally excludes `.atw/`
+# and you want session data kept local-only, or if you prefer to review
+# staged changes manually before each commit.
+#
+# Accepts: true / false / yes / no / 1 / 0 / on / off (case-insensitive).
+#
+# session_auto_commit: true
+
+#-------------------------------------------------------------------------------
+# Task Lifecycle Hooks
+#-------------------------------------------------------------------------------
+
+# Shell commands to run after task lifecycle events.
+# Each hook receives TASK_JSON_PATH environment variable pointing to task.json.
+# Hook failures print a warning but do not block the main operation.
+#
+# hooks:
+#   after_create:
+#     - "echo 'Task created'"
+#   after_start:
+#     - "echo 'Task started'"
+#   after_finish:
+#     - "echo 'Task finished'"
+#   after_archive:
+#     - "echo 'Task archived'"
+
+#-------------------------------------------------------------------------------
+# Monorepo / Packages
+#-------------------------------------------------------------------------------
+
+# Declare packages for monorepo projects.
+# ATW auto-detects workspaces during `atw init`, but you can also
+# configure them manually here.
+#
+# packages:
+#   frontend:
+#     path: packages/frontend
+#   backend:
+#     path: packages/backend
+#   docs:
+#     path: docs-site
+#     type: submodule
+#   # For polyrepo / meta-repo layouts (independent .git in each subdir),
+#   # mark the package with `git: true`. The runtime treats it as an
+#   # independent repository for things like git-context display.
+#   webapp:
+#     path: ./webapp
+#     git: true
+
+# Default package used when --package is not specified.
+# default_package: frontend
+
+#-------------------------------------------------------------------------------
+# Channel worker OOM guard
+#-------------------------------------------------------------------------------
+# Default safeguards for `atw channel spawn` workers. The guard runs
+# at spawn time (cleans expired idle workers, then enforces the live-worker
+# budget) and inside each supervisor (self-terminates a worker that stays
+# continuously idle past `idle_timeout`).
+#
+# Precedence: CLI flag > env var (ATW_CHANNEL_WORKER_IDLE_TIMEOUT /
+# ATW_CHANNEL_MAX_LIVE_WORKERS) > this config > built-in default.
+#
+# `idle_timeout: 0` disables idle cleanup (workers can sit idle forever
+# unless explicitly killed or given `--timeout`).
+# `max_live_workers: 0` disables the spawn-time budget check.
+#
+# `trusted_context_dirs` extends the `--file`/`--jsonl`/`--agent` containment
+# check beyond the worker cwd — useful when `.atw/tasks` or
+# `.atw/workspace` is a symlink to an external directory. Realpaths under
+# any listed dir are accepted in addition to cwd.
+# `auto_trust_atw_symlinks: false` disables the narrow auto-trust of
+# `.atw/tasks` / `.atw/workspace` when either is itself a top-level
+# symlink (auto-trust is on by default).
+#
+channel:
+  worker_guard:
+    idle_timeout: 5m
+    max_live_workers: 6
+  # trusted_context_dirs:
+  #   - /work/user/atw_workspace
+  # auto_trust_atw_symlinks: false
+
+#-------------------------------------------------------------------------------
+# Codex (dispatch behavior)
+#-------------------------------------------------------------------------------
+# Codex-only knob; other platforms ignore it. Default ("auto") dispatches
+# atw-review sub-agents for the two review axes. Implementation is never
+# dispatched on any platform: it runs inside `/atw-implement` in the main
+# session (`atw-implement-agent` ships only as a reserved role). This does
+# not rely on inherited parent transcripts: `fork_turns` remains
+# caller-controlled, while Codex's native SubagentStart hook injects task
+# context when trusted and child-side loading remains the fallback when it is
+# unavailable. Set to "inline" only to run the review axes in the main
+# session too. "sub-agent" remains a backwards-compatible alias for "auto".
+# Invalid explicit values safely use inline mode.
+#
+# In "auto" mode, dispatched sub-agents inherit the main session's model
+# unless you pin one. To use a cheaper/faster model for review sub-agent
+# work, edit `model` / `model_reasoning_effort` directly
+# on the generated `.codex/agents/atw-*.toml` files (see the commented
+# hint lines in those files) — there is no config.yaml knob for this,
+# `atw update` preserves your edits across regeneration.
+#
+# codex:
+#   dispatch_mode: auto  # or "inline"; legacy alias: "sub-agent"
+
+#-------------------------------------------------------------------------------
+# Sub-agent context injection limits
+#-------------------------------------------------------------------------------
+# Caps how much task context (check.jsonl referenced files, plus prd.md and
+# the current ticket) gets inlined into a sub-agent's
+# first prompt. Oversized files are truncated with a notice; once the total
+# payload cap is reached, remaining files degrade to index lines (path +
+# reason + size) instead of being inlined.
+#
+# All values are byte counts. `0` disables the corresponding limit.
+#
+# context_injection:
+#   max_file_bytes: 32768        # per check.jsonl referenced file
+#   max_artifact_bytes: 65536    # per task artifact (prd.md, current ticket)
+#   max_total_bytes: 131072      # whole injected payload; overflow degrades to index lines
+
+#-------------------------------------------------------------------------------
+# Per-turn prompt injection
+#-------------------------------------------------------------------------------
+# Escape hatch for the per-turn <workflow-state> breadcrumb. When a user
+# prompt contains the skip keyword as a standalone word (case-insensitive,
+# word-boundary match — "no-atwfoo" does NOT count), the breadcrumb is
+# skipped for that turn only. Does not affect SessionStart or sub-agent
+# context injection.
+#
+# Supported on claude/codex/copilot/cursor (shared Python hook), opencode,
+# and omp. NOT supported on pi, by design: pi injects task context as a
+# memoized systemPrompt snapshot rather than per-turn, and rewriting the
+# system prompt invalidates the provider's prefix cache from byte 0. A
+# half-working escape hatch there would read as "off" while the bulk of the
+# context stayed on, so pi does not offer one at all.
+#
+# prompt_injection:
+#   skip_keyword: "no-atw"   # "" disables the escape hatch entirely
+
+# Auto-detected monorepo packages
+packages:
+  adapters:
+    path: packages/adapters
+  desktop-control:
+    path: packages/desktop-control
+  harness-adapter:
+    path: packages/harness-adapter
+  harness-broker:
+    path: packages/harness-broker
+  harness-discovery:
+    path: packages/harness-discovery
+  host-runtime:
+    path: packages/host-runtime
+  mapping-store:
+    path: packages/mapping-store
+  protocol-core:
+    path: packages/protocol-core
+  renderer-extension:
+    path: packages/renderer-extension
+  repository-automation:
+    path: packages/repository-automation
+  shared-contracts:
+    path: packages/shared-contracts
+  update-manager:
+    path: packages/update-manager
+  adapter-antigravity:
+    path: packages/adapters/antigravity
+  adapter-claude-code:
+    path: packages/adapters/claude-code
+  adapter-codebuddy:
+    path: packages/adapters/codebuddy
+  adapter-cursor-cli:
+    path: packages/adapters/cursor-cli
+  adapter-deepseek-harness:
+    path: packages/adapters/deepseek-harness
+  adapter-grok:
+    path: packages/adapters/grok
+  adapter-hermes:
+    path: packages/adapters/hermes
+  adapter-kimi-code:
+    path: packages/adapters/kimi-code
+  adapter-kiro-cli:
+    path: packages/adapters/kiro-cli
+  adapter-omp:
+    path: packages/adapters/omp
+  adapter-opencode:
+    path: packages/adapters/opencode
+  adapter-pi:
+    path: packages/adapters/pi
+  adapter-qoder:
+    path: packages/adapters/qoder
+  adapter-qoder-cn:
+    path: packages/adapters/qoder-cn
+  adapter-workbuddy:
+    path: packages/adapters/workbuddy
+  codexhost-launcher:
+    path: crates/launcher
+  codexhost-platform:
+    path: crates/platform
+  codexhost-shim:
+    path: crates/shim
+  codexhost-updater:
+    path: crates/updater
+  codexhost-gate-a-native:
+    path: tools/gate-a/native
+default_package: adapters
