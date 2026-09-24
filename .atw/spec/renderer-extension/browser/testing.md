@@ -14,7 +14,7 @@
 `tests/vitest.config.js` 的 `environment` 是 `"node"`，仓库里没有 jsdom 或 happy-dom，也不编译 CSS。能直接测的只有纯函数；涉及 DOM 的代码有三种现成写法，按优先顺序选：
 
 1. **注入 DOM 端口**：模块接收一个小接口，测试里提供 Fake 实现。例如 `renderer-sidebar-agent-icons.ts` 的 `SidebarAgentIconDom` / `SidebarAgentIconRow`（测试中的 `FakeDom`、`FakeRow`），`renderer-fork-control.ts` 的 `RendererForkDom`（`FakeForkDom`）。新写的 DOM 模块优先采用这种设计。
-2. **拆出视图函数**：把“计算要渲染什么”和“写 DOM”分开，只测前者，例如 `rendererAgentPickerView`、`rendererAgentMenuPlacement`、`createDefaultRendererSettingsPages`、`rendererThinkingOptionPresentation` / `rendererThinkingSliderVisual` / `rendererThinkingSliderIndexAt` / `rendererThinkingCardPlacement`（见 `test/renderer-thinking-option-picker.test.ts`）。
+2. **拆出视图函数**：把“计算要渲染什么”和“写 DOM”分开，只测前者，例如 `rendererAgentPickerView`、`rendererAgentMenuPlacement`、`createDefaultRendererSettingsPages`、`rendererThinkingOptionPresentation` / `rendererThinkingSliderVisual` / `rendererThinkingSliderPointerAt` / `rendererThinkingCardPlacement`（见 `test/renderer-thinking-option-picker.test.ts`）。
 3. **手工桩全局对象**：`vi.stubGlobal("document" | "window" | "MutationObserver", …)`，配合 `as unknown as HTMLElement` 构造最小对象；`afterEach` 中必须调用 `vi.unstubAllGlobals()`（见 `renderer-fork-control.test.ts`、`settings/trigger.test.ts`）。
 
 - 测试导入本包源码时用 `../src/x.js`，导入 `@codexhost/shared-contracts` / `@codexhost/desktop-control` 则解析到 `dist`，需要先执行 `npm run build:typescript`。

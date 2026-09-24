@@ -31,12 +31,24 @@ export const RENDERER_THINKING_GRADIENT: {
 
 export const RENDERER_THINKING_MAX_STARS = 16;
 
+/** 首尾选项点离轨道两端的距离（轨道高度的一半），拖块在两端时仍完整落在轨道上。 */
+const RAIL_INSET = 12;
+/** 与样式表中 28px 的拖块一致；填充右端这段被拖块盖住。 */
+const THUMB_RADIUS = 14;
+
 export interface RendererThinkingSliderVisual {
   /** 相对位置 `index / (n - 1)`，同时是填充比例。 */
   position: number;
   color: { light: string; dark: string };
   starCount: number;
   starOpacity: number;
+}
+
+export interface RendererThinkingSliderPointer {
+  /** 指针在选项点区间内的连续相对位置，0 到 1。 */
+  position: number;
+  /** 离指针最近的选项下标。 */
+  index: number;
 }
 
 export interface RendererThinkingOptionPresentation {
@@ -55,6 +67,7 @@ interface ThinkingSliderParts {
   slider: HTMLElement;
   rail: HTMLElement;
   fill: HTMLElement;
+  track: HTMLElement;
   thumb: HTMLElement;
   dots: HTMLElement[];
 }
@@ -71,6 +84,8 @@ export interface RendererThinkingOptionPickerControl {
   presentation: RendererThinkingOptionPresentation;
   /** 拖动中或提交后等待 Harness 确认时显示的下标；为 null 时跟随 presentation。 */
   displayIndex: number | null;
+  /** 拖动中指针的连续位置；为 null 时拖块停在 displayIndex 对应的点上。 */
+  dragPosition: number | null;
   close(): void;
   dispose(): void;
 }
@@ -81,11 +96,7 @@ function interpolate(from: Rgb, to: Rgb, position: number): string {
   return `rgb(${channel(0)}, ${channel(1)}, ${channel(2)})`;
 }
 
-export function rendererThinkingSliderVisual(
-  index: number,
-  count: number,
-): RendererThinkingSliderVisual {
-  const position = count > 1 ? Math.min(Math.max(index, 0), count - 1) / (count - 1) : 0;
+function sliderVisualAt(position: number): RendererThinkingSliderVisual {
   return {
     position,
     color: {
@@ -109,14 +120,26 @@ export function rendererThinkingSliderVisual(
   };
 }
 
-export function rendererThinkingSliderIndexAt(
-  clientX: number,
-  rail: { left: number; width: number },
+function optionPosition(index: number, count: number): number {
+  return count > 1 ? Math.min(Math.max(index, 0), count - 1) / (count - 1) : 0;
+}
+
+export function rendererThinkingSliderVisual(
+  index: number,
   count: number,
-): number {
-  if (count <= 1 || rail.width <= 0) return 0;
-  const ratio = Math.min(Math.max((clientX - rail.left) / rail.width, 0), 1);
-  return Math.round(ratio * (count - 1));
+): RendererThinkingSliderVisual {
+  return sliderVisualAt(optionPosition(index, count));
+}
+
+/** `track` 是首尾选项点之间的区间，不含轨道两端的内缩。 */
+export function rendererThinkingSliderPointerAt(
+  clientX: number,
+  track: { left: number; width: number },
+  count: number,
+): RendererThinkingSliderPointer {
+  if (count <= 1 || track.width <= 0) return { position: 0, index: 0 };
+  const position = Math.min(Math.max((clientX - track.left) / track.width, 0), 1);
+  return { position, index: Math.round(position * (count - 1)) };
 }
 
 export function rendererThinkingOptionPresentation(
@@ -153,53 +176,62 @@ function popoverOpen(element: HTMLElement): boolean {
 function sliderParts(control: RendererThinkingOptionPickerControl): ThinkingSliderParts {
   const rail = control.slider.querySelector<HTMLElement>("[data-codexhost-thinking-rail]");
   const fill = control.slider.querySelector<HTMLElement>("[data-codexhost-thinking-fill]");
+  const track = control.slider.querySelector<HTMLElement>("[data-codexhost-thinking-track]");
   const thumb = control.slider.querySelector<HTMLElement>("[data-codexhost-thinking-thumb]");
-  if (!rail || !fill || !thumb) throw new Error("Thinking slider structure is unavailable");
+  if (!rail || !fill || !track || !thumb) {
+    throw new Error("Thinking slider structure is unavailable");
+  }
   return {
     slider: control.slider,
     rail,
     fill,
+    track,
     thumb,
-    dots: [...rail.querySelectorAll<HTMLElement>("[data-codexhost-thinking-dot]")],
+    dots: [...track.querySelectorAll<HTMLElement>("[data-codexhost-thinking-dot]")],
   };
+}
+
+function createStar(index: number): HTMLElement {
+  const star = document.createElement("span");
+  star.dataset.codexhostThinkingStar = "true";
+  // 黄金分割序列让星点在填充段内稳定、均匀地散开；右端留出拖块盖住的部分。
+  const spread = ((index * 0.618034 + 0.31) % 1) * 0.92 + 0.04;
+  star.style.left = `calc((100% - ${THUMB_RADIUS}px) * ${spread.toFixed(4)})`;
+  star.style.top = `${(((index * 0.381966 + 0.17) % 1) * 60 + 20).toFixed(2)}%`;
+  star.style.animationDelay = `${((index * 0.73) % 2.8).toFixed(2)}s`;
+  return star;
 }
 
 function syncStars(fill: HTMLElement, count: number): void {
   const stars = fill.querySelectorAll("[data-codexhost-thinking-star]");
-  if (stars.length === count) return;
-  const next: HTMLElement[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const star = document.createElement("span");
-    star.dataset.codexhostThinkingStar = "true";
-    // 黄金分割序列让星点在填充段内稳定、均匀地散开。
-    star.style.left = `${(((index * 0.618034 + 0.31) % 1) * 92 + 4).toFixed(2)}%`;
-    star.style.top = `${(((index * 0.381966 + 0.17) % 1) * 60 + 20).toFixed(2)}%`;
-    star.style.animationDelay = `${((index * 0.73) % 2.8).toFixed(2)}s`;
-    next.push(star);
-  }
-  fill.replaceChildren(...next);
+  // 拖动时星点数连续变化，只增删差额，已有星点的闪烁不被重置。
+  for (let index = stars.length; index < count; index += 1) fill.append(createStar(index));
+  for (let index = stars.length - 1; index >= count; index -= 1) stars[index]?.remove();
 }
 
 function applyDisplay(control: RendererThinkingOptionPickerControl): void {
   const { options, selectedIndex } = control.presentation;
   const index = control.displayIndex ?? selectedIndex;
-  const visual = rendererThinkingSliderVisual(index, options.length);
-  const origin = rendererThinkingSliderVisual(0, options.length).color;
+  const position = control.dragPosition ?? optionPosition(index, options.length);
+  const visual = sliderVisualAt(position);
+  const origin = sliderVisualAt(0).color;
+  const color = `light-dark(${visual.color.light}, ${visual.color.dark})`;
   const option = options[index];
   const parts = sliderParts(control);
-  const percent = `${(visual.position * 100).toFixed(4)}%`;
-  parts.fill.style.width = percent;
-  parts.fill.style.background = `linear-gradient(90deg, light-dark(${origin.light}, ${origin.dark}), light-dark(${visual.color.light}, ${visual.color.dark}))`;
+  // 填充右端延伸到拖块圆心、被拖块盖住；第 0 位不留填充。
+  parts.fill.style.width =
+    position === 0
+      ? "0px"
+      : `calc(${RAIL_INSET}px + (100% - ${RAIL_INSET * 2}px) * ${position.toFixed(4)})`;
+  parts.fill.style.background = `linear-gradient(90deg, light-dark(${origin.light}, ${origin.dark}), ${color})`;
   parts.fill.style.setProperty("--codexhost-thinking-star-opacity", String(visual.starOpacity));
   syncStars(parts.fill, visual.starCount);
-  parts.thumb.style.left = percent;
-  parts.slider.style.setProperty(
-    "--codexhost-thinking-thumb-color",
-    `light-dark(${visual.color.light}, ${visual.color.dark})`,
-  );
+  parts.thumb.style.left = `${(position * 100).toFixed(4)}%`;
+  parts.slider.style.setProperty("--codexhost-thinking-accent", color);
   parts.dots.forEach((dot, dotIndex) => {
-    dot.dataset.active = String(index > 0 && dotIndex <= index);
+    dot.dataset.reached = String(optionPosition(dotIndex, options.length) <= position);
   });
+  control.title.style.color = color;
   syncRendererLabelText(control.title, option?.label ?? "");
   if (index >= 0 && option) {
     parts.slider.setAttribute("aria-valuenow", String(index));
@@ -216,16 +248,20 @@ function rebuildSlider(control: RendererThinkingOptionPickerControl): void {
   rail.dataset.codexhostThinkingRail = "true";
   const fill = document.createElement("div");
   fill.dataset.codexhostThinkingFill = "true";
-  rail.append(fill);
+  const track = document.createElement("div");
+  track.dataset.codexhostThinkingTrack = "true";
+  track.style.left = `${RAIL_INSET}px`;
+  track.style.right = `${RAIL_INSET}px`;
   options.forEach((_option, index) => {
     const dot = document.createElement("span");
     dot.dataset.codexhostThinkingDot = "true";
-    dot.style.left = `${(options.length > 1 ? (index / (options.length - 1)) * 100 : 0).toFixed(4)}%`;
-    rail.append(dot);
+    dot.style.left = `${(optionPosition(index, options.length) * 100).toFixed(4)}%`;
+    track.append(dot);
   });
   const thumb = document.createElement("span");
   thumb.dataset.codexhostThinkingThumb = "true";
-  rail.append(thumb);
+  track.append(thumb);
+  rail.append(fill, track);
   control.slider.replaceChildren(rail);
   control.slider.setAttribute("aria-valuemin", "0");
   control.slider.setAttribute("aria-valuemax", String(Math.max(options.length - 1, 0)));
@@ -288,18 +324,20 @@ export function mountRendererThinkingOptionPicker(
   card.style.margin = "0";
   card.style.border = "0";
   card.style.boxSizing = "border-box";
-  card.style.padding = "12px 14px 8px";
+  card.style.padding = "12px 14px 14px";
   trigger.setAttribute("aria-controls", card.id);
 
   const title = document.createElement("div");
   title.style.font = "600 20px/26px system-ui, sans-serif";
   title.style.letterSpacing = "0";
+  title.style.textAlign = "center";
   title.style.overflow = "hidden";
   title.style.textOverflow = "ellipsis";
   title.style.whiteSpace = "nowrap";
   const subtitle = document.createElement("div");
   subtitle.style.font = "400 12px/16px system-ui, sans-serif";
   subtitle.style.color = "color-mix(in srgb, currentColor 60%, transparent)";
+  subtitle.style.textAlign = "center";
   subtitle.style.overflow = "hidden";
   subtitle.style.textOverflow = "ellipsis";
   subtitle.style.whiteSpace = "nowrap";
@@ -311,12 +349,17 @@ export function mountRendererThinkingOptionPicker(
   card.append(title, subtitle, slider);
 
   let dragging = false;
-  const indexAt = (clientX: number): number => {
-    const rail = slider.querySelector<HTMLElement>("[data-codexhost-thinking-rail]");
-    const rect = rail?.getBoundingClientRect();
-    return rect
-      ? rendererThinkingSliderIndexAt(clientX, rect, control.presentation.options.length)
-      : control.presentation.selectedIndex;
+  const pointerAt = (clientX: number): RendererThinkingSliderPointer =>
+    rendererThinkingSliderPointerAt(
+      clientX,
+      sliderParts(control).track.getBoundingClientRect(),
+      control.presentation.options.length,
+    );
+  const previewAt = (clientX: number): void => {
+    const pointer = pointerAt(clientX);
+    control.displayIndex = pointer.index;
+    control.dragPosition = pointer.position;
+    applyDisplay(control);
   };
   const commit = (index: number): void => {
     const option = control.presentation.options[index];
@@ -332,30 +375,31 @@ export function mountRendererThinkingOptionPicker(
   };
   const endDrag = (): void => {
     dragging = false;
+    control.dragPosition = null;
+    // 先恢复过渡，随后写入的吸附位置才会以动画到位。
     delete slider.dataset.dragging;
   };
   const onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 || !sliderInteractive(control)) return;
     event.preventDefault();
     dragging = true;
-    slider.dataset.dragging = "true";
+    // 按下时保留过渡，点击会以动画吸附到最近的点；真正移动后才连续跟随指针。
+    slider.dataset.dragging = "pressed";
     slider.setPointerCapture(event.pointerId);
     slider.focus();
-    control.displayIndex = indexAt(event.clientX);
+    control.displayIndex = pointerAt(event.clientX).index;
     applyDisplay(control);
   };
   const onPointerMove = (event: PointerEvent): void => {
     if (!dragging) return;
-    const index = indexAt(event.clientX);
-    if (index === control.displayIndex) return;
-    control.displayIndex = index;
-    applyDisplay(control);
+    slider.dataset.dragging = "moving";
+    previewAt(event.clientX);
   };
   const onPointerUp = (event: PointerEvent): void => {
     if (!dragging) return;
     endDrag();
     if (slider.hasPointerCapture(event.pointerId)) slider.releasePointerCapture(event.pointerId);
-    commit(indexAt(event.clientX));
+    commit(pointerAt(event.clientX).index);
   };
   const onPointerCancel = (): void => {
     if (!dragging) return;
@@ -437,6 +481,7 @@ export function mountRendererThinkingOptionPicker(
     harnessId: "",
     presentation: rendererThinkingOptionPresentation({ status: "idle" }),
     displayIndex: null,
+    dragPosition: null,
     close,
     dispose() {
       close();

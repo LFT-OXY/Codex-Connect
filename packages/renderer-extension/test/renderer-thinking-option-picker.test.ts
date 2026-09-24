@@ -10,7 +10,7 @@ import {
   RENDERER_THINKING_GRADIENT,
   RENDERER_THINKING_MAX_STARS,
   rendererThinkingOptionPresentation,
-  rendererThinkingSliderIndexAt,
+  rendererThinkingSliderPointerAt,
   rendererThinkingSliderVisual,
 } from "../src/renderer-thinking-option-picker.js";
 
@@ -222,15 +222,34 @@ describe("Renderer Thinking slider visual", () => {
     expect(rendererThinkingSliderVisual(0, 1)).toMatchObject({ position: 0, starCount: 0 });
   });
 
-  it("snaps a pointer to the nearest option and clamps outside the rail", () => {
-    const rail = { left: 100, width: 300 };
-    expect(rendererThinkingSliderIndexAt(100, rail, 7)).toBe(0);
-    expect(rendererThinkingSliderIndexAt(170, rail, 7)).toBe(1);
-    expect(rendererThinkingSliderIndexAt(260, rail, 7)).toBe(3);
-    expect(rendererThinkingSliderIndexAt(40, rail, 7)).toBe(0);
-    expect(rendererThinkingSliderIndexAt(900, rail, 7)).toBe(6);
-    expect(rendererThinkingSliderIndexAt(250, rail, 1)).toBe(0);
-    expect(rendererThinkingSliderIndexAt(250, { left: 100, width: 0 }, 3)).toBe(0);
+  it("follows the pointer continuously and reports the nearest option", () => {
+    const track = { left: 100, width: 300 };
+    expect(rendererThinkingSliderPointerAt(100, track, 7)).toEqual({ position: 0, index: 0 });
+    expect(rendererThinkingSliderPointerAt(250, track, 7)).toEqual({ position: 0.5, index: 3 });
+    const between = rendererThinkingSliderPointerAt(170, track, 7);
+    expect(between.position).toBeCloseTo(70 / 300);
+    expect(between.index).toBe(1);
+    expect(rendererThinkingSliderPointerAt(260, track, 7).index).toBe(3);
+  });
+
+  it("clamps a pointer outside the track and handles degenerate tracks", () => {
+    const track = { left: 100, width: 300 };
+    expect(rendererThinkingSliderPointerAt(40, track, 7)).toEqual({ position: 0, index: 0 });
+    expect(rendererThinkingSliderPointerAt(900, track, 7)).toEqual({ position: 1, index: 6 });
+    expect(rendererThinkingSliderPointerAt(250, track, 1)).toEqual({ position: 0, index: 0 });
+    expect(rendererThinkingSliderPointerAt(250, { left: 100, width: 0 }, 3)).toEqual({
+      position: 0,
+      index: 0,
+    });
+  });
+
+  it("snaps to the option whose visual position is nearest", () => {
+    const track = { left: 0, width: 600 };
+    for (let x = 0; x <= 600; x += 25) {
+      const { position, index } = rendererThinkingSliderPointerAt(x, track, 7);
+      const snapped = rendererThinkingSliderVisual(index, 7).position;
+      expect(Math.abs(snapped - position)).toBeLessThanOrEqual(1 / 12 + 1e-9);
+    }
   });
 });
 

@@ -315,7 +315,7 @@ test("Kiro selects Thinking through its own pill before a Thread exists", async 
   await expect(slider).toHaveAttribute("aria-valuetext", "Low");
   const rail = await thinkingCard.locator("[data-codexhost-thinking-rail]").boundingBox();
   if (!rail) throw new Error("Thinking rail geometry is unavailable");
-  await page.mouse.click(rail.x + rail.width, rail.y + rail.height / 2);
+  await page.mouse.click(rail.x + rail.width - 2, rail.y + rail.height / 2);
   await expect(thinkingPill).toHaveAttribute("aria-label", "Thinking: High");
   await expect(thinkingCard).toBeVisible();
   expect(await page.evaluate(() => Reflect.get(globalThis, "appliedConfiguration"))).toEqual({

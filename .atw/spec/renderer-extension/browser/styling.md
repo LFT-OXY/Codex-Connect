@@ -14,6 +14,7 @@
 - 需要 `:hover` / `:disabled` / `[data-state="open"]` 这类伪类时写进样式表；每个控件自己的高度、内边距和挤压宽度用内联 style 设置（`applyRendererTriggerChipSqueezeTrigger`）。不要复制 Desktop 的私有 class 或设计 token（事故记录见该文件头注释，提交 `fb4f94d8` 处理了侧边栏收窄时的 chip 挤压）。
 - **已知例外**：模型列表与思考卡片的外框共用 `renderer-model-picker.ts` 导出的 `MENU_CLASSES`（`bg-token-dropdown-background/90`、`text-token-foreground` 等 Desktop Tailwind 类），这是为了让两个弹层外观一致，经 `split-model-thinking-pills` 任务确认保留。Desktop 改名这些 token 时两者会一起失去底色。不要再把它扩展到新控件；新弹层的配色放进自己的 `data-codexhost-*` 样式表，用自定义常量加 `light-dark()` 跟随宿主 color-scheme（参见 `renderer-thinking-option-style.ts`、`renderer-usage-control.ts#applyRendererPopoverChrome`）。
 - 动画必须在 `@media (prefers-reduced-motion: reduce)` 下关闭（例如思考滑块的星点闪烁与填充过渡）。
+- 需要"拖动时连续跟随、松手后动画吸附"的控件，用状态属性区分按下和移动，只在真正移动时关闭过渡。例如思考滑块：`pointerdown` 设 `data-dragging="pressed"`，保留 `0.2s ease-out` 过渡，所以点击会以动画吸附；`pointermove` 改为 `"moving"`，样式表只对 `[data-dragging="moving"]` 设 `transition: none`；松手时先删除该属性，再写入吸附位置，过渡才会生效。不要在 `pointerdown` 时就关闭过渡，否则点击会瞬间跳到目标位置。
 
 ## 设置页 Tailwind 规则（摘自架构文档，均已在代码中落地）
 

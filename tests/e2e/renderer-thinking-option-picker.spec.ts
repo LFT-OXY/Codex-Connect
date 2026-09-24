@@ -91,9 +91,15 @@ async function railPoint(
   index: number,
   count: number,
 ): Promise<{ x: number; y: number }> {
-  const box = await page.locator("[data-codexhost-thinking-rail]").boundingBox();
-  if (!box) throw new Error("Thinking rail geometry is unavailable");
+  const box = await page.locator("[data-codexhost-thinking-track]").boundingBox();
+  if (!box) throw new Error("Thinking track geometry is unavailable");
   return { x: box.x + (box.width * index) / (count - 1), y: box.y + box.height / 2 };
+}
+
+async function thumbCenterX(page: Page): Promise<number> {
+  const box = await page.locator("[data-codexhost-thinking-thumb]").boundingBox();
+  if (!box) throw new Error("Thinking thumb geometry is unavailable");
+  return box.x + box.width / 2;
 }
 
 test("dragging previews options and commits once on release", async ({ page }) => {
@@ -154,6 +160,46 @@ test("dragging previews options and commits once on release", async ({ page }) =
   await expect(card).toBeVisible();
   await page.mouse.click(5, 5);
   await expect(card).toBeHidden();
+});
+
+test("the thumb follows the pointer continuously and snaps with a transition", async ({ page }) => {
+  await setup(page, CLAUDE_CODE, "high");
+  const pill = page.locator('[data-codexhost-thinking-control="test-composer"] > button');
+  const card = page.getByRole("dialog", { name: "Thinking" });
+  const thumb = page.locator("[data-codexhost-thinking-thumb]");
+  await pill.click();
+  await expect(card).toBeVisible();
+  const track = await page.locator("[data-codexhost-thinking-track]").boundingBox();
+  if (!track) throw new Error("Thinking track geometry is unavailable");
+
+  const start = await railPoint(page, 4, 7);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  const transition = (): Promise<string> =>
+    thumb.evaluate((element) => getComputedStyle(element).transitionDuration);
+  expect(await transition()).toBe("0.2s");
+  const between = track.x + (track.width * 2.3) / 6;
+  await page.mouse.move(between, start.y, { steps: 6 });
+  await expect(card).toContainText("Low");
+  expect(await transition()).toBe("0s");
+  expect(await thumbCenterX(page)).toBeCloseTo(between, 0);
+  await page.mouse.up();
+  expect(await selections(page)).toEqual(["low"]);
+  const low = await railPoint(page, 2, 7);
+  await expect.poll(() => thumbCenterX(page)).toBeCloseTo(low.x, 0);
+});
+
+test("reduced motion removes slider transitions", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await setup(page, CLAUDE_CODE, "high");
+  await page.locator('[data-codexhost-thinking-control="test-composer"] > button').click();
+  for (const selector of ["[data-codexhost-thinking-thumb]", "[data-codexhost-thinking-fill]"]) {
+    expect(
+      await page
+        .locator(selector)
+        .evaluate((element) => getComputedStyle(element).transitionDuration),
+    ).toBe("0s");
+  }
 });
 
 test("a single option is shown read-only", async ({ page }) => {

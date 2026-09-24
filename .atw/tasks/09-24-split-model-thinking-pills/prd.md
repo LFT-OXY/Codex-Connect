@@ -148,6 +148,43 @@
 - **键盘与焦点**：打开卡片时焦点移到滑块。←/→ 会阻止事件继续传播，避免 Harness 的全局键盘处理把焦点拉回输入框。
 - **测试**：单测见 `test/renderer-thinking-option-picker.test.ts`。另外补了只断言交互、不断言视觉的 e2e：`tests/e2e/renderer-thinking-option-picker.spec.ts`。`renderer-model-picker.spec.ts` 和 `renderer-binding-startup.spec.ts` 中的 Kiro 用例已改为适配两个独立药丸。
 
+## 验收反馈修订（2026-09-24）
+
+用户在真实 Desktop 中目测后，本任务退回实现阶段。参考图为 `research/thinking-card-reference.png`（522×216，按 2 倍图理解，下文尺寸均为 1 倍 CSS 像素）。
+
+### 修订 1：滑块改为参考图样式
+
+- **轨道**：改为约 24px 高的胶囊，两端全圆角，未填充部分为浅灰（暗色主题下用对应的暗灰）。当前实现是 10px 细条，用户认为太细。
+- **填充**：与轨道等高，左端圆角；右端延伸到拖块中心，被拖块盖住。颜色、蓝到紫的渐变和星点规则不变。星点要在较粗的填充段里清楚可见。
+- **拖块**：约 28px 的白色圆形，比轨道略大，带柔和阴影，圆心落在当前位置，压在轨道上。去掉当前那种彩色描边的小圆环样式。
+- **未到达的点**：落在未填充轨道上的点显示为灰色小圆点；已到达的点被填充覆盖，可以不显示。
+- **动画**，这是用户指出的主要问题：
+  - 拖动时，拖块和填充跟随指针**连续移动**，不再逐格跳。卡片上的大字仍然实时显示最近的选项。
+  - 松手或点击时，拖块和填充以约 200ms 的 ease-out 动画吸附到最近的点，然后按原规则只提交一次。
+  - ←/→ 与 Harness 确认后的位置变化也走同样的过渡动画。
+  - 在 `prefers-reduced-motion: reduce` 下关闭过渡与星点闪烁，瞬时到位。
+- **卡片排版**：大号选项名和小号 Model 名改为**居中**。
+- **仍然不做**：闪电图标、重置按钮和 `>`，保持 Q7 的决定。
+- **展示接口**：新增一个纯函数，根据指针的连续位置算出显示用的连续 `position` 和最近选项的下标，作为测试接缝。它与 `rendererThinkingSliderIndexAt` 保持一致：取整后得到的下标相同。
+
+### 修订 2：模型列表加宽
+
+- 模型列表的首选宽度由 280px 改为 **360px**，仍然贴着药丸右边缘对齐，并在视口内收回：窄窗口时收窄到 `视口宽度 - 16px`。
+- 用户没有指定固定宽度还是自适应，本次按固定 360px 加视口收回实现。
+
+### 不在本次修订范围
+
+- Pi 等 Adapter 按模型提供实际思考等级（验收反馈第 1 点）：用户决定暂不处理。原因是 Pi Adapter 给所有推理模型都声明了全部 7 档（`packages/adapters/pi/src/pi-model-catalog.ts`），属于 Adapter 范围，以后如需处理再另开任务。
+
+### 修订实现记录
+
+- **结构**：`[data-codexhost-thinking-rail]`（24px 胶囊）内有两层。第一层是填充 `[data-codexhost-thinking-fill]`。第二层是左右各内缩 `RAIL_INSET = 12px` 的 `[data-codexhost-thinking-track]`，选项点和 28px 拖块都按百分比定位在 track 内，所以首尾位置的拖块也完整落在轨道上。填充宽度为 `12px + (100% - 24px) × position`，右端正好在拖块圆心；第 0 位时宽度为 0，满足"第 0 位没有填充"。
+- **纯函数**：`rendererThinkingSliderPointerAt(clientX, track, count) → { position, index }` **替换**了原 `rendererThinkingSliderIndexAt`，旧函数已删除。它按 track 区间（不含两端内缩）计算连续位置，`index = round(position × (n-1))`，与旧函数对同一输入给出相同下标。展示时，连续位置通过内部的 `sliderVisualAt(position)` 算颜色和星点，`rendererThinkingSliderVisual(index, count)` 也基于它实现。
+- **控件状态**：新增 `dragPosition`。拖动中它等于指针的连续位置，拖块和填充跟随它；其余时间为 null，拖块停在 `displayIndex` 或已选项对应的点上。大字始终显示 `displayIndex` 对应的最近选项。
+- **动画**：填充 `width`、拖块 `left`、未到达点的 `opacity` 都使用 `0.2s ease-out`。按下时只把 `displayIndex` 吸附到最近的点，保留过渡，所以点击也有动画。开始移动后才用 `data-dragging="moving"` 关闭这三项过渡，改为连续跟随。星点数随连续位置变化时只增删差额，已有星点的闪烁不会重来。
+- **参考图细节**：大号选项名使用当前位置的渐变色，和参考图的蓝色标题一致；这个颜色也写入 `--codexhost-thinking-accent`，供焦点描边使用。每第 3 颗星点为 3px，其余为 2px，保证在较粗的填充上看得清。星点横向只分布在填充中不被拖块盖住的部分，即 `(填充宽度 - 14px 拖块半径)` 的 4%–96%。已到达的点隐藏（`data-reached="true"`）。
+- **测试**：`test/renderer-thinking-option-picker.test.ts` 覆盖连续位置、越界与退化 track，以及吸附下标与最近点位一致。e2e 新增两个用例：一个验证连续跟随、按下时保留过渡、移动后关闭过渡、松手吸附；另一个验证减少动态效果时过渡为 `0s`。尺寸等纯视觉效果不做 e2e 断言。模型列表宽度 360 的断言见 `test/renderer-model-picker.test.ts`。
+
 ## Acceptance Criteria
 
 - [ ] 在外部 Harness Thread 中，输入框下方出现两个相邻药丸：`[Model][思考选项]`；原生 Codex Thread 不变。
@@ -164,3 +201,6 @@
 - [ ] 亮色和暗色主题下卡片与渐变都协调；新样式不引用 Desktop 私有 token。
 - [ ] 滑块具备 `role="slider"` 及 value 和 valuetext 属性；新增的 Host 文案同时有 `en` 和 `zh-CN`。
 - [ ] 新增和调整后的 vitest 覆盖上述展示与定位情形并通过；`npm run build:renderer` 与 `npm run lint` 通过。
+- [ ] （修订 1）滑块轨道约 24px 高、呈胶囊形，拖块为约 28px 的白色圆形并压在轨道上；卡片标题与 Model 名居中；整体与 `research/thinking-card-reference.png` 一致（闪电、重置、`>` 除外）。
+- [ ] （修订 1）拖动时拖块与填充连续跟随指针，松手、点击或按 ←/→ 时带约 200ms 的过渡吸附到选项点；`prefers-reduced-motion` 下没有过渡。
+- [ ] （修订 2）模型列表首选宽度为 360px，窄窗口下收回到视口以内。

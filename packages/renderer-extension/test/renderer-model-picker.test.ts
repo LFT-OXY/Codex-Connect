@@ -42,7 +42,7 @@ describe("Renderer Model picker presentation", () => {
         { left: 700, right: 900, top: 820 },
         { width: 1200, height: 900 },
       ),
-    ).toEqual({ left: 620, width: 280, maxHeight: 360, bottom: 88 });
+    ).toEqual({ left: 540, width: 360, maxHeight: 360, bottom: 88 });
   });
 
   it("keeps the Model list inside the viewport when the trigger is near an edge", () => {
