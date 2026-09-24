@@ -5,11 +5,7 @@ import {
 } from "@codexhost/shared-contracts";
 import { describe, expect, it } from "vitest";
 
-import {
-  rendererModelPickerMainMenuPlacement,
-  rendererModelPickerModelMenuPlacement,
-  rendererModelPickerStandaloneModelMenuPlacement,
-} from "../src/renderer-model-picker-positioning.js";
+import { rendererModelPickerStandaloneModelMenuPlacement } from "../src/renderer-model-picker-positioning.js";
 
 import {
   isRendererModelPickerDisabled,
@@ -39,28 +35,8 @@ function catalog(levels: readonly string[]) {
   });
 }
 
-describe("Renderer combined Model and Thinking picker presentation", () => {
-  it("anchors the main menu's right edge to the model trigger", () => {
-    expect(
-      rendererModelPickerMainMenuPlacement(
-        { left: 700, right: 900, top: 820 },
-        { width: 1200, height: 900 },
-        180,
-      ),
-    ).toEqual({ left: 720, width: 180, bottom: 88 });
-  });
-
-  it("keeps the main menu inside the viewport when the trigger is near an edge", () => {
-    expect(
-      rendererModelPickerMainMenuPlacement(
-        { left: 0, right: 50, top: 820 },
-        { width: 240, height: 900 },
-        180,
-      ).left,
-    ).toBe(8);
-  });
-
-  it("opens the model-only picker directly above the model trigger", () => {
+describe("Renderer Model picker presentation", () => {
+  it("opens the Model list directly above the model trigger", () => {
     expect(
       rendererModelPickerStandaloneModelMenuPlacement(
         { left: 700, right: 900, top: 820 },
@@ -69,25 +45,16 @@ describe("Renderer combined Model and Thinking picker presentation", () => {
     ).toEqual({ left: 620, width: 280, maxHeight: 360, bottom: 88 });
   });
 
-  it("keeps the model submenu top-aligned with the main menu while flipping left", () => {
+  it("keeps the Model list inside the viewport when the trigger is near an edge", () => {
     expect(
-      rendererModelPickerModelMenuPlacement(
-        { left: 700, right: 1120, top: 100 },
-        { width: 1200, height: 900 },
+      rendererModelPickerStandaloneModelMenuPlacement(
+        { left: 0, right: 50, top: 820 },
+        { width: 240, height: 900 },
       ),
-    ).toEqual({ left: 416, top: 100, width: 280, maxHeight: 360 });
+    ).toMatchObject({ left: 8, width: 224 });
   });
 
-  it("keeps the model submenu on the right when there is enough space", () => {
-    expect(
-      rendererModelPickerModelMenuPlacement(
-        { left: 100, right: 280, top: 100 },
-        { width: 1200, height: 900 },
-      ),
-    ).toEqual({ left: 284, top: 100, width: 280, maxHeight: 360 });
-  });
-
-  it("does not rewrite an unchanged Thinking label", () => {
+  it("does not rewrite an unchanged label", () => {
     let value: string | null = "High";
     let writes = 0;
     const element = {
@@ -107,27 +74,15 @@ describe("Renderer combined Model and Thinking picker presentation", () => {
     expect(writes).toBe(1);
   });
 
-  it("shows only Adapter-reported Thinking options and the confirmed label", () => {
-    const view = rendererModelPickerPresentation({
-      status: "ready",
-      catalog: catalog(["off", "low", "high"]),
-      selected: model,
-      selectedThinkingOptionId: harnessThinkingOptionIdSchema.parse("high"),
-    });
-
-    expect(view).toEqual({
-      modelLabel: "provider / model",
-      thinkingLabel: "High",
-      thinkingOptions: [
-        { id: "off", label: "Off" },
-        { id: "low", label: "Low" },
-        { id: "high", label: "High" },
-      ],
-      showThinkingSection: true,
-      thinkingSelectionEnabled: true,
-    });
-    expect(view.thinkingOptions.map(({ id }) => id)).not.toContain("xhigh");
-    expect(view.thinkingOptions.map(({ id }) => id)).not.toContain("max");
+  it("shows only the Model label, without the Thinking Option", () => {
+    expect(
+      rendererModelPickerPresentation({
+        status: "ready",
+        catalog: catalog(["off", "low", "high"]),
+        selected: model,
+        selectedThinkingOptionId: harnessThinkingOptionIdSchema.parse("high"),
+      }),
+    ).toEqual({ modelLabel: "provider / model" });
   });
 
   it("shows a runtime-resolved Model label after the selected Model", () => {
@@ -158,109 +113,22 @@ describe("Renderer combined Model and Thinking picker presentation", () => {
     ).toEqual({
       modelLabel: "Family alias",
       resolvedModelLabel: "runtime-custom",
-      thinkingOptions: [],
-      showThinkingSection: false,
-      thinkingSelectionEnabled: false,
     });
   });
 
-  it("shows Claude Thinking options through the shared picker when selection is enabled", () => {
-    const claudeModel = harnessModelRefSchema.parse({ id: "claude-model-v1.c29ubmV0" });
-    const claudeCatalog = harnessModelCatalogSchema.parse({
-      models: [
-        {
-          ref: claudeModel,
-          label: "Family alias",
-          supportedThinkingOptionIds: ["off", "auto", "high"],
-        },
-      ],
-      defaultModel: claudeModel,
-      thinkingOptions: [
-        { id: "off", label: "Off" },
-        { id: "auto", label: "Auto" },
-        { id: "high", label: "High" },
-      ],
-      defaultThinkingOptionId: "auto",
-    });
-
-    expect(
-      rendererModelPickerPresentation({
-        status: "ready",
-        catalog: claudeCatalog,
-        selected: claudeModel,
-        selectedThinkingOptionId: harnessThinkingOptionIdSchema.parse("auto"),
-        thinkingSelectionSupported: true,
-      }),
-    ).toMatchObject({
-      thinkingLabel: "Auto",
-      thinkingOptions: [
-        { id: "off", label: "Off" },
-        { id: "auto", label: "Auto" },
-        { id: "high", label: "High" },
-      ],
-      showThinkingSection: true,
-      thinkingSelectionEnabled: true,
-    });
-  });
-
-  it("does not reuse global Thinking options for a Model without a declared list", () => {
-    const uninspectedCatalog = harnessModelCatalogSchema.parse({
-      models: [{ ref: model, label: "provider / model" }],
+  it("does not repeat a resolved label identical to the Model label", () => {
+    const sameCatalog = harnessModelCatalogSchema.parse({
+      models: [{ ref: model, label: "provider / model", resolvedModelLabel: "provider / model" }],
       defaultModel: model,
-      thinkingOptions: [
-        { id: "off", label: "Off" },
-        { id: "high", label: "High" },
-      ],
-      defaultThinkingOptionId: "high",
-    });
-
-    expect(
-      rendererModelPickerPresentation({
-        status: "ready",
-        catalog: uninspectedCatalog,
-        selected: model,
-        selectedThinkingOptionId: harnessThinkingOptionIdSchema.parse("high"),
-      }),
-    ).toEqual({
-      modelLabel: "provider / model",
       thinkingOptions: [],
-      showThinkingSection: false,
-      thinkingSelectionEnabled: false,
     });
-  });
 
-  it("omits the Thinking section and trigger suffix when Pi reports only off", () => {
     expect(
-      rendererModelPickerPresentation({
-        status: "ready",
-        catalog: catalog(["off"]),
-        selected: model,
-        selectedThinkingOptionId: harnessThinkingOptionIdSchema.parse("off"),
-      }),
-    ).toEqual({
-      modelLabel: "provider / model",
-      thinkingOptions: [{ id: "off", label: "Off" }],
-      showThinkingSection: false,
-      thinkingSelectionEnabled: false,
-    });
+      rendererModelPickerPresentation({ status: "ready", catalog: sameCatalog, selected: model }),
+    ).toEqual({ modelLabel: "provider / model" });
   });
 
-  it("shows one non-off Thinking option as read-only", () => {
-    expect(
-      rendererModelPickerPresentation({
-        status: "ready",
-        catalog: catalog(["minimal"]),
-        selected: model,
-        selectedThinkingOptionId: harnessThinkingOptionIdSchema.parse("minimal"),
-      }),
-    ).toMatchObject({
-      thinkingLabel: "Minimal",
-      showThinkingSection: true,
-      thinkingSelectionEnabled: false,
-    });
-  });
-
-  it("disables the combined control for loading and selection, but permits retry", () => {
+  it("disables the Model control for loading and selection, but permits retry", () => {
     const readyCatalog = catalog(["off", "low"]);
     expect(isRendererModelPickerDisabled({ status: "loading" })).toBe(true);
     const selectingView = {
@@ -284,27 +152,18 @@ describe("Renderer combined Model and Thinking picker presentation", () => {
     );
   });
 
-  it("uses stable loading and unsupported presentation without inventing options", () => {
+  it("uses stable loading, empty and unavailable labels", () => {
     for (const status of ["waitingForAdapter", "loading"] as const) {
       expect(isRendererModelPickerDisabled({ status })).toBe(true);
       expect(rendererModelPickerPresentation({ status })).toEqual({
         modelLabel: "Loading models...",
-        thinkingOptions: [],
-        showThinkingSection: false,
-        thinkingSelectionEnabled: false,
       });
     }
-    expect(
-      rendererModelPickerPresentation({
-        status: "ready",
-        catalog: catalog([]),
-        selected: model,
-      }),
-    ).toEqual({
-      modelLabel: "provider / model",
-      thinkingOptions: [],
-      showThinkingSection: false,
-      thinkingSelectionEnabled: false,
+    expect(rendererModelPickerPresentation({ status: "empty" })).toEqual({
+      modelLabel: "No models",
+    });
+    expect(rendererModelPickerPresentation({ status: "error" })).toEqual({
+      modelLabel: "Models unavailable",
     });
   });
 });

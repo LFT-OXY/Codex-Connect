@@ -278,7 +278,7 @@ test("restores the visible draft selection after a same-Host connection policy c
     .toMatchObject({ agent: "pi", model: { id: "pi-model-v1.startup" } });
 });
 
-test("Kiro selects Thinking inside the Model picker before a Thread exists", async ({
+test("Kiro selects Thinking through its own pill before a Thread exists", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1000, height: 700 });
@@ -297,39 +297,43 @@ test("Kiro selects Thinking inside the Model picker before a Thread exists", asy
   await page.evaluate(() => Reflect.set(globalThis, "startupAgent", "kiro-cli"));
   await page.addScriptTag({ content: browserBundle });
   const trigger = page.locator("[data-codexhost-model-control] > button");
-  const mainMenu = page.getByRole("menu", { name: "Model and Thinking", exact: true });
   const modelMenu = page.getByRole("menu", { name: "Model", exact: true });
+  const thinkingPill = page.locator("[data-codexhost-thinking-control] > button");
+  const thinkingCard = page.getByRole("dialog", { name: "Thinking", exact: true });
+  const slider = thinkingCard.getByRole("slider");
   await expect(trigger).toHaveAttribute("aria-label", "Model: Auto");
   await expect(trigger).toBeEnabled();
+  await expect(thinkingPill).toBeHidden();
   await trigger.click();
   await modelMenu.locator('[data-model-id="adjustable"]').click();
-  await expect(trigger).toHaveAttribute("aria-label", "Model: Adjustable Kiro Model, Low");
-  await trigger.click();
-  await expect(mainMenu).toBeVisible();
-  await expect(mainMenu.locator("[data-thinking-option-id]")).toHaveText([
-    "Low✓",
-    "Medium✓",
-    "High✓",
-  ]);
-  await mainMenu.locator('[data-thinking-option-id="high"]').click();
-  await expect(trigger).toHaveAttribute("aria-label", "Model: Adjustable Kiro Model, High");
+  await expect(trigger).toHaveAttribute("aria-label", "Model: Adjustable Kiro Model");
+  await expect(thinkingPill).toHaveAttribute("aria-label", "Thinking: Low");
+  await expect(thinkingCard).toBeHidden();
+  await thinkingPill.click();
+  await expect(thinkingCard).toBeVisible();
+  await expect(slider).toHaveAttribute("aria-valuemax", "2");
+  await expect(slider).toHaveAttribute("aria-valuetext", "Low");
+  const rail = await thinkingCard.locator("[data-codexhost-thinking-rail]").boundingBox();
+  if (!rail) throw new Error("Thinking rail geometry is unavailable");
+  await page.mouse.click(rail.x + rail.width, rail.y + rail.height / 2);
+  await expect(thinkingPill).toHaveAttribute("aria-label", "Thinking: High");
+  await expect(thinkingCard).toBeVisible();
   expect(await page.evaluate(() => Reflect.get(globalThis, "appliedConfiguration"))).toEqual({
     agent: "kiro-cli",
     model: { id: "adjustable" },
     thinkingOptionId: "high",
   });
-  await trigger.click();
-  await mainMenu.locator("[data-open-model-menu]").hover();
-  await expect(modelMenu).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("kiro-model-thinking-picker.png"),
     clip: { x: 0, y: 430, width: 600, height: 270 },
   });
-  await modelMenu.locator('[data-model-id="fixed"]').click();
-  await expect(trigger).toHaveAttribute("aria-label", "Model: Fixed Kiro Model");
+  await page.keyboard.press("Escape");
+  await expect(thinkingCard).toBeHidden();
   await trigger.click();
   await expect(modelMenu).toBeVisible();
-  await expect(mainMenu).toBeHidden();
+  await modelMenu.locator('[data-model-id="fixed"]').click();
+  await expect(trigger).toHaveAttribute("aria-label", "Model: Fixed Kiro Model");
+  await expect(thinkingPill).toBeHidden();
   expect(await page.evaluate(() => Reflect.get(globalThis, "appliedConfiguration"))).toEqual({
     agent: "kiro-cli",
     model: { id: "fixed" },

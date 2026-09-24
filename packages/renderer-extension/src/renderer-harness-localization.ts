@@ -10,6 +10,7 @@ export interface RendererHarnessMessages {
   readonly commandMenuHint: string;
   readonly textArgument: string;
   readonly permissionMode: string;
+  readonly thinkingOption: string;
   readonly permissions: string;
   readonly loadingPermissions: string;
   readonly selecting: string;
@@ -26,6 +27,7 @@ const ENGLISH_HARNESS_MESSAGES: RendererHarnessMessages = Object.freeze({
   commandMenuHint: "Type # for commands, skills and agents",
   textArgument: "Text",
   permissionMode: "Permission mode",
+  thinkingOption: "Thinking",
   permissions: "Permissions",
   loadingPermissions: "Loading permissions...",
   selecting: "Selecting...",
@@ -44,6 +46,7 @@ const CHINESE_HARNESS_MESSAGES: RendererHarnessMessages = Object.freeze({
   commandMenuHint: "输入 # 打开命令、技能和 Agent",
   textArgument: "文本",
   permissionMode: "权限模式",
+  thinkingOption: "思考",
   permissions: "权限",
   loadingPermissions: "正在加载权限...",
   selecting: "正在选择...",

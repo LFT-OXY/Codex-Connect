@@ -46,24 +46,19 @@ const { outputFiles } = await build({
           selectedThinkingOptionId: "low",
         };
         let control;
-        control = mountRendererModelPicker(
-          "test-composer",
-          undefined,
-          (modelId) => {
-            view = { ...view, status: "selecting" };
+        control = mountRendererModelPicker("test-composer", (modelId) => {
+          view = { ...view, status: "selecting" };
+          renderRendererModelPicker(control, view, true);
+          setTimeout(() => {
+            view = {
+              status: "ready",
+              catalog,
+              selected: modelId === modelB.id ? modelB : modelA,
+              selectedThinkingOptionId: modelId === modelB.id ? "high" : "low",
+            };
             renderRendererModelPicker(control, view, true);
-            setTimeout(() => {
-              view = {
-                status: "ready",
-                catalog,
-                selected: modelId === modelB.id ? modelB : modelA,
-                selectedThinkingOptionId: modelId === modelB.id ? "high" : "low",
-              };
-              renderRendererModelPicker(control, view, true);
-            }, 250);
-          },
-          () => {},
-        );
+          }, 250);
+        });
         document.body.append(control.root);
         renderRendererModelPicker(control, view, true);
       };
@@ -98,12 +93,7 @@ const { outputFiles } = await build({
           resolvedModelLabel: "Runtime custom",
           thinkingSelectionSupported: false,
         };
-        const control = mountRendererModelPicker(
-          "claude-composer",
-          "native-model-trigger",
-          () => {},
-          () => {},
-        );
+        const control = mountRendererModelPicker("claude-composer", () => {});
         document.body.append(control.root);
         renderRendererModelPicker(control, view, true);
       };
@@ -122,7 +112,7 @@ const { outputFiles } = await build({
 const browserBundle = outputFiles[0]?.text;
 if (!browserBundle) throw new Error("Renderer Model picker E2E bundle was not generated");
 
-test("selecting a Model keeps the main menu open and refreshes Thinking options", async ({
+test("the Model pill opens the Model list directly and closes it after selection", async ({
   page,
 }) => {
   await page.setContent(
@@ -137,57 +127,34 @@ test("selecting a Model keeps the main menu open and refreshes Thinking options"
 
   const root = page.locator('[data-codexhost-model-control="test-composer"]');
   const trigger = root.locator(':scope > button[aria-haspopup="menu"]');
-  const mainMenu = root.locator('[aria-label="Model and Thinking"]');
-  const modelMenu = root.locator('[aria-label="Model"]');
+  const modelMenu = page.getByRole("menu", { name: "Model", exact: true });
 
+  await expect(trigger).toHaveText("Provider / Model A");
   await trigger.click();
-  await expect(mainMenu).toBeVisible();
-  const [triggerBox, mainBox] = await Promise.all([trigger.boundingBox(), mainMenu.boundingBox()]);
-  if (!triggerBox || !mainBox) throw new Error("Model picker main menu geometry is unavailable");
-  expect(mainBox.y + mainBox.height).toBeLessThanOrEqual(triggerBox.y + 1);
-  await root.locator("button[data-open-model-menu]").click();
   await expect(modelMenu).toBeVisible();
-  const [openedMainBox, modelBox] = await Promise.all([
-    mainMenu.boundingBox(),
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(modelMenu.getByRole("searchbox")).toBeVisible();
+  await expect(page.locator("button[data-thinking-option-id]")).toHaveCount(0);
+  const [triggerBox, modelBox] = await Promise.all([
+    trigger.boundingBox(),
     modelMenu.boundingBox(),
   ]);
-  if (!openedMainBox || !modelBox) throw new Error("Model picker submenu geometry is unavailable");
-  expect(modelBox.x).toBeCloseTo(openedMainBox.x + openedMainBox.width + 4, 0);
-  expect(modelBox.y + modelBox.height).toBeCloseTo(openedMainBox.y + openedMainBox.height, 0);
+  if (!triggerBox || !modelBox) throw new Error("Model list geometry is unavailable");
+  expect(modelBox.y + modelBox.height).toBeLessThanOrEqual(triggerBox.y + 1);
   expect(modelBox.height).toBeLessThanOrEqual(360);
+
   await modelMenu.locator('button[data-model-id="model-b"]').click();
-
   await expect(modelMenu).toBeHidden();
-  await expect(mainMenu).toBeVisible();
   await expect(trigger).toBeDisabled();
-  await expect(root.locator("button[data-thinking-option-id]:not(:disabled)")).toHaveCount(0);
-
   await expect(trigger).toBeEnabled();
-  await expect(mainMenu).toBeVisible();
-  const thinkingOptions = root.locator("button[data-thinking-option-id]");
-  await expect(thinkingOptions).toHaveCount(3);
-  await expect
-    .poll(() =>
-      thinkingOptions.evaluateAll((options) =>
-        options.map((option) => option.getAttribute("data-thinking-option-id")),
-      ),
-    )
-    .toEqual(["off", "high", "xhigh"]);
+  await expect(trigger).toHaveText("Provider / Model B");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
 });
 
-test("Claude aliases show actual runtime Model without exposing Thinking", async ({ page }) => {
-  await page.setContent(`
-    <!doctype html>
-    <style>
-      .native-model-trigger {
-        display: flex;
-        width: 100%;
-        gap: 4px;
-        padding: 4px 8px;
-      }
-    </style>
-    <body style="display:flex;align-items:flex-end;min-height:100vh;margin:0"></body>
-  `);
+test("Claude aliases show the actual runtime Model as secondary text", async ({ page }) => {
+  await page.setContent(
+    '<!doctype html><body style="display:flex;align-items:flex-end;min-height:100vh;margin:0"></body>',
+  );
   await page.addScriptTag({ content: browserBundle });
   await page.evaluate(() => {
     const setup = Reflect.get(globalThis, "setupClaudeRendererModelPicker");
@@ -199,7 +166,6 @@ test("Claude aliases show actual runtime Model without exposing Thinking", async
   const trigger = root.locator(':scope > button[aria-haspopup="menu"]');
   await expect(trigger).toContainText("Family alias");
   await expect(trigger).toContainText("Runtime custom");
-  await expect(trigger).not.toContainText("\u2304");
   await expect(trigger).toHaveAttribute("aria-label", /Family alias, Runtime custom/u);
   const secondaryLabel = trigger.locator("span").last();
   const [labelTriggerBox, secondaryLabelBox] = await Promise.all([
@@ -213,26 +179,16 @@ test("Claude aliases show actual runtime Model without exposing Thinking", async
   expect(trailingSpace).toBeLessThanOrEqual(16);
 
   await trigger.click();
-  await expect(root.locator("button[data-thinking-option-id]")).toHaveCount(0);
-  await root.locator("button[data-open-model-menu]").click();
-  const mainMenu = root.locator('[aria-label="Model and Thinking"]');
-  const modelMenu = root.locator('[aria-label="Model"]');
+  const modelMenu = page.getByRole("menu", { name: "Model", exact: true });
   await expect(modelMenu.locator("button[data-model-id]")).toHaveCount(2);
-  const geometry = await Promise.all([
+  const [claudeTriggerBox, modelBox, viewport] = await Promise.all([
     trigger.boundingBox(),
-    mainMenu.boundingBox(),
     modelMenu.boundingBox(),
     page.evaluate(() => ({ height: window.innerHeight, width: window.innerWidth })),
   ]);
-  const [claudeTriggerBox, mainBox, modelBox, viewport] = geometry;
-  if (!claudeTriggerBox || !mainBox || !modelBox)
-    throw new Error("Model picker geometry is unavailable");
-  expect(mainBox.y + mainBox.height).toBeLessThanOrEqual(claudeTriggerBox.y + 1);
-  expect(modelBox.x).toBeCloseTo(mainBox.x + mainBox.width + 4, 0);
-  expect(modelBox.y + modelBox.height).toBeCloseTo(mainBox.y + mainBox.height, 0);
-  expect(modelBox.height).toBeLessThanOrEqual(360);
+  if (!claudeTriggerBox || !modelBox) throw new Error("Model list geometry is unavailable");
+  expect(modelBox.y + modelBox.height).toBeLessThanOrEqual(claudeTriggerBox.y + 1);
+  expect(modelBox.x).toBeGreaterThanOrEqual(8);
   expect(modelBox.x + modelBox.width).toBeLessThanOrEqual(viewport.width - 8);
-  expect(modelBox.y).toBeGreaterThanOrEqual(8);
-  expect(modelBox.y + modelBox.height).toBeLessThanOrEqual(viewport.height - 8);
   await expect(root).not.toContainText("claude-model-v1");
 });

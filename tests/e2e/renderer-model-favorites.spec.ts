@@ -13,7 +13,7 @@ const { outputFiles } = await build({
         globalThis.selections += 1;
         view.selected = { id: modelId };
         renderRendererModelPicker(control, view, true, harnessId);
-      }, () => {});
+      });
       let harnessId = "pi";
       globalThis.selections = 0;
       document.body.append(control.root);

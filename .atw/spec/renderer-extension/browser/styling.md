@@ -12,6 +12,8 @@
 - Desktop 自身也用 Tailwind v4，类名、`--tw-*` 变量和 layer 名都会冲突，所以 Tailwind 编译结果只能进入设置页的 Shadow DOM。
 - 注入控件的样式按“一个模块一个 `<style data-codexhost-…-style>`，幂等插入”的方式写：`renderer-trigger-chip-style.ts#ensureRendererTriggerChipStyle`、`renderer-model-option-style.ts`、`renderer-delegation-mention.ts`。插入前用属性选择器查重，选择器以 `codexhost-` class 或 `data-codexhost-*` 属性为作用域。
 - 需要 `:hover` / `:disabled` / `[data-state="open"]` 这类伪类时写进样式表；每个控件自己的高度、内边距和挤压宽度用内联 style 设置（`applyRendererTriggerChipSqueezeTrigger`）。不要复制 Desktop 的私有 class 或设计 token（事故记录见该文件头注释，提交 `fb4f94d8` 处理了侧边栏收窄时的 chip 挤压）。
+- **已知例外**：模型列表与思考卡片的外框共用 `renderer-model-picker.ts` 导出的 `MENU_CLASSES`（`bg-token-dropdown-background/90`、`text-token-foreground` 等 Desktop Tailwind 类），这是为了让两个弹层外观一致，经 `split-model-thinking-pills` 任务确认保留。Desktop 改名这些 token 时两者会一起失去底色。不要再把它扩展到新控件；新弹层的配色放进自己的 `data-codexhost-*` 样式表，用自定义常量加 `light-dark()` 跟随宿主 color-scheme（参见 `renderer-thinking-option-style.ts`、`renderer-usage-control.ts#applyRendererPopoverChrome`）。
+- 动画必须在 `@media (prefers-reduced-motion: reduce)` 下关闭（例如思考滑块的星点闪烁与填充过渡）。
 
 ## 设置页 Tailwind 规则（摘自架构文档，均已在代码中落地）
 

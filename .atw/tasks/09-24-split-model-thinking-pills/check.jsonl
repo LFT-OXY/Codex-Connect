@@ -1,0 +1,6 @@
+{"file": ".atw/spec/renderer-extension/browser/index.md", "reason": "renderer-extension 边界、改动前检查清单（文案双语、规模阈值）"}
+{"file": ".atw/spec/renderer-extension/browser/styling.md", "reason": "注入控件样式表规则，禁止复用 Desktop 私有 token"}
+{"file": ".atw/spec/renderer-extension/browser/testing.md", "reason": "Node 环境 vitest 接缝选择：视图函数优先"}
+{"file": ".atw/spec/renderer-extension/browser/dom-integration.md", "reason": "Composer 控件挂载与原生 DOM 接入"}
+{"file": ".atw/spec/guides/index.md", "reason": "共享思考指南"}
+{"file": ".atw/tasks/09-24-split-model-thinking-pills/research/discover-decisions.md", "reason": "访谈决策 Q1–Q19"}

@@ -24,6 +24,11 @@ import {
   type RendererModelPickerControl,
 } from "./renderer-model-picker.js";
 import {
+  mountRendererThinkingOptionPicker,
+  renderRendererThinkingOptionPicker,
+  type RendererThinkingOptionPickerControl,
+} from "./renderer-thinking-option-picker.js";
+import {
   isPermissionModeControlReady,
   mountRendererPermissionModePicker,
   renderRendererPermissionModePicker,
@@ -83,6 +88,7 @@ export interface ComposerAgentControl {
   root: HTMLElement;
   picker: RendererAgentPickerControl;
   modelPicker: RendererModelPickerControl;
+  thinkingPicker: RendererThinkingOptionPickerControl;
   permissionModePicker: RendererPermissionModePickerControl;
   nativeModelControl: NativeModelControlState | null;
   nativePermissionModeControl: NativePermissionModeControlState | null;
@@ -119,6 +125,7 @@ function isOwnedRendererControl(element: Element): boolean {
   return (
     element.hasAttribute(CONTROL_ATTRIBUTE) ||
     element.hasAttribute("data-codexhost-model-control") ||
+    element.hasAttribute("data-codexhost-thinking-control") ||
     element.hasAttribute("data-codexhost-permission-mode-control") ||
     element.hasAttribute("data-codexhost-usage-control") ||
     element.hasAttribute("data-codexhost-credits-control") ||
@@ -529,21 +536,25 @@ export function refreshSendButton(control: ComposerAgentControl): HTMLButtonElem
 function refreshTrailingClusterPlacement(control: ComposerAgentControl): void {
   const sendButton = refreshSendButton(control);
   const modelRoot = control.modelPicker?.root;
+  const thinkingRoot = control.thinkingPicker?.root;
   const agentRoot = control.root ?? control.picker?.root;
-  if (!sendButton || !modelRoot || !agentRoot) return;
+  if (!sendButton || !modelRoot || !thinkingRoot || !agentRoot) return;
   const anchor = trailingActionAnchor(sendButton);
   const parent = anchor.parentElement;
   if (!parent || typeof parent.insertBefore !== "function") return;
   if (!parent.isConnected || !control.composer.contains(parent)) return;
   if (
     modelRoot.parentElement === parent &&
+    thinkingRoot.parentElement === parent &&
     agentRoot.parentElement === parent &&
-    modelRoot.nextElementSibling === agentRoot &&
+    modelRoot.nextElementSibling === thinkingRoot &&
+    thinkingRoot.nextElementSibling === agentRoot &&
     agentRoot.nextElementSibling === anchor
   ) {
     return;
   }
   parent.insertBefore(modelRoot, anchor);
+  parent.insertBefore(thinkingRoot, anchor);
   parent.insertBefore(agentRoot, anchor);
 }
 
@@ -676,7 +687,8 @@ export function mountComposerAgentControl(
     onDownload,
     onOpenProviderPicker,
   );
-  const modelPicker = mountRendererModelPicker(composerId, onSelectModel, onSelectThinking);
+  const modelPicker = mountRendererModelPicker(composerId, onSelectModel);
+  const thinkingPicker = mountRendererThinkingOptionPicker(composerId, onSelectThinking);
   const permissionModePicker = mountRendererPermissionModePicker(
     composerId,
     onSelectPermissionMode,
@@ -697,13 +709,14 @@ export function mountComposerAgentControl(
     composer.append(permissionModePicker.root);
   }
 
-  if (!toolbar) composer.append(modelPicker.root, picker.root);
+  if (!toolbar) composer.append(modelPicker.root, thinkingPicker.root, picker.root);
   const control = {
     composer,
     composerId,
     root: picker.root,
     picker,
     modelPicker,
+    thinkingPicker,
     permissionModePicker,
     nativeModelControl,
     nativePermissionModeControl,
@@ -801,6 +814,13 @@ export function renderComposerAgentControl(
     switching || state.agent !== "codex",
   );
   renderRendererModelPicker(control.modelPicker, modelView, state.agent !== "codex", state.agent);
+  renderRendererThinkingOptionPicker(
+    control.thinkingPicker,
+    modelView,
+    state.agent !== "codex",
+    state.agent,
+    locale,
+  );
   const permissionModeVisible =
     state.agent !== "codex" &&
     permissionModeView.status !== "idle" &&
@@ -845,6 +865,7 @@ export function disposeComposerAgentControl(control: ComposerAgentControl): void
   control.usage = null;
   control.harnessCommands.dispose();
   control.permissionModePicker.dispose();
+  control.thinkingPicker.dispose();
   control.modelPicker.dispose();
   control.picker.dispose();
 }

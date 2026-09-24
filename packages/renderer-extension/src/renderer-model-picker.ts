@@ -6,10 +6,7 @@ import type {
 } from "@codexhost/shared-contracts";
 
 import {
-  rendererModelPickerMainMenuPlacement,
-  rendererModelPickerModelMenuPlacement,
   rendererModelPickerStandaloneModelMenuPlacement,
-  RENDERER_MODEL_PICKER_MAIN_MENU_WIDTH,
   RENDERER_MODEL_PICKER_MODEL_MENU_MAX_HEIGHT,
 } from "./renderer-model-picker-positioning.js";
 import {
@@ -23,7 +20,7 @@ import {
 import { readModelFavorites, writeModelFavorites } from "./renderer-model-favorites.js";
 import { createModelFavoriteIcon, ensureModelOptionStyle } from "./renderer-model-option-style.js";
 
-const MENU_CLASSES =
+export const MENU_CLASSES =
   "fixed z-50 overflow-hidden rounded-xl bg-token-dropdown-background/90 text-token-foreground shadow-lg backdrop-blur-xl";
 
 const SEARCH_INPUT_CLASSES =
@@ -47,11 +44,7 @@ export interface RendererModelControlView {
 
 export interface RendererModelPickerPresentation {
   modelLabel: string;
-  thinkingLabel?: string;
   resolvedModelLabel?: string;
-  thinkingOptions: HarnessThinkingOption[];
-  showThinkingSection: boolean;
-  thinkingSelectionEnabled: boolean;
 }
 
 interface ModelOptionControl {
@@ -63,26 +56,18 @@ interface ModelOptionControl {
   searchText: string;
 }
 
-interface ThinkingOptionControl {
-  button: HTMLButtonElement;
-  check: HTMLElement;
-}
-
 export interface RendererModelPickerControl {
   root: HTMLElement;
   trigger: HTMLButtonElement;
   label: HTMLElement;
-  thinkingLabel: HTMLElement;
-  menu: HTMLElement;
+  resolvedLabel: HTMLElement;
   modelMenu: HTMLElement;
-  modelButton: HTMLButtonElement;
   searchInput: HTMLInputElement;
   searchHeader: HTMLElement;
   searchEmpty: HTMLElement;
   harnessId: string;
   favorites: Set<string>;
   options: Map<string, ModelOptionControl>;
-  thinkingOptions: Map<string, ThinkingOptionControl>;
   close(): void;
   dispose(): void;
 }
@@ -152,7 +137,7 @@ export function shouldCloseRendererModelPicker(view: RendererModelControlView): 
   return isRendererModelPickerDisabled(view) && view.status !== "selecting";
 }
 
-function isTransientPickerState(view: RendererModelControlView): boolean {
+export function isRendererModelPickerTransient(view: RendererModelControlView): boolean {
   return view.status === "idle" || view.status === "loading";
 }
 
@@ -160,14 +145,6 @@ export function rendererModelPickerPresentation(
   view: RendererModelControlView,
 ): RendererModelPickerPresentation {
   const selectedModel = view.catalog?.models.find((model) => model.ref.id === view.selected?.id);
-  const thinkingOptions =
-    view.thinkingSelectionSupported === false
-      ? []
-      : thinkingOptionsForModel(view.catalog, view.selected);
-  const selectedThinking = thinkingOptions.find(({ id }) => id === view.selectedThinkingOptionId);
-  const showThinkingSection =
-    thinkingOptions.length > 0 &&
-    !(thinkingOptions.length === 1 && thinkingOptions[0]?.id === "off");
   const resolvedModelLabel = view.resolvedModelLabel ?? selectedModel?.resolvedModelLabel;
   let modelLabel = "Select model";
   if (selectedModel) modelLabel = selectedModel.label;
@@ -179,46 +156,14 @@ export function rendererModelPickerPresentation(
   return {
     modelLabel,
     ...(resolvedModelLabel && resolvedModelLabel !== modelLabel ? { resolvedModelLabel } : {}),
-    thinkingOptions,
-    showThinkingSection,
-    thinkingSelectionEnabled: thinkingOptions.length > 1,
-    ...(showThinkingSection && selectedThinking ? { thinkingLabel: selectedThinking.label } : {}),
   };
 }
 
-function positionMainMenu(control: RendererModelPickerControl): void {
-  const triggerRect = control.trigger.getBoundingClientRect();
-  const placement = rendererModelPickerMainMenuPlacement(
-    triggerRect,
+function positionModelMenu(control: RendererModelPickerControl): void {
+  const placement = rendererModelPickerStandaloneModelMenuPlacement(
+    control.trigger.getBoundingClientRect(),
     { width: window.innerWidth, height: window.innerHeight },
-    RENDERER_MODEL_PICKER_MAIN_MENU_WIDTH,
   );
-  control.menu.style.setProperty("width", `${placement.width}px`, "important");
-  control.menu.style.left = `${placement.left}px`;
-  control.menu.style.maxWidth = `${placement.width}px`;
-  control.menu.style.right = "auto";
-  control.menu.style.top = "auto";
-  control.menu.style.bottom = `${placement.bottom}px`;
-}
-
-function positionAdvancedMenus(control: RendererModelPickerControl): void {
-  positionMainMenu(control);
-  positionModelMenu(control);
-}
-
-function positionModelMenu(control: RendererModelPickerControl, standalone = false): void {
-  const anchorRect = standalone
-    ? control.trigger.getBoundingClientRect()
-    : control.menu.getBoundingClientRect();
-  const placement = standalone
-    ? rendererModelPickerStandaloneModelMenuPlacement(anchorRect, {
-        width: window.innerWidth,
-        height: window.innerHeight,
-      })
-    : rendererModelPickerModelMenuPlacement(anchorRect, {
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
   control.modelMenu.style.setProperty("width", `${placement.width}px`, "important");
   control.modelMenu.style.left = `${placement.left}px`;
   control.modelMenu.style.maxWidth = `${placement.width}px`;
@@ -298,7 +243,6 @@ function orderModelFavorites(control: RendererModelPickerControl): void {
 export function mountRendererModelPicker(
   composerId: string,
   onSelectModel: (modelId: string) => void,
-  onSelectThinking: (thinkingOptionId: string) => void,
 ): RendererModelPickerControl {
   ensureRendererTriggerChipStyle(document);
   ensureModelOptionStyle(document);
@@ -330,46 +274,24 @@ export function mountRendererModelPicker(
   label.style.textOverflow = "ellipsis";
   label.style.whiteSpace = "nowrap";
 
-  const thinkingLabel = document.createElement("span");
-  thinkingLabel.style.color = "var(--color-text-tertiary, #8f8f8f)";
-  thinkingLabel.style.flex = "0 1 auto";
-  thinkingLabel.style.maxWidth = "72px";
-  thinkingLabel.style.overflow = "hidden";
-  thinkingLabel.style.textOverflow = "ellipsis";
-  thinkingLabel.style.whiteSpace = "nowrap";
-  thinkingLabel.hidden = true;
+  const resolvedLabel = document.createElement("span");
+  resolvedLabel.style.color = "var(--color-text-tertiary, #8f8f8f)";
+  resolvedLabel.style.flex = "0 1 auto";
+  resolvedLabel.style.maxWidth = "72px";
+  resolvedLabel.style.overflow = "hidden";
+  resolvedLabel.style.textOverflow = "ellipsis";
+  resolvedLabel.style.whiteSpace = "nowrap";
+  resolvedLabel.hidden = true;
 
-  trigger.append(label, thinkingLabel);
-
-  const menu = document.createElement("div");
-  menu.id = `${composerId}-model-menu`;
-  menu.setAttribute("role", "menu");
-  menu.setAttribute("aria-label", "Model and Thinking");
-  // The Model submenu is a separate top-layer popover appended to the document,
-  // so an `auto` popover here would light-dismiss whenever the search input or
-  // a model option inside that submenu receives a pointer. Dismissal is handled
-  // manually (onDocumentPointerDown / onDocumentKeyDown) instead.
-  menu.setAttribute("popover", "manual");
-  menu.className = MENU_CLASSES;
-  menu.style.position = "fixed";
-  menu.style.inset = "auto";
-  menu.style.margin = "0";
-  menu.style.padding = "4px";
-  menu.style.border = "0";
-  trigger.setAttribute("aria-controls", menu.id);
-
-  const modelButton = document.createElement("button");
-  modelButton.type = "button";
-  modelButton.dataset.openModelMenu = "true";
-  modelButton.setAttribute("role", "menuitem");
-  modelButton.setAttribute("aria-haspopup", "menu");
-  modelButton.setAttribute("aria-expanded", "false");
-  modelButton.className = OPTION_CLASSES;
+  trigger.append(label, resolvedLabel);
 
   const modelMenu = document.createElement("div");
-  modelMenu.id = `${composerId}-model-submenu`;
+  modelMenu.id = `${composerId}-model-menu`;
   modelMenu.setAttribute("role", "menu");
   modelMenu.setAttribute("aria-label", "Model");
+  // An `auto` popover would light-dismiss unpredictably around the search
+  // input; dismissal is handled manually (onDocumentPointerDown /
+  // onDocumentKeyDown) instead.
   modelMenu.setAttribute("popover", "manual");
   modelMenu.className = MENU_CLASSES;
   modelMenu.dataset.codexhostModelScrollable = "true";
@@ -381,10 +303,9 @@ export function mountRendererModelPicker(
   modelMenu.style.border = "0";
   modelMenu.style.maxHeight = `min(${RENDERER_MODEL_PICKER_MODEL_MENU_MAX_HEIGHT}px, 60vh)`;
   modelMenu.style.overflowY = "auto";
-  modelButton.setAttribute("aria-controls", modelMenu.id);
+  trigger.setAttribute("aria-controls", modelMenu.id);
 
   const options = new Map<string, ModelOptionControl>();
-  const thinkingOptions = new Map<string, ThinkingOptionControl>();
   const searchInput = document.createElement("input");
   searchInput.type = "search";
   searchInput.placeholder = "Search models";
@@ -429,7 +350,7 @@ export function mountRendererModelPicker(
   }
   // Safety net: if the harness still manages to steal focus to the composer
   // (e.g. via an earlier capture-phase listener), pull the cursor back into the
-  // search box as long as the submenu remains open.
+  // search box as long as the menu remains open.
   const onSearchBlur = (): void => {
     if (!popoverOpen(modelMenu)) return;
     const active = document.activeElement;
@@ -451,66 +372,29 @@ export function mountRendererModelPicker(
     });
   };
   searchInput.addEventListener("blur", onSearchBlur);
-  const closeModelMenu = (): void => {
+  const close = (): void => {
     if (popoverOpen(modelMenu)) modelMenu.hidePopover();
-    modelButton.setAttribute("aria-expanded", "false");
     if (searchInput.value !== "") {
       searchInput.value = "";
       applyModelSearchFilter(control);
     }
   };
-  const pickerOpen = (): boolean => popoverOpen(menu) || popoverOpen(modelMenu);
-  const close = (): void => {
-    closeModelMenu();
-    if (popoverOpen(menu)) menu.hidePopover();
-  };
-  const openModelMenu = (standalone = false): void => {
-    if ((!standalone && !popoverOpen(menu)) || popoverOpen(modelMenu)) return;
+  const open = (): void => {
+    if (trigger.disabled || popoverOpen(modelMenu)) return;
     control.favorites = readModelFavorites(control.harnessId);
     orderModelFavorites(control);
     modelMenu.scrollTop = 0;
     modelMenu.showPopover();
-    positionModelMenu(control, standalone);
-    modelButton.setAttribute("aria-expanded", "true");
-  };
-  const open = (): void => {
-    if (trigger.disabled || pickerOpen()) return;
-    if (control.thinkingOptions.size === 0) {
-      openModelMenu(true);
-      return;
-    }
-    menu.showPopover();
-    positionAdvancedMenus(control);
+    positionModelMenu(control);
   };
   const onTriggerClick = (): void => {
-    if (pickerOpen()) close();
+    if (popoverOpen(modelMenu)) close();
     else open();
-  };
-  const onToggle = (): void => {
-    const openState = popoverOpen(menu);
-    trigger.setAttribute("aria-expanded", String(openState || popoverOpen(modelMenu)));
-    trigger.setAttribute("data-state", openState ? "open" : "closed");
-    if (!openState) closeModelMenu();
   };
   const onModelToggle = (): void => {
     const openState = popoverOpen(modelMenu);
-    modelButton.setAttribute("aria-expanded", String(openState));
-    trigger.setAttribute("aria-expanded", String(openState || popoverOpen(menu)));
-    trigger.setAttribute("data-state", openState || popoverOpen(menu) ? "open" : "closed");
-  };
-  const onRootClick = (event: MouseEvent): void => {
-    const target =
-      event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button") : null;
-    if (target?.dataset.openModelMenu) {
-      openModelMenu();
-      control.searchInput.focus();
-      return;
-    }
-    if (target?.dataset.thinkingOptionId) {
-      close();
-      trigger.focus();
-      onSelectThinking(target.dataset.thinkingOptionId);
-    }
+    trigger.setAttribute("aria-expanded", String(openState));
+    trigger.setAttribute("data-state", openState ? "open" : "closed");
   };
   const onModelMenuClick = (event: MouseEvent): void => {
     const favoriteButton =
@@ -543,42 +427,35 @@ export function mountRendererModelPicker(
     trigger.focus();
     onSelectModel(target.dataset.modelId);
   };
-  const onModelHover = (): void => openModelMenu();
   const onDocumentPointerDown = (event: PointerEvent): void => {
-    if (!popoverOpen(menu) && !popoverOpen(modelMenu)) return;
+    if (!popoverOpen(modelMenu)) return;
     const target = event.target instanceof Node ? event.target : null;
-    if (target && (root.contains(target) || menu.contains(target) || modelMenu.contains(target))) {
-      return;
-    }
+    if (target && (root.contains(target) || modelMenu.contains(target))) return;
     close();
   };
   const onDocumentKeyDown = (event: KeyboardEvent): void => {
     if (event.key !== "Escape") return;
-    if (!popoverOpen(menu) && !popoverOpen(modelMenu)) return;
+    if (!popoverOpen(modelMenu)) return;
     event.preventDefault();
     close();
     trigger.focus();
   };
   const onViewportChange = (): void => {
-    if (popoverOpen(menu)) positionAdvancedMenus(control);
-    else if (popoverOpen(modelMenu)) positionModelMenu(control, true);
+    if (popoverOpen(modelMenu)) positionModelMenu(control);
   };
   trigger.addEventListener("click", onTriggerClick);
-  menu.addEventListener("toggle", onToggle);
   modelMenu.addEventListener("toggle", onModelToggle);
-  modelButton.addEventListener("mouseenter", onModelHover);
-  menu.addEventListener("click", onRootClick);
   modelMenu.addEventListener("click", onModelMenuClick);
   document.addEventListener("pointerdown", onDocumentPointerDown, true);
   document.addEventListener("keydown", onDocumentKeyDown, true);
   window.addEventListener("resize", onViewportChange);
   window.addEventListener("scroll", onViewportChange, true);
-  // Keep both popovers in the document viewport's coordinate space. The native
+  // Keep the popover in the document viewport's coordinate space. The native
   // composer toolbar can be affected by browser zoom or a transformed ancestor;
-  // portaling the menus prevents fixed-position coordinates from being resolved
+  // portaling the menu prevents fixed-position coordinates from being resolved
   // in that local coordinate space.
   root.append(trigger);
-  document.body.append(menu, modelMenu);
+  document.body.append(modelMenu);
   searchHeader.append(searchInput);
   modelMenu.append(searchHeader, searchEmpty);
 
@@ -586,25 +463,19 @@ export function mountRendererModelPicker(
     root,
     trigger,
     label,
-    thinkingLabel,
-    menu,
+    resolvedLabel,
     modelMenu,
-    modelButton,
     searchInput,
     searchHeader,
     searchEmpty,
     harnessId: "",
     favorites: new Set(),
     options,
-    thinkingOptions,
     close,
     dispose() {
       close();
       trigger.removeEventListener("click", onTriggerClick);
-      menu.removeEventListener("toggle", onToggle);
       modelMenu.removeEventListener("toggle", onModelToggle);
-      modelButton.removeEventListener("mouseenter", onModelHover);
-      menu.removeEventListener("click", onRootClick);
       modelMenu.removeEventListener("click", onModelMenuClick);
       searchInput.removeEventListener("input", onSearchInput);
       for (const type of silencedEventTypes) {
@@ -615,7 +486,6 @@ export function mountRendererModelPicker(
       document.removeEventListener("keydown", onDocumentKeyDown, true);
       window.removeEventListener("resize", onViewportChange);
       window.removeEventListener("scroll", onViewportChange, true);
-      menu.remove();
       modelMenu.remove();
       root.remove();
     },
@@ -625,49 +495,12 @@ export function mountRendererModelPicker(
 }
 
 function rebuildOptions(control: RendererModelPickerControl, view: RendererModelControlView): void {
-  const presentation = rendererModelPickerPresentation(view);
   control.options.clear();
-  control.thinkingOptions.clear();
-  control.menu.replaceChildren();
   control.modelMenu.replaceChildren(
     createHeading("Model"),
     control.searchHeader,
     control.searchEmpty,
   );
-
-  if (presentation.showThinkingSection) {
-    control.menu.append(createHeading("Thinking"));
-    for (const option of presentation.thinkingOptions) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.dataset.thinkingOptionId = option.id;
-      button.setAttribute("role", "menuitemradio");
-      button.className = OPTION_CLASSES;
-
-      const text = document.createElement("span");
-      text.textContent = option.label;
-      text.className = "min-w-0 flex-1 truncate";
-      const check = createCheck();
-      button.append(text, check);
-      control.thinkingOptions.set(option.id, { button, check });
-      control.menu.append(button);
-    }
-    const divider = document.createElement("div");
-    divider.setAttribute("role", "separator");
-    divider.className = "my-1 h-px bg-token-border";
-    control.menu.append(divider);
-  }
-
-  const modelText = document.createElement("span");
-  modelText.textContent = presentation.modelLabel;
-  modelText.className = "min-w-0 flex-1 truncate";
-  modelText.title = presentation.modelLabel;
-  const modelChevron = document.createElement("span");
-  modelChevron.textContent = "\u203a";
-  modelChevron.setAttribute("aria-hidden", "true");
-  modelChevron.className = "shrink-0 text-token-text-tertiary";
-  control.modelButton.replaceChildren(modelText, modelChevron);
-  control.menu.append(control.modelButton);
 
   for (const model of view.catalog?.models ?? []) {
     const button = document.createElement("button");
@@ -704,9 +537,9 @@ function rebuildOptions(control: RendererModelPickerControl, view: RendererModel
   }
   orderModelFavorites(control);
   applyModelSearchFilter(control);
-  // rebuildOptions replaced the submenu children above, which moves the focused
+  // rebuildOptions replaced the menu children above, which moves the focused
   // search input out and back in and therefore drops focus; restore it while
-  // the submenu stays open.
+  // the menu stays open.
   if (popoverOpen(control.modelMenu)) control.searchInput.focus();
 }
 
@@ -733,17 +566,12 @@ export function renderRendererModelPicker(
     return;
   }
   const presentation = rendererModelPickerPresentation(view);
-  const catalogSignature = JSON.stringify({
-    models: view.catalog?.models,
-    thinkingOptions: presentation.thinkingOptions,
-    showThinkingSection: presentation.showThinkingSection,
-    modelLabel: presentation.modelLabel,
-  });
+  const catalogSignature = JSON.stringify({ models: view.catalog?.models });
   // While the popover is open and the picker passes through a transient state
   // (conversation target rebind or catalog reload during turn renders), keep the
   // already-rendered menu stable: do not rebuild it to an empty list or
   // force-close it under the pointer. It refreshes once a real catalog returns.
-  const keepOpenMenu = popoverOpen(control.menu) && isTransientPickerState(view);
+  const keepOpenMenu = popoverOpen(control.modelMenu) && isRendererModelPickerTransient(view);
   if (control.root.dataset.catalogSignature !== catalogSignature && !keepOpenMenu) {
     rebuildOptions(control, view);
     control.root.dataset.catalogSignature = catalogSignature;
@@ -751,11 +579,11 @@ export function renderRendererModelPicker(
 
   syncRendererLabelText(control.label, presentation.modelLabel);
   control.label.title = presentation.modelLabel;
-  const secondaryLabel = presentation.thinkingLabel ?? presentation.resolvedModelLabel;
-  syncRendererLabelText(control.thinkingLabel, secondaryLabel ?? "");
-  control.thinkingLabel.hidden = secondaryLabel === undefined;
-  const accessibleLabel = secondaryLabel
-    ? `${presentation.modelLabel}, ${secondaryLabel}`
+  const resolvedModelLabel = presentation.resolvedModelLabel;
+  syncRendererLabelText(control.resolvedLabel, resolvedModelLabel ?? "");
+  control.resolvedLabel.hidden = resolvedModelLabel === undefined;
+  const accessibleLabel = resolvedModelLabel
+    ? `${presentation.modelLabel}, ${resolvedModelLabel}`
     : presentation.modelLabel;
   control.trigger.title = view.error ?? accessibleLabel;
   control.trigger.setAttribute("aria-label", `Model: ${accessibleLabel}`);
@@ -765,7 +593,6 @@ export function renderRendererModelPicker(
   );
   control.trigger.disabled = isRendererModelPickerDisabled(view);
   if (shouldCloseRendererModelPicker(view) && !keepOpenMenu) control.close();
-  control.modelButton.disabled = control.trigger.disabled;
   // The search input must not mirror the trigger's disabled state: disabling a
   // focused element blurs it, which would drop the cursor out of the box during
   // transient states (e.g. "selecting"). Filtering is client-side and safe.
@@ -775,13 +602,6 @@ export function renderRendererModelPicker(
     option.button.setAttribute("aria-checked", String(selected));
     option.button.classList.toggle("bg-token-list-hover-background", selected);
     option.button.disabled = control.trigger.disabled;
-    option.check.style.visibility = selected ? "visible" : "hidden";
-  }
-  for (const [thinkingOptionId, option] of control.thinkingOptions) {
-    const selected = thinkingOptionId === view.selectedThinkingOptionId;
-    option.button.setAttribute("aria-checked", String(selected));
-    option.button.classList.toggle("bg-token-list-hover-background", selected);
-    option.button.disabled = control.trigger.disabled || !presentation.thinkingSelectionEnabled;
     option.check.style.visibility = selected ? "visible" : "hidden";
   }
 }

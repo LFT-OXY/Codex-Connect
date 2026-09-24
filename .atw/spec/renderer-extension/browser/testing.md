@@ -14,7 +14,7 @@
 `tests/vitest.config.js` 的 `environment` 是 `"node"`，仓库里没有 jsdom 或 happy-dom，也不编译 CSS。能直接测的只有纯函数；涉及 DOM 的代码有三种现成写法，按优先顺序选：
 
 1. **注入 DOM 端口**：模块接收一个小接口，测试里提供 Fake 实现。例如 `renderer-sidebar-agent-icons.ts` 的 `SidebarAgentIconDom` / `SidebarAgentIconRow`（测试中的 `FakeDom`、`FakeRow`），`renderer-fork-control.ts` 的 `RendererForkDom`（`FakeForkDom`）。新写的 DOM 模块优先采用这种设计。
-2. **拆出视图函数**：把“计算要渲染什么”和“写 DOM”分开，只测前者，例如 `rendererAgentPickerView`、`rendererAgentMenuPlacement`、`createDefaultRendererSettingsPages`。
+2. **拆出视图函数**：把“计算要渲染什么”和“写 DOM”分开，只测前者，例如 `rendererAgentPickerView`、`rendererAgentMenuPlacement`、`createDefaultRendererSettingsPages`、`rendererThinkingOptionPresentation` / `rendererThinkingSliderVisual` / `rendererThinkingSliderIndexAt` / `rendererThinkingCardPlacement`（见 `test/renderer-thinking-option-picker.test.ts`）。
 3. **手工桩全局对象**：`vi.stubGlobal("document" | "window" | "MutationObserver", …)`，配合 `as unknown as HTMLElement` 构造最小对象；`afterEach` 中必须调用 `vi.unstubAllGlobals()`（见 `renderer-fork-control.test.ts`、`settings/trigger.test.ts`）。
 
 - 测试导入本包源码时用 `../src/x.js`，导入 `@codexhost/shared-contracts` / `@codexhost/desktop-control` 则解析到 `dist`，需要先执行 `npm run build:typescript`。
@@ -31,7 +31,7 @@
 2. `page.route("https://codexhost.test/**", …)` 返回空白 HTML，`page.goto` 后用 `addScriptTag` 注入 bundle，再通过 `page.evaluate` 调用夹具。
 3. Host 客户端和 Desktop Manager 都是夹具里的伪对象，不连接真实账号或 Host。
 
-- `CODEXHOST_PLAYWRIGHT_EXECUTABLE_PATH` 可指定浏览器可执行文件。时间相关的 UI 用 `test.use({ timezoneId })` 固定时区。
+- `CODEXHOST_PLAYWRIGHT_EXECUTABLE_PATH` 可指定浏览器可执行文件。本机 `~/Library/Caches/ms-playwright` 的浏览器修订号与锁定的 Playwright 不一致时（报 `Executable doesn't exist`），把它指向已有的 `chromium_headless_shell-*/chrome-headless-shell-mac-arm64/chrome-headless-shell` 即可，不必重新下载。时间相关的 UI 用 `test.use({ timezoneId })` 固定时区。
 - e2e spec 由 `tests/tsconfig.json` 纳入 `npm run typecheck`，类型错误会在 CI 中暴露，但行为不会在 CI 中执行。改动设置页样式、Shadow DOM 或多 Host 生命周期后，要在本地运行对应的 spec，并在汇报中写明是否运行过。
 
 ## 真实 Desktop 与发布链
