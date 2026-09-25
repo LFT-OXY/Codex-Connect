@@ -41,6 +41,8 @@
    - npm：`<node> <npm-cli> install --global --no-audit --no-fund @chinhae/codex-connect@<version>`（包名由 `npm_package_spec` 拼接，有单测）。
    - Windows：先校验安装器 SHA-256，再以 `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-` 运行，最后校验 `<install_root>/app/codexhost-distribution.json` 的 `version` 和 `distribution == "installer"`。
    - macOS：校验 DMG SHA-256 → `hdiutil attach -nobrowse -readonly` → `ditto` 到同目录的 `.codexhost-update-<id>.app` → 校验分发元数据和 `codesign --verify --deep --strict` → 旧 app 改名为 `.codexhost-backup-<id>.app` → 新 app 换入 → 再校验，失败时回滚备份。
+     - DMG 内的应用名固定为 `Codex Connect.app`（`install.rs` 按这个名字查找）。它与 `scripts/release/prepare-payload.mjs`（传给 `package.sh` 的 app 路径）、`scripts/release/macos/package.sh`（路径校验、DMG staging、`create-dmg --icon/--hide-extension`）三处必须同时改名；`tests/release/packagers.test.mjs` 只覆盖后两处。
+     - 新 app 换入的是请求里的 `app_path`，不是 DMG 内的名字。所以从上游 `codexhost.app` 升级的机器，磁盘上仍叫 `codexhost.app`，只有 Info.plist 里的显示名变为 Codex Connect。bundle id `com.codexhost.app`、可执行文件 `codexhost`、`codexhost.icns` 都是内部名，不随品牌改名。
 4. `relaunch`：npm 用 `node <npm_launcher_path>`，Windows 用 `<install_root>/bin/codexhost-start.exe`，macOS 用 `/usr/bin/open <app_path>`；标准流全部重定向到 null。
 5. `wait_for_relaunch`：最多 30s。
 

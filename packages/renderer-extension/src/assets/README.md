@@ -9,9 +9,9 @@ Codex blue so it stays visible on dark surfaces.
 light gray rounded tile with a charcoal C and central rounded square, padded to
 the macOS icon grid. It is the Renderer settings brand icon (settings header
 mark and the application-header settings trigger button).
-`crates/launcher/assets/codexhost.png` is a 1024px render of this SVG for macOS
-application and DMG icons. Windows application and installer icons use the
-multi-size `crates/launcher/assets/codexhost.ico` generated from that PNG.
+The application and installer icons come from the separate Codex Connect
+artwork in `crates/launcher/assets/codexhost.png`; see
+`crates/launcher/assets/README.md`.
 
 `codex-agent.png` is the Codex App GA mark distributed with OpenAI's official
 `openai.chatgpt` VS Code extension. It is bundled as a data URL so the Renderer

@@ -86,7 +86,7 @@
   - npm 包元数据（repository、bugs、homepage）
   - npm 安装后提示中的仓库地址
 - npm 包：主包 `@chinhae/codex-connect`，平台包 `@chinhae/codex-connect-{darwin-arm64,darwin-x64,win32-x64,win32-arm64,linux-x64,linux-arm64}`。npm keywords 中的产品名同步更新。发布脚本内的包名、命令名、仓库地址、keywords、tarball 基名集中在 `scripts/release/prepare-npm.mjs` 的 `NPM_*` 常量，npm 包内所有展示命令的文案都从这些常量派生。Renderer（`CODEXHOST_NPM_MANUAL_UPDATE_COMMAND`）和 Rust 更新器（`NPM_PACKAGE_NAME`）因边界限制各持一份字面量，分别由设置页渲染测试和 `npm_package_spec` 单测断言。
-- 发布产物：`codex-connect-<version>-<target>.{dmg,exe}`，npm tarball 名随包名变化，为 `chinhae-codex-connect-<version>[-<target>].tgz`；发布流水线中的产物匹配模式与上传文件列表同步修改。流水线结构（OIDC、provenance、校验步骤）不变。
+- 发布产物：`codex-connect-<version>-<target>.{dmg,exe}`，npm tarball 名随包名变化，为 `chinhae-codex-connect-<version>[-<target>].tgz`；发布流水线中的产物匹配模式与上传文件列表同步修改。流水线结构（OIDC、provenance、校验步骤）不变。应用内更新按产物名选择 Release 资源（update-manager `expectedInstallerAssetName`），它和产物名一起改为 `codex-connect-*`，这部分在第 02 票完成。GitHub Release 标题改为 `Codex Connect <version>`；CI 内部的 artifact 名 `codexhost-<target>` 用户看不到，保持不变。
 
 **跨 Harness 委派（只改名，实现期间决定）**
 
@@ -98,7 +98,8 @@
 - 数据目录 `~/.codexhost` 与 `CODEXHOST_DATA_DIR` 不变。
 - macOS bundle id `com.codexhost.app` 不变，只改 `CFBundleName`/`CFBundleDisplayName` 和 `.app` 名称。可执行文件名与图标文件名随 slug 变化与否属于实现细节，但不能改变 bundle id。
 - LaunchAgent 标签 `ai.bytepioneer.codexhost.*` 不变（包括 Claude Code 的旧 Label 兼容语义）。
-- Windows `AppId` GUID 不变，从而覆盖升级上游安装；`AppName`/`AppPublisher` 改为 `Codex Connect`，新安装的默认目录为 `Programs\codex-connect`。
+- Windows `AppId` GUID 不变，从而覆盖升级上游安装；`AppName`/`AppPublisher` 改为 `Codex Connect`，新安装的默认目录为 `Programs\codex-connect`。覆盖升级时沿用原安装目录（Inno Setup 按 AppId 记住上次的目录）。开始菜单快捷方式改名为 `Codex Connect`，安装器用 `[InstallDelete]` 删除上游留下的 `codexhost.lnk`，避免出现两个入口。
+- macOS DMG 内的应用是 `Codex Connect.app`。更新器把新 app 换到已安装的路径上，所以从 `codexhost.app` 升级的机器，磁盘上的名字保持不变。
 
 **图标**
 

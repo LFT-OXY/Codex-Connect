@@ -4,13 +4,13 @@
 
 **Blocked by:** None — can start immediately
 **Status:** ready-for-agent
-**Impl:** ready
+**Impl:** done
 
-- [ ] 发布产物文件名前缀为 `codex-connect-`（dmg、exe 及 payload 产物）
-- [ ] 发布工作流中安装包的匹配模式与上传文件列表同步更新
-- [ ] macOS：`.app` 名称、`CFBundleName`、`CFBundleDisplayName` 为 Codex Connect；`CFBundleIdentifier` 仍为 `com.codexhost.app`
-- [ ] Windows：`AppName`、`AppPublisher` 为 Codex Connect；`DefaultDirName` 为 `Programs\codex-connect`；`AppId` GUID 不变
-- [ ] 启动器品牌 PNG 替换为 `/Users/oxy/Downloads/codex-connect-icons/macos-rounded/02-holographic.png`，多尺寸 `.ico` 用现有脚本重新生成；macOS `.icns` 与 DMG 卷图标由其生成
-- [ ] 品牌图标来源的资源说明文档已更新
-- [ ] LaunchAgent 标签与数据目录不变
-- [ ] packagers、payload、dmg-assets 等受影响的 release 测试已更新并通过
+- [x] 发布产物文件名前缀为 `codex-connect-`（dmg、exe 及 payload 产物）
+- [x] 发布工作流中安装包的匹配模式与上传文件列表同步更新
+- [x] macOS：`.app` 名称、`CFBundleName`、`CFBundleDisplayName` 为 Codex Connect；`CFBundleIdentifier` 仍为 `com.codexhost.app`
+- [x] Windows：`AppName`、`AppPublisher` 为 Codex Connect；`DefaultDirName` 为 `Programs\codex-connect`；`AppId` GUID 不变
+- [x] 启动器品牌 PNG 替换为 `/Users/oxy/Downloads/codex-connect-icons/macos-rounded/02-holographic.png`，多尺寸 `.ico` 用现有脚本重新生成；macOS `.icns` 与 DMG 卷图标由其生成
+- [x] 品牌图标来源的资源说明文档已更新
+- [x] LaunchAgent 标签与数据目录不变
+- [x] packagers、payload、dmg-assets 等受影响的 release 测试已更新并通过

@@ -12,8 +12,8 @@ DMG_PATH="$3"
 BUNDLE_VERSION="$4"
 
 case "$APP_PATH" in
-  */codexhost.app) ;;
-  *) echo "error: app output must end with /codexhost.app" >&2; exit 2 ;;
+  */"Codex Connect.app") ;;
+  *) echo "error: app output must end with /Codex Connect.app" >&2; exit 2 ;;
 esac
 case "$DMG_PATH" in
   *.dmg) ;;
@@ -88,7 +88,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
   <key>CFBundleDisplayName</key>
-  <string>codexhost</string>
+  <string>Codex Connect</string>
   <key>CFBundleExecutable</key>
   <string>codexhost</string>
   <key>CFBundleIconFile</key>
@@ -98,7 +98,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>codexhost</string>
+  <string>Codex Connect</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -125,21 +125,21 @@ PLIST
 "$RESOURCES/runtime/node" -e 'if (process.version !== "v24.13.1") process.exit(1)'
 
 mkdir -p "$DMG_STAGE"
-/usr/bin/ditto "$APP_PATH" "$DMG_STAGE/codexhost.app"
-/usr/bin/codesign --verify --deep --strict "$DMG_STAGE/codexhost.app"
+/usr/bin/ditto "$APP_PATH" "$DMG_STAGE/Codex Connect.app"
+/usr/bin/codesign --verify --deep --strict "$DMG_STAGE/Codex Connect.app"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # create-dmg (https://github.com/create-dmg/create-dmg) builds the styled
 # standard DMG: window size, icon positions, Applications drop link, volume
 # icon and background are matched to the official example template.
 create-dmg \
-  --volname "codexhost" \
+  --volname "Codex Connect" \
   --volicon "$RESOURCES/codexhost.icns" \
   --background "$SCRIPT_DIR/assets/installer-background.png" \
   --window-pos 200 120 \
   --window-size 800 400 \
   --icon-size 100 \
-  --icon "codexhost.app" 200 190 \
-  --hide-extension "codexhost.app" \
+  --icon "Codex Connect.app" 200 190 \
+  --hide-extension "Codex Connect.app" \
   --app-drop-link 600 185 \
   "$DMG_PATH" \
   "$DMG_STAGE" >/dev/null

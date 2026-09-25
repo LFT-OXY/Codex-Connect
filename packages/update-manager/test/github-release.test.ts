@@ -20,11 +20,11 @@ function release(overrides: Record<string, unknown> = {}) {
     body: "## Changes\n\n- Safer updates",
     assets: [
       {
-        name: "codexhost-1.2.3-windows-x64.exe",
+        name: "codex-connect-1.2.3-windows-x64.exe",
         size: 42,
         digest: `sha256:${"ab".repeat(32)}`,
         browser_download_url:
-          "https://github.com/BytePioneer-AI/codex-host/releases/download/v1.2.3/codexhost-1.2.3-windows-x64.exe",
+          "https://github.com/BytePioneer-AI/codex-host/releases/download/v1.2.3/codex-connect-1.2.3-windows-x64.exe",
         uploader: { login: "github-actions" },
       },
     ],
@@ -39,15 +39,15 @@ describe("GitHub Release update discovery", () => {
     expect(parsed.version).toBe("1.2.3");
     expect(parsed.releaseNotes).toBe("## Changes\n\n- Safer updates");
     expect(selectInstallerReleaseArtifact(parsed, "windows-x64")).toEqual({
-      name: "codexhost-1.2.3-windows-x64.exe",
+      name: "codex-connect-1.2.3-windows-x64.exe",
       source: {
-        url: "https://github.com/BytePioneer-AI/codex-host/releases/download/v1.2.3/codexhost-1.2.3-windows-x64.exe",
+        url: "https://github.com/BytePioneer-AI/codex-host/releases/download/v1.2.3/codex-connect-1.2.3-windows-x64.exe",
         sha256: "ab".repeat(32),
         size: 42,
       },
     });
     expect(expectedInstallerAssetName("1.2.3", "macos-arm64")).toBe(
-      "codexhost-1.2.3-macos-arm64.dmg",
+      "codex-connect-1.2.3-macos-arm64.dmg",
     );
   });
 
@@ -64,10 +64,10 @@ describe("GitHub Release update discovery", () => {
       release({
         assets: [
           {
-            name: "codexhost-1.2.3-windows-x64.exe",
+            name: "codex-connect-1.2.3-windows-x64.exe",
             size: 42,
             browser_download_url:
-              "https://github.com/BytePioneer-AI/codex-host/releases/download/v1.2.3/codexhost-1.2.3-windows-x64.exe",
+              "https://github.com/BytePioneer-AI/codex-host/releases/download/v1.2.3/codex-connect-1.2.3-windows-x64.exe",
           },
         ],
       }),

@@ -24,7 +24,7 @@
   - 下载地址只接受不带凭据的 HTTPS（`validateArtifact`），重定向后的最终 URL 会再检查一次；
   - SHA-256 必须是小写十六进制，单个安装包上限 2 GiB；
   - 先下载到 `.<name>.download`，完成后校验大小和 SHA-256，再 rename 到正式文件名；
-  - GitHub Release 必须恰好包含一个 `codexhost-<version>-<target>.(dmg|exe)`，且带有 `sha256:` digest，下载 URL 前缀固定为本仓库的 releases/download。
+  - GitHub Release 必须恰好包含一个 `codex-connect-<version>-<target>.(dmg|exe)`（产物名与 `scripts/release/prepare-payload.mjs` 一致），且带有 `sha256:` digest，下载 URL 前缀固定为本仓库的 releases/download。
 - **Release 发现顺序**：先尝试 `fetchLatestGitHubReleaseWithGitHubCli`（使用 `gh api`，凭据由 gh 和系统钥匙串管理，超时 5s，输出上限 1 MiB）。它返回 `null` 时，再用匿名 HTTP 请求 `fetchLatestGitHubRelease`（`redirect: "error"`）。gh 的 stderr **永远不透传**，因为调试输出里可能含有 token。只有 `ENOENT`/`EACCES`（可执行文件无法启动）时才换下一个候选路径；认证失败或网络失败不会重复请求。显式设置了 `CODEXHOST_GH_COMMAND` 时，不再尝试其他安装位置。
 - **错误形态**：本包只抛普通 `Error`，message 是简短英文。写入状态文件时截断到 500 字符（`statusSnapshot`），coordinator 返回给 Desktop 时也截断到 500 字符。不要把完整 stderr 或 URL 查询参数写进 message。
 - **状态写入**：`writeStatusSnapshot` 先写到 `.update-status-<id>.tmp` 再 rename。在 Windows 上，`replaceStatusFile` 遇到 `EACCES`/`EBUSY`/`EPERM` 会按 10/30/70/150/300ms 退避重试。下载进度最多每 250ms 写一次，并通过 Promise 链串行写入。

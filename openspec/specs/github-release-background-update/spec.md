@@ -18,7 +18,7 @@ The update capability SHALL discover the latest stable codexhost version only fr
 Host SHALL derive the expected installer asset name from the packaged distribution target and the discovered version. It SHALL accept only that exact Release asset's HTTPS download URL, positive bounded size, and lowercase GitHub `sha256:` digest as installation input. Renderer MUST NOT provide or override a URL, digest, path, package, target, or version.
 
 #### Scenario: Matching asset is complete
-- **WHEN** the current installer target is `windows-x64` and the Release contains exactly one valid `codexhost-<version>-windows-x64.exe` asset
+- **WHEN** the current installer target is `windows-x64` and the Release contains exactly one valid `codex-connect-<version>-windows-x64.exe` asset
 - **THEN** Host SHALL prepare that asset using its GitHub size and SHA-256 digest
 
 #### Scenario: Asset digest is unavailable

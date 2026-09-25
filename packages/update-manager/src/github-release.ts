@@ -161,7 +161,7 @@ export function expectedInstallerAssetName(
 ): string {
   requireSemanticVersion(version);
   const extension = target.startsWith("macos-") ? "dmg" : "exe";
-  return `codexhost-${version}-${target}.${extension}`;
+  return `codex-connect-${version}-${target}.${extension}`;
 }
 
 export function selectInstallerReleaseArtifact(

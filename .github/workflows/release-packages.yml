@@ -191,8 +191,8 @@ jobs:
         with:
           name: codexhost-${{ matrix.target }}
           path: |
-            build/release/${{ needs.prepare.outputs.version }}/${{ matrix.target }}/codexhost-*.dmg
-            build/release/${{ needs.prepare.outputs.version }}/${{ matrix.target }}/codexhost-*.exe
+            build/release/${{ needs.prepare.outputs.version }}/${{ matrix.target }}/codex-connect-*.dmg
+            build/release/${{ needs.prepare.outputs.version }}/${{ matrix.target }}/codex-connect-*.exe
             build/npm/${{ needs.prepare.outputs.version }}/${{ matrix.target }}/chinhae-codex-connect-*-${{ matrix.target }}.tgz
             build/npm/${{ needs.prepare.outputs.version }}/meta/chinhae-codex-connect-${{ needs.prepare.outputs.version }}.tgz
           if-no-files-found: error
@@ -344,10 +344,10 @@ jobs:
         run: |
           set -euo pipefail
           expected=(
-            "codexhost-${VERSION}-macos-arm64.dmg"
-            "codexhost-${VERSION}-macos-x64.dmg"
-            "codexhost-${VERSION}-windows-x64.exe"
-            "codexhost-${VERSION}-windows-arm64.exe"
+            "codex-connect-${VERSION}-macos-arm64.dmg"
+            "codex-connect-${VERSION}-macos-x64.dmg"
+            "codex-connect-${VERSION}-windows-x64.exe"
+            "codex-connect-${VERSION}-windows-arm64.exe"
           )
           files=()
           for name in "${expected[@]}"; do
@@ -373,7 +373,7 @@ jobs:
             flags=(
               --repo "${{ github.repository }}"
               --verify-tag
-              --title "codexhost ${VERSION}"
+              --title "Codex Connect ${VERSION}"
               --notes-file release-metadata/release-notes.md
             )
             if [[ "$PRERELEASE" == "true" ]]; then

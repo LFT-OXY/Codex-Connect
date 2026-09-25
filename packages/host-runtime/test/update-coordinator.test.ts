@@ -252,11 +252,11 @@ describe("Host update coordinator", () => {
         releaseNotesUrl: "https://github.com/BytePioneer-AI/codex-host/releases/tag/v1.2.3",
         assets: [
           {
-            name: "codexhost-1.2.3-macos-arm64.dmg",
+            name: "codex-connect-1.2.3-macos-arm64.dmg",
             size: bytes.length,
             digest: `sha256:${digest(bytes)}`,
             downloadUrl:
-              "https://github.com/BytePioneer-AI/codex-host/releases/download/v1.2.3/codexhost-1.2.3-macos-arm64.dmg",
+              "https://github.com/BytePioneer-AI/codex-host/releases/download/v1.2.3/codex-connect-1.2.3-macos-arm64.dmg",
           },
         ],
       }),
