@@ -817,7 +817,7 @@ export function resolveRuntimeLicenseSource(root, dependency) {
 export async function writeThirdPartyNotices(root, packageRoot) {
   const licensesDirectory = path.join(packageRoot, "licenses");
   await mkdir(licensesDirectory, { recursive: true });
-  const notices = ["codexhost npm package third-party notices", ""];
+  const notices = ["Codex Connect npm package third-party notices", ""];
   for (const dependency of runtimeLicenses) {
     const dependencyRoot = path.join(root, "node_modules", dependency.packageName);
     const manifest = packageManifest(

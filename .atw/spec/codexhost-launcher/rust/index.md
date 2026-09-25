@@ -55,6 +55,7 @@
 | stderr 诊断 | `main.rs` 顶层错误、`[codexhost startup …]` trace | 保留 `codexhost launcher:` 前缀 |
 | 错误正文 | 例如 `did not start the codexhost Host chain`、`codexhost control endpoint …` | 描述内部组件的诊断文字，保留 `codexhost` |
 
+- 品牌守卫：`tools/brand-guard.test.mjs` 扫描本 crate 与 `codexhost-platform` 的非测试字符串字面量。上表"stderr 诊断"与"错误正文"两行对应白名单中按文件限定的规则。新增的诊断文字如果被误报，就在守卫里补短语或前缀并写明理由，不要改成产品名。
 - 验证：`tests/cli.rs` 断言 usage 含 `codex-connect inspect` / `codex-connect launch`，并断言源码中存在冲突文案；`codexhost-platform` 的 Linux 测试 `cleanup_failure_does_not_hide_an_unmanaged_desktop_conflict` 匹配 `outside Codex Connect`。
 - 错误示例：`show_error_dialog(&format!("codexhost launcher: {error}"))` 会把诊断前缀显示在弹窗里。正确写法：stderr 用 `eprintln!("codexhost launcher: {error}")`，弹窗用 `show_error_dialog(&format!("Codex Connect could not start: {error}"))`。
 

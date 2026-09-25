@@ -183,7 +183,7 @@ export async function writeThirdPartyNotices(root, payloadRoot) {
   const licensesDirectory = path.join(payloadRoot, "licenses");
   await mkdir(licensesDirectory, { recursive: true });
   const notices = [
-    "codexhost third-party notices",
+    "Codex Connect third-party notices",
     "",
     "Node.js 24.13.1",
     "License: see licenses/Node.js-LICENSE.txt",

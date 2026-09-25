@@ -52,6 +52,18 @@ These guides help you **ask the right questions before coding**.
 
 → Read [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md)
 
+### When to Think About Product Naming（品牌守卫）
+
+- [ ] 新增或修改面向用户的文案：本地化、设置页、Harness 安装引导、CLI 帮助与委派提示、发布脚本产物、Rust 弹窗与 usage、README
+- [ ] 合并上游之后
+- [ ] 新增带 `codexhost` 字样的内部标识（CSS 类名、临时目录前缀、内部二进制、诊断前缀）
+
+→ 运行 `npx vitest run --config tests/vitest.config.js tools/brand-guard.test.mjs`。
+- 面向用户的文字写 `Codex Connect`，npm 命令写 `codex-connect`。上游地址 `BytePioneer-AI/codex-host` 只能作为署名出现，且只在"关于"页和 README 致谢中各一处。
+- 守卫只扫描字符串字面量和 README，跳过注释与 Rust 的 `#[cfg(test)]`/`#[cfg(all(test, …))]` 项。
+- 如果内部标识被误报，就在 `ALLOWED_INTERNAL_NAMES` 里加一条规则，写明 `reason`。只要这个形状可能出现在文案里，就用 `files` 把规则限定在它实际出现的文件上。不要放宽已有的规则去覆盖文案文件。
+- 新增面向用户文案的文件时，把它加进 `SCANNED_FILES`。
+
 ### When to Think About Code Reuse
 
 - [ ] You're writing similar code to something that exists

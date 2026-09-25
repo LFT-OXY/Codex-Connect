@@ -84,7 +84,7 @@ export async function runRemoteHostCli(input: {
           "  codex-connect remote status",
           "  codex-connect remote uninstall",
           "",
-          "Installs and manages a headless codexhost Remote Host for SSH sessions.",
+          "Installs and manages a headless Codex Connect Remote Host for SSH sessions.",
         ].join("\n") + "\n",
       );
       return 0;
