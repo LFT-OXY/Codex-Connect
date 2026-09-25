@@ -111,7 +111,7 @@ fn wait_for_relaunch(request: &UpdateRequest) -> Result<(), Box<dyn Error>> {
         }
         thread::sleep(Duration::from_millis(100));
     }
-    Err("updated codexhost did not become ready after relaunch".into())
+    Err("updated Codex Connect did not become ready after relaunch".into())
 }
 
 fn apply(request_path: &Path) -> Result<(), Box<dyn Error>> {

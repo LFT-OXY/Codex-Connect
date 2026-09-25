@@ -36,3 +36,6 @@
   - `prepare-npm.mjs` 的第三方声明标题
 - 已人为验证：把设置页下载链接改回上游、把一处本地化文案改回 codexhost，测试会失败并给出文件、行号和内容。
 - 桌面控制包 `desktop-control` 中的 PowerShell 诊断 `CodexHost Remote Control runtime is not running` 不在扫描范围内，它属于诊断输出。`crates/launcher/windows.manifest` 的 `<description>` 是程序集元数据，不向用户展示，也不扫描。
+- 追加扫描应用内更新链路：`packages/update-manager/src/*.ts` 与 `crates/updater/src/*.rs`。更新失败原因会写进更新状态，由设置页 `pages.ts` 原样显示。
+  - 已改为 Codex Connect：`updated … did not become ready after relaunch` 与 npm 启动器标签 `npm … launcher`。
+  - 保留 codexhost：更新器请求校验阶段的同名标签。这个阶段还没写更新状态，报错只进 stderr。

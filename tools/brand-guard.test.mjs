@@ -27,9 +27,12 @@ const SCANNED_FILES = [
   "scripts/release/macos/package.sh",
   "scripts/release/windows/Installer.iss",
   "scripts/release/windows/package.ps1",
-  // Rust 平台层与启动器（只扫字符串字面量，跳过测试代码）
+  // 应用内更新：失败原因会写入更新状态并显示在设置页
+  "packages/update-manager/src/*.ts",
+  // Rust 平台层、启动器与更新器（只扫字符串字面量，跳过测试代码）
   "crates/platform/src/*.rs",
   "crates/launcher/src/*.rs",
+  "crates/updater/src/*.rs",
   // README
   "README.md",
   "docs/project/README.zh-CN.md",
@@ -89,9 +92,9 @@ const ALLOWED_INTERNAL_NAMES = [
     pattern: /codexhost-(?:icons|npm-smoke|dmg-stage|dmg-assets)\b/g,
   },
   {
-    reason: "平台层的临时目录前缀",
+    reason: "Rust 层的临时目录前缀，以及更新器挂载 DMG 时的临时目录和暂存、备份 app 名",
     files: rustSources,
-    pattern: /codexhost-(?:appx-node-env|tool-override|direct-desktop|desktop-launch-args)\b/g,
+    pattern: /codexhost-(?:appx-node-env|tool-override|direct-desktop|desktop-launch-args|update-mount|update|backup)\b/g,
   },
   {
     reason: "启动器图标资源名与 Windows 原生启动器 codexhost.exe（内部二进制）",
@@ -125,12 +128,13 @@ const ALLOWED_INTERNAL_NAMES = [
   },
   {
     reason:
-      "机器标识：每用户运行时目录名、Linux 存储目录名、SCDynamicStore 客户端名、" +
+      "机器标识：每用户运行时目录名、Linux 存储目录名、SCDynamicStore 客户端名、更新暂存目录名、" +
       "发给 Codex Desktop 的 modelProvider id、远程 Host 协议标签",
     files: only(
       "crates/launcher/src/runtime_instance.rs",
       "crates/launcher/src/secure_storage.rs",
       "crates/platform/src/system_proxy.rs",
+      "packages/update-manager/src/distribution.ts",
       `${hostRuntime}/app-server-host.ts`,
       `${hostRuntime}/remote-host-lifecycle.ts`,
     ),
@@ -140,7 +144,7 @@ const ALLOWED_INTERNAL_NAMES = [
     reason: "stderr/控制台诊断前缀（PRD 命名规则：诊断输出保留 codexhost）",
     files: /^(crates\/|scripts\/release\/|packages\/host-runtime\/src\/(app-server-host|remote-host-cli)\.ts$)/,
     pattern:
-      /(?<=^|")codexhost(?: (?:launcher|remote|release|release prepare|npm release|npm meta release|npm publish|Host Runtime))?(?=: )/g,
+      /(?<=^|")codexhost(?: (?:launcher|updater|remote|release|release prepare|npm release|npm meta release|npm publish|Host Runtime))?(?=: )/g,
   },
   {
     reason: "启动追踪标签",
@@ -153,8 +157,10 @@ const ALLOWED_INTERNAL_NAMES = [
     pattern: /(?<=\[)codexhost(?= delegation\])/g,
   },
   {
-    reason: "描述内部组件的诊断错误正文（PRD 命名规则：按诊断输出保留）",
-    files: /^(crates\/launcher\/|packages\/renderer-extension\/src\/settings\/(pages|shell|connections-page)\.ts$|packages\/host-runtime\/src\/remote-host-lifecycle\.ts$)/,
+    reason:
+      "描述内部组件的诊断错误正文（PRD 命名规则：按诊断输出保留）；" +
+      "更新器请求校验失败时尚未写入更新状态，只进 stderr",
+    files: /^(crates\/launcher\/|crates\/updater\/src\/request\.rs$|packages\/renderer-extension\/src\/settings\/(pages|shell|connections-page)\.ts$|packages\/host-runtime\/src\/remote-host-lifecycle\.ts$)/,
     pattern:
       /codexhost(?= (?:storage|state base|executable|Host chain|control endpoint|runtime descriptor|[Ll]auncher|Start Menu executable|settings shell|update request failed|connection diagnostics)\b)|(?<=not owned by )codexhost/g,
   },

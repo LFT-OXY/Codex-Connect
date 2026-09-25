@@ -409,7 +409,7 @@ export function createBackgroundUpdateManager(
           npm_cli_path: await requireRegularFile(options.npmCliPath, "npm CLI"),
           npm_launcher_path: await requireRegularFile(
             options.npmLauncherPath,
-            "npm codexhost launcher",
+            "npm Codex Connect launcher",
           ),
         });
       } catch (error) {
