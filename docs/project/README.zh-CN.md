@@ -1,6 +1,6 @@
 <div align="center">
 
-# CodexHost
+# Codex Connect
 
 **在 Codex Desktop 中运行 Pi 和其他 Harness**
 
@@ -8,7 +8,7 @@
 
 但 **Codex** 并不是唯一优秀的 **Agent Harness**，还有 **Claude Code**、**Pi**
 
-**CodexHost** 让你在 **Codex Desktop** 中原生使用其他 **Harness**，并让它们协作完成任务
+**Codex Connect** 让你在 **Codex Desktop** 中原生使用其他 **Harness**，并让它们协作完成任务
 
 ⭐ 如果这个项目对你有帮助，请给我们一个 Star！⭐
 
@@ -30,7 +30,7 @@
 </p>
 <br />
 
-<p align="center"><a href="https://github.com/BytePioneer-AI/codex-host/releases"><strong>下载</strong></a> · <a href="#跨-agent-协作">跨 Agent 协作</a> · <a href="#远程连接-harness">远程连接</a> · <a href="#加入交流群">交流群</a> · <a href="../../README.md">English</a> · <a href="README.ko.md">한국어</a></p>
+<p align="center"><a href="https://github.com/LFT-OXY/Codex-Connect/releases"><strong>下载</strong></a> · <a href="#跨-agent-协作">跨 Agent 协作</a> · <a href="#远程连接-harness">远程连接</a> · <a href="../../README.md">English</a></p>
 
 <br />
 
@@ -48,18 +48,23 @@ https://github.com/user-attachments/assets/c48192d7-23ff-4f6e-b61a-6345a655bb76
   <img width="90%" src="../imgs/codexhost-native-overview.png" alt="Claude Code、Pi、Grok Build、Oh My Pi 的会话运行在 Codex Desktop 中，并可使用 Diff 审查、Fork、Worktree 和 Agent 切换">
 </div>
 
+## 新特性
+
+- **Model 与思考选项拆分为独立药丸**：在外部 Harness 的 Thread 中，输入框下方的 Model 和思考选项分成两个相邻的药丸。Model 药丸直接打开模型列表；思考药丸打开一张卡片，卡片上的分段滑块按 Harness 给出的顺序排列它提供的全部思考选项。
+- **胶囊样式的思考滑块**：滑块改为胶囊轨道，拖动时连续跟随指针，松手后吸附到最近的选项。填充上有一道光泽循环流过，滑块越靠右流动越快；系统开启「减少动态效果」时关闭动画。
+
 ## 快速使用
 
 **方式一：npm**（macOS / Windows / Linux）
 
 ```bash
-npm install -g @codexhost/cli
-codexhost
+npm install -g @chinhae/codex-connect
+codex-connect
 ```
 
 **方式二：安装包**（macOS / Windows）
 
-从 [Releases](https://github.com/BytePioneer-AI/codex-host/releases) 下载对应平台的安装包。
+从 [Releases](https://github.com/LFT-OXY/Codex-Connect/releases) 下载对应平台的安装包。
 
 > Linux 支持 x64 / ARM64，详见 [Linux 说明](../platforms/linux/linux.zh-CN.md)。
 
@@ -69,7 +74,7 @@ codexhost
 **macOS：首次打开提示「应用无法验证」**
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/codexhost.app
+xattr -dr com.apple.quarantine "/Applications/Codex Connect.app"
 ```
 
 **Windows：使用绿色解压版 Codex Desktop**
@@ -80,7 +85,20 @@ xattr -dr com.apple.quarantine /Applications/codexhost.app
    [Environment]::SetEnvironmentVariable("CODEXHOST_INSTALL_ROOT", "D:\CodexPortable", "User")
    ```
 
-2. 完全退出 Codex Desktop，重新打开终端，再运行 `codexhost`。
+2. 完全退出 Codex Desktop，重新打开终端，再运行 `codex-connect`。
+
+</details>
+
+<details>
+<summary>如果之前装过 codexhost</summary>
+
+Codex Connect 用于替代 codexhost。请移除旧版本，只保留一个入口：
+
+- npm：`npm rm -g @codexhost/cli`
+- macOS 安装包：删除 `/Applications/codexhost.app`
+- Windows 安装包：无需处理，Codex Connect 会原地覆盖安装
+
+会话与账号配置会自动沿用。
 
 </details>
 
@@ -91,7 +109,7 @@ xattr -dr com.apple.quarantine /Applications/codexhost.app
     <td colspan="2" valign="top">
       <p><strong>完整工作界面</strong><br /><sub>不同 Harness 的会话在同一个侧边栏里，输入框右下角随时切换 Agent</sub></p>
       <div align="center">
-        <img width="90%" src="../imgs/codexhost-full-workspace.png" alt="Codex Desktop 中 codexhost 的完整工作界面，展示项目结构、对话区域和多个 Agent 选择器">
+        <img width="90%" src="../imgs/codexhost-full-workspace.png" alt="Codex Desktop 中 Codex Connect 的完整工作界面，展示项目结构、对话区域和多个 Agent 选择器">
       </div>
     </td>
   </tr>
@@ -183,12 +201,12 @@ xattr -dr com.apple.quarantine /Applications/codexhost.app
 >
 > 让 `opencode` 在独立 Thread 中验证这个修复，并运行相关测试。
 
-CodexHost 会为目标 Harness 创建独立的 Native Session。委派会话将出现在 Codex Desktop 的会话列表中，你可以随时打开、查看进度或继续对话。
+Codex Connect 会为目标 Harness 创建独立的 Native Session。委派会话将出现在 Codex Desktop 的会话列表中，你可以随时打开、查看进度或继续对话。
 
 <details>
 <summary><h3 id="远程连接-harness">远程连接 Harness</h3></summary>
 
-在本机 Codex Desktop 中使用被控机器上的 Harness，任务在被控机器执行，界面仍在本地。两端需安装相同版本的 codexhost。
+在本机 Codex Desktop 中使用被控机器上的 Harness，任务在被控机器执行，界面仍在本地。两端需安装相同版本的 Codex Connect。
 
 | 被控机器 | 连接方式 |
 | --- | --- |
@@ -206,13 +224,13 @@ CodexHost 会为目标 Harness 创建独立的 Native Session。委派会话将�
 1. 在被控机器上安装并启动：
 
    ```bash
-   npm install -g @codexhost/cli
-   codexhost remote install
-   codexhost remote start
-   codexhost remote status
+   npm install -g @chinhae/codex-connect
+   codex-connect remote install
+   codex-connect remote start
+   codex-connect remote status
    ```
 
-2. 在本地通过 codexhost 启动 Codex Desktop，打开 SSH 工作区。
+2. 在本地通过 Codex Connect 启动 Codex Desktop，打开 SSH 工作区。
 3. 在输入框的 Agent / Model 选择器中选择目标 Harness。
 
 [SSH 配置、诊断与卸载 →](../platforms/remote/remote-ssh-host.zh-CN.md)
@@ -232,7 +250,7 @@ CodexHost 会为目标 Harness 创建独立的 Native Session。委派会话将�
 
 多数「多 Agent 客户端」会自己重做一套聊天界面，再用统一协议接入不同 Harness。
 
-CodexHost 的做法不同：
+Codex Connect 的做法不同：
 
 - **Desktop 侧**：通过 CDP / Electron Inspector 增强官方 Codex Desktop，不重做聊天界面，也不修改官方安装包
 - **协议侧**：通过 CLI Shim 接入官方 app-server，原生 Codex 请求原样转发，不受影响
@@ -241,27 +259,6 @@ CodexHost 的做法不同：
 
 </details>
 
-## 加入交流群
-
-<table align="center">
-  <tr>
-    <td>
-      <strong>加入交流群</strong><br />
-      <sub>对 CodexHost 用法、功能感兴趣的开发者可以扫码加入微信群交流。</sub>
-      <ul>
-        <li><sub>安装问题可以加群询问</sub></li>
-        <li><sub>功能建议与反馈</sub></li>
-        <li><sub>开发问题讨论</sub></li>
-        <li><sub>Bug 问题建议提交 <strong>issue</strong></sub></li>
-      </ul>
-      <sub><strong>欢迎一起贡献~ </strong></sub>
-    </td>
-    <td align="center">
-      <img width="230" alt="微信群二维码" src="../imgs/wechat-qrcode.jpg" />
-    </td>
-  </tr>
-</table>
-
 ## 开发
 
 提交 Issue 或 PR 前可阅读[贡献说明](../../CONTRIBUTING.md)；PR 标题标签、简短 CI 结果和发布前校验见[仓库维护自动化](../operations/repository-maintenance.md)。
@@ -269,8 +266,8 @@ CodexHost 的做法不同：
 环境要求：官方 Codex Desktop、Node.js 22.19+ 或 24、Rust。
 
 ```bash
-git clone https://github.com/BytePioneer-AI/codex-host
-cd codex-host
+git clone https://github.com/LFT-OXY/Codex-Connect
+cd Codex-Connect
 npm ci
 npm start
 ```
@@ -290,15 +287,5 @@ npm start
 
 ## 鸣谢
 
-- 感谢 [LINUX DO](https://linux.do/) 社区一直以来的支持。
+- Codex Connect 基于 [codex-host](https://github.com/BytePioneer-AI/codex-host) 开发，感谢其作者与贡献者。
 - 感谢 [Paseo](https://github.com/getpaseo/paseo) 项目在多 Harness 接入思路与架构设计方面带来的启发与参考。
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=bytepioneer-ai%2Fcodex-host&type=date&legend=top-left">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=bytepioneer-ai/codex-host&type=date&theme=dark&legend=top-left" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=bytepioneer-ai/codex-host&type=date&legend=top-left" />
-    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=bytepioneer-ai/codex-host&type=date&legend=top-left" />
-  </picture>
-</a>

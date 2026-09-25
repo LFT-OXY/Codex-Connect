@@ -1,6 +1,6 @@
 <div align="center">
 
-# CodexHost
+# Codex Connect
 
 **Run Pi and other Harnesses inside Codex Desktop**
 
@@ -8,9 +8,9 @@ We believe **Codex Desktop** offers the best desktop development experience toda
 
 But **Codex** isn't the only great **Agent Harness** — **Claude Code** and **Pi** are great too.
 
-**CodexHost** lets you run other **Harnesses** natively inside **Codex Desktop** and have them work together.
+**Codex Connect** lets you run other **Harnesses** natively inside **Codex Desktop** and have them work together.
 
-⭐ If CodexHost is useful to you, please give it a star! ⭐
+⭐ If Codex Connect is useful to you, please give it a star! ⭐
 
 <p>
   <a href="https://pi.dev/"><img alt="Pi" src="https://img.shields.io/badge/Pi-000000?logo=pi&logoColor=white" /></a>
@@ -31,7 +31,7 @@ But **Codex** isn't the only great **Agent Harness** — **Claude Code** and **P
 </p>
 <br />
 
-<p align="center"><a href="https://github.com/BytePioneer-AI/codex-host/releases"><strong>Download</strong></a> · <a href="#cross-agent-collaboration">Cross-Agent Collaboration</a> · <a href="#remote-harness">Remote</a> · <a href="#join-the-community">Community</a> · <a href="docs/project/README.zh-CN.md">简体中文</a> · <a href="docs/project/README.ko.md">한국어</a></p>
+<p align="center"><a href="https://github.com/LFT-OXY/Codex-Connect/releases"><strong>Download</strong></a> · <a href="#cross-agent-collaboration">Cross-Agent Collaboration</a> · <a href="#remote-harness">Remote</a> · <a href="docs/project/README.zh-CN.md">简体中文</a></p>
 
 <br />
 
@@ -49,18 +49,23 @@ https://github.com/user-attachments/assets/c48192d7-23ff-4f6e-b61a-6345a655bb76
   <img width="90%" src="docs/imgs/codexhost-native-overview.png" alt="Claude Code, Pi, Grok Build, and Oh My Pi sessions running in Codex Desktop, with Diff review, Fork, Worktree, and Agent switching">
 </div>
 
+## What's New
+
+- **Separate Model and Thinking pills**: in external Harness Threads, the composer shows the Model and the Thinking Option as two adjacent pills. The Model pill opens the model list directly; the Thinking pill opens a card with a segmented slider holding the Harness's own Thinking Options, in the Harness's order.
+- **Capsule Thinking slider**: the Thinking slider is a capsule track that follows the pointer continuously while you drag and snaps to the nearest option on release. A gloss sweeps across the fill and flows faster the further right the slider sits; motion turns off when the system asks for reduced motion.
+
 ## Quick Start
 
 **Option 1: npm** (macOS / Windows / Linux)
 
 ```bash
-npm install -g @codexhost/cli
-codexhost
+npm install -g @chinhae/codex-connect
+codex-connect
 ```
 
 **Option 2: Installer** (macOS / Windows)
 
-Grab the installer for your platform from [Releases](https://github.com/BytePioneer-AI/codex-host/releases).
+Grab the installer for your platform from [Releases](https://github.com/LFT-OXY/Codex-Connect/releases).
 
 > Linux is supported on x64 and ARM64. See the [Linux guide](docs/platforms/linux/linux.md).
 
@@ -70,7 +75,7 @@ Grab the installer for your platform from [Releases](https://github.com/BytePion
 **macOS: "App can't be verified" on first launch**
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/codexhost.app
+xattr -dr com.apple.quarantine "/Applications/Codex Connect.app"
 ```
 
 **Windows: using a portable Codex Desktop**
@@ -81,7 +86,20 @@ xattr -dr com.apple.quarantine /Applications/codexhost.app
    [Environment]::SetEnvironmentVariable("CODEXHOST_INSTALL_ROOT", "D:\CodexPortable", "User")
    ```
 
-2. Quit Codex Desktop completely, open a new terminal, and run `codexhost`.
+2. Quit Codex Desktop completely, open a new terminal, and run `codex-connect`.
+
+</details>
+
+<details>
+<summary>If you previously installed codexhost</summary>
+
+Codex Connect replaces codexhost. Remove the old install so only one entry remains:
+
+- npm: `npm rm -g @codexhost/cli`
+- macOS installer: delete `/Applications/codexhost.app`
+- Windows installer: nothing to do; Codex Connect installs over it in place
+
+Your sessions and account settings are kept automatically.
 
 </details>
 
@@ -92,7 +110,7 @@ xattr -dr com.apple.quarantine /Applications/codexhost.app
     <td colspan="2" valign="top">
       <p><strong>Full workspace</strong><br /><sub>Sessions from different Harnesses share one sidebar; switch Agents from the bottom-right of the composer</sub></p>
       <div align="center">
-        <img width="90%" src="docs/imgs/codexhost-full-workspace.png" alt="The complete CodexHost workspace in Codex Desktop, showing the project tree, conversation area, and multiple Agent selectors">
+        <img width="90%" src="docs/imgs/codexhost-full-workspace.png" alt="The complete Codex Connect workspace in Codex Desktop, showing the project tree, conversation area, and multiple Agent selectors">
       </div>
     </td>
   </tr>
@@ -183,12 +201,12 @@ Ask the current Agent to hand off a self-contained task to another Harness. For 
 >
 > Have `#opencode` verify this fix in a separate Thread and run the related tests.
 
-CodexHost spins up a separate Native Session in the target Harness. It shows up in the Codex Desktop conversation list, so you can open it anytime to check progress or pick up the conversation.
+Codex Connect spins up a separate Native Session in the target Harness. It shows up in the Codex Desktop conversation list, so you can open it anytime to check progress or pick up the conversation.
 
 <details>
 <summary><h3 id="remote-harness">Remote Harness</h3></summary>
 
-Drive Harnesses on another machine from your local Codex Desktop: tasks run remotely, the UI stays local. Both machines need the same codexhost version.
+Drive Harnesses on another machine from your local Codex Desktop: tasks run remotely, the UI stays local. Both machines need the same Codex Connect version.
 
 | Remote machine | How to connect |
 | --- | --- |
@@ -203,16 +221,16 @@ Before you start, add the remote machine in Codex Desktop under **Settings → C
   <img width="70%" src="docs/imgs/remote-ssh-connections.png" alt="SSH connections added under Settings → Connections → SSH in Codex Desktop">
 </div>
 
-1. Install and start codexhost on the remote machine:
+1. Install and start Codex Connect on the remote machine:
 
    ```bash
-   npm install -g @codexhost/cli
-   codexhost remote install
-   codexhost remote start
-   codexhost remote status
+   npm install -g @chinhae/codex-connect
+   codex-connect remote install
+   codex-connect remote start
+   codex-connect remote status
    ```
 
-2. On your local machine, launch Codex Desktop through codexhost and open the SSH workspace.
+2. On your local machine, launch Codex Desktop through Codex Connect and open the SSH workspace.
 3. Pick a Harness from the composer's Agent / Model selector.
 
 [SSH setup, diagnostics, and uninstall →](docs/platforms/remote/remote-ssh-host.md)
@@ -232,7 +250,7 @@ Before you start, make sure official Remote Control can already run Codex tasks.
 
 Most multi-agent clients build their own chat UI and plug Harnesses in through a common protocol.
 
-CodexHost does it differently:
+Codex Connect does it differently:
 
 - **Desktop:** extends the official Codex Desktop via CDP / Electron Inspector — no rebuilt chat UI, no patched installer.
 - **Protocol:** a CLI Shim sits in front of the official app-server and passes native Codex requests through untouched.
@@ -241,27 +259,6 @@ CodexHost does it differently:
 
 </details>
 
-## Join the Community
-
-<table align="center">
-  <tr>
-    <td>
-      <strong>Join the Community</strong><br />
-      <sub>Scan the QR code to join our WeChat group and chat about CodexHost.</sub>
-      <ul>
-        <li><sub>Get help with installation</sub></li>
-        <li><sub>Share feature ideas and feedback</sub></li>
-        <li><sub>Talk about development</sub></li>
-        <li><sub>For bugs, please open an <strong>issue</strong></sub></li>
-      </ul>
-      <sub><strong>Contributions are welcome.</strong></sub>
-    </td>
-    <td align="center">
-      <img width="230" alt="WeChat group QR code" src="docs/imgs/wechat-qrcode.jpg" />
-    </td>
-  </tr>
-</table>
-
 ## Development
 
 Please read the [contributing guide](CONTRIBUTING.md) before opening an issue or PR. See [repository maintenance automation](docs/operations/repository-maintenance.md) for PR title labels, CI summaries, and pre-release checks.
@@ -269,8 +266,8 @@ Please read the [contributing guide](CONTRIBUTING.md) before opening an issue or
 Requirements: the official Codex Desktop, Node.js 22.19+ or 24, and Rust.
 
 ```bash
-git clone https://github.com/BytePioneer-AI/codex-host
-cd codex-host
+git clone https://github.com/LFT-OXY/Codex-Connect
+cd Codex-Connect
 npm ci
 npm start
 ```
@@ -291,15 +288,5 @@ Tip: point your coding Agent at the in-repo [codexhost-add-harness Skill](.agent
 
 ## Acknowledgements
 
-- Thanks to the [LINUX DO](https://linux.do/) community for their ongoing support.
+- Codex Connect is built on [codex-host](https://github.com/BytePioneer-AI/codex-host). Thanks to its authors and contributors.
 - Thanks to [Paseo](https://github.com/getpaseo/paseo), whose approach to multi-Harness integration and architecture inspired ours.
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=bytepioneer-ai%2Fcodex-host&type=date&legend=top-left">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=bytepioneer-ai/codex-host&type=date&theme=dark&legend=top-left" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=bytepioneer-ai/codex-host&type=date&legend=top-left" />
-    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=bytepioneer-ai/codex-host&type=date&legend=top-left" />
-  </picture>
-</a>

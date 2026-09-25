@@ -116,10 +116,10 @@
 **README（英文与简体中文同步）**
 
 - 标题、简介、正文中的产品名改为 Codex Connect。
-- 保留 Star 提示并指向本仓库；删除 Star History、微信群二维码与 Join the Community 一节，以及导航中对应的锚点；删除韩文 README 及其导航链接。
+- 保留 Star 提示并指向本仓库（句子只改产品名，与上游一样不加链接）；删除 Star History、微信群二维码与 Join the Community 一节，以及导航中对应的锚点，二维码图片 `docs/imgs/wechat-qrcode.jpg` 因此成为孤儿文件，一并删除；删除韩文 README 及其导航链接，`docs/index.md` 中的韩文入口行同步删除。
 - 下载链接与 `git clone` 地址改为本仓库；Quick Start 的 npm 命令改为 `@chinhae/codex-connect` 与 `codex-connect`。
-- Interface Preview 之后新增"新特性"一节，共两项（Model 与思考选项拆分为独立药丸；思考强度滑块胶囊样式、连续拖动与吸附、光泽流动动画），不写成"Fork 新增"，暂不配截图。
-- Quick Start 末尾新增折叠的"如果之前装过 codexhost"：卸载 `@codexhost/cli` 或删除 `codexhost.app`，会话数据自动沿用。
+- Interface Preview 之后新增"新特性"一节（英文 `What's New`），共两项（Model 与思考选项拆分为独立药丸；思考滑块胶囊样式、连续拖动与吸附、光泽流动动画），不写成"Fork 新增"，暂不配截图。第一项限定为"外部 Harness 的 Thread 中"，原生 Codex Thread 不受影响；光泽流速按滑块位置描述（越靠右越快），不写"强度越高"，因为思考选项可能含 Off/Auto，不是单一强度刻度。
+- Quick Start 的"安装问题排查"之后新增折叠的"如果之前装过 codexhost"：npm 用户卸载 `@codexhost/cli`，macOS 安装包用户删除 `codexhost.app`，Windows 安装包用户无需处理（AppId 不变，原地覆盖安装）；会话与账号配置自动沿用。术语表的 codexhost 条目已为这段迁移说明登记例外。
 - Acknowledgements 首条：`Codex Connect is built on [codex-host](https://github.com/BytePioneer-AI/codex-host). Thanks to its authors and contributors.`（中文版对应翻译）；保留 Paseo，删除 LINUX DO。
 - README 中引用的截图文件名（含 codexhost 字样）属于内部资源名，不改。
 
