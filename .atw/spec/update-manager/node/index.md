@@ -25,6 +25,13 @@
   - SHA-256 必须是小写十六进制，单个安装包上限 2 GiB；
   - 先下载到 `.<name>.download`，完成后校验大小和 SHA-256，再 rename 到正式文件名；
   - GitHub Release 必须恰好包含一个 `codex-connect-<version>-<target>.(dmg|exe)`（产物名与 `scripts/release/prepare-payload.mjs` 一致），且带有 `sha256:` digest，下载 URL 前缀固定为本仓库的 releases/download。
+- **仓库身份 `LFT-OXY/Codex-Connect`**：更新只认本仓库，上游 `BytePioneer-AI/codex-host` 的 URL 一律拒绝。受边界规则限制，这个地址以字面量形式分散在下面几处，改仓库时要一起修改：
+  - `github-release.ts`：`CODEXHOST_LATEST_RELEASE_URL`（`https://api.github.com/repos/LFT-OXY/Codex-Connect/releases/latest`）、`RELEASE_NOTES_URL_PATTERN`（`html_url` 不匹配时报 `GitHub Release notes URL does not match its tag`）、`DOWNLOAD_URL_PREFIX`（`browser_download_url` 不匹配时报 `GitHub Release asset is invalid`）；
+  - `github-cli-release.ts`：`GITHUB_LATEST_RELEASE_ENDPOINT`（`repos/LFT-OXY/Codex-Connect/releases/latest`）；
+  - `packages/shared-contracts/src/updates.ts`：`githubReleaseNotesUrlSchema` 的正则必须与 `RELEASE_NOTES_URL_PATTERN` 接受同一个仓库；
+  - `packages/renderer-extension/src/settings/pages.ts`（仓库地址，以及 Windows 手动下载地址 `…/releases/download/v<ver>/codex-connect-<ver>-windows-<arch>.exe`）、`connections-page.ts`（`…/issues/new`）；
+  - `crates/platform/src/desktop_launch.rs`：`CODEXHOST_RELEASES_LATEST_URL`。
+  - 测试断言：`github-release.test.ts` 断言两条发现路径请求的端点，并拒绝上游的 `html_url` 和下载 URL；`shared-contracts/test/updates.test.ts` 拒绝上游的 `releaseNotesUrl`；host-runtime、renderer 测试里的 fixture 统一使用本仓库地址。
 - **Release 发现顺序**：先尝试 `fetchLatestGitHubReleaseWithGitHubCli`（使用 `gh api`，凭据由 gh 和系统钥匙串管理，超时 5s，输出上限 1 MiB）。它返回 `null` 时，再用匿名 HTTP 请求 `fetchLatestGitHubRelease`（`redirect: "error"`）。gh 的 stderr **永远不透传**，因为调试输出里可能含有 token。只有 `ENOENT`/`EACCES`（可执行文件无法启动）时才换下一个候选路径；认证失败或网络失败不会重复请求。显式设置了 `CODEXHOST_GH_COMMAND` 时，不再尝试其他安装位置。
 - **错误形态**：本包只抛普通 `Error`，message 是简短英文。写入状态文件时截断到 500 字符（`statusSnapshot`），coordinator 返回给 Desktop 时也截断到 500 字符。不要把完整 stderr 或 URL 查询参数写进 message。
 - **状态写入**：`writeStatusSnapshot` 先写到 `.update-status-<id>.tmp` 再 rename。在 Windows 上，`replaceStatusFile` 遇到 `EACCES`/`EBUSY`/`EPERM` 会按 10/30/70/150/300ms 退避重试。下载进度最多每 250ms 写一次，并通过 Promise 链串行写入。

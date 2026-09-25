@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { parseLatestGitHubRelease, type CodexhostLatestRelease } from "./github-release.js";
 
-const GITHUB_LATEST_RELEASE_ENDPOINT = "repos/BytePioneer-AI/codex-host/releases/latest";
+const GITHUB_LATEST_RELEASE_ENDPOINT = "repos/LFT-OXY/Codex-Connect/releases/latest";
 const MAX_RELEASE_RESPONSE_BYTES = 1024 * 1024;
 const GITHUB_CLI_TIMEOUT_MS = 5_000;
 

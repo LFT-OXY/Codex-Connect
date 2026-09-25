@@ -14,7 +14,7 @@ import {
 function release(overrides: Record<string, unknown> = {}) {
   return {
     tag_name: "v1.2.3",
-    html_url: "https://github.com/BytePioneer-AI/codex-host/releases/tag/v1.2.3",
+    html_url: "https://github.com/LFT-OXY/Codex-Connect/releases/tag/v1.2.3",
     draft: false,
     prerelease: false,
     body: "## Changes\n\n- Safer updates",
@@ -24,7 +24,7 @@ function release(overrides: Record<string, unknown> = {}) {
         size: 42,
         digest: `sha256:${"ab".repeat(32)}`,
         browser_download_url:
-          "https://github.com/BytePioneer-AI/codex-host/releases/download/v1.2.3/codex-connect-1.2.3-windows-x64.exe",
+          "https://github.com/LFT-OXY/Codex-Connect/releases/download/v1.2.3/codex-connect-1.2.3-windows-x64.exe",
         uploader: { login: "github-actions" },
       },
     ],
@@ -41,7 +41,7 @@ describe("GitHub Release update discovery", () => {
     expect(selectInstallerReleaseArtifact(parsed, "windows-x64")).toEqual({
       name: "codex-connect-1.2.3-windows-x64.exe",
       source: {
-        url: "https://github.com/BytePioneer-AI/codex-host/releases/download/v1.2.3/codex-connect-1.2.3-windows-x64.exe",
+        url: "https://github.com/LFT-OXY/Codex-Connect/releases/download/v1.2.3/codex-connect-1.2.3-windows-x64.exe",
         sha256: "ab".repeat(32),
         size: 42,
       },
@@ -56,7 +56,7 @@ describe("GitHub Release update discovery", () => {
     expect(() =>
       parseLatestGitHubRelease(
         release({
-          html_url: "https://github.com/BytePioneer-AI/codex-host/releases/tag/v9.9.9",
+          html_url: "https://github.com/LFT-OXY/Codex-Connect/releases/tag/v9.9.9",
         }),
       ),
     ).toThrow("does not match");
@@ -67,7 +67,7 @@ describe("GitHub Release update discovery", () => {
             name: "codex-connect-1.2.3-windows-x64.exe",
             size: 42,
             browser_download_url:
-              "https://github.com/BytePioneer-AI/codex-host/releases/download/v1.2.3/codex-connect-1.2.3-windows-x64.exe",
+              "https://github.com/LFT-OXY/Codex-Connect/releases/download/v1.2.3/codex-connect-1.2.3-windows-x64.exe",
           },
         ],
       }),
@@ -91,6 +91,29 @@ describe("GitHub Release update discovery", () => {
     ).toThrow("no valid SHA-256");
   });
 
+  it("rejects release and download URLs from the upstream repository", () => {
+    expect(() =>
+      parseLatestGitHubRelease(
+        release({ html_url: "https://github.com/BytePioneer-AI/codex-host/releases/tag/v1.2.3" }),
+      ),
+    ).toThrow("does not match");
+    expect(() =>
+      parseLatestGitHubRelease(
+        release({
+          assets: [
+            {
+              name: "codex-connect-1.2.3-windows-x64.exe",
+              size: 42,
+              digest: `sha256:${"ab".repeat(32)}`,
+              browser_download_url:
+                "https://github.com/BytePioneer-AI/codex-host/releases/download/v1.2.3/codex-connect-1.2.3-windows-x64.exe",
+            },
+          ],
+        }),
+      ),
+    ).toThrow("asset is invalid");
+  });
+
   it("uses stable SemVer precedence", () => {
     expect(compareSemanticVersions("1.2.3-test.2", "1.2.3")).toBeLessThan(0);
     expect(compareSemanticVersions("1.2.4", "1.2.3")).toBeGreaterThan(0);
@@ -108,6 +131,9 @@ describe("GitHub Release update discovery", () => {
     await expect(fetchLatestGitHubRelease({ fetch: fetchImpl })).resolves.toMatchObject({
       version: "1.2.3",
     });
+    expect(CODEXHOST_LATEST_RELEASE_URL).toBe(
+      "https://api.github.com/repos/LFT-OXY/Codex-Connect/releases/latest",
+    );
     expect(fetchImpl).toHaveBeenCalledWith(
       CODEXHOST_LATEST_RELEASE_URL,
       expect.objectContaining({ redirect: "error" }),
@@ -135,7 +161,7 @@ describe("GitHub Release update discovery", () => {
         "Accept: application/vnd.github+json",
         "--header",
         "X-GitHub-Api-Version: 2022-11-28",
-        "repos/BytePioneer-AI/codex-host/releases/latest",
+        "repos/LFT-OXY/Codex-Connect/releases/latest",
       ],
       { environment: { PATH: "/usr/bin:/bin" } },
     );

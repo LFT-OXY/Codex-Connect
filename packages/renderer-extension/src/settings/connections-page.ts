@@ -15,7 +15,7 @@ import { createHarnessInstallationPanel } from "./harness-installation-panel.js"
 import type { RendererSettingsMessages } from "./localization.js";
 
 export const CODEXHOST_GITHUB_ISSUES_NEW_URL =
-  "https://github.com/BytePioneer-AI/codex-host/issues/new";
+  "https://github.com/LFT-OXY/Codex-Connect/issues/new";
 
 export interface RendererConnectionAgentSnapshot {
   readonly agent: ExternalRendererAgent;
