@@ -24,6 +24,7 @@
 | `src/tool-lifecycle.ts`、`subagent-lifecycle.ts`、`task-tracker.ts`、`background-occupancy.ts`、`file-change.ts` | 工具、Subagent、Todo、后台占用、文件 diff 投影 |
 | `src/model-catalog.ts`、`thinking-options.ts`、`permission-modes.ts`、`plan-review.ts` | 配置编码与计划审批 |
 | `src/slash-commands.ts`、`account-usage.ts`、`usage-estimate.ts`、`claude-session-import.ts` | 命令目录、账号额度、费用估算、导入 |
+| `src/claude-native-usage.ts` | `nativeUsage.read` 的原生用量解析，规则见下文「原生用量」 |
 | `src/user-shell-environment.ts`、`process-fence.ts`、`command.ts` | 环境、进程组回收、可执行文件发现 |
 | `docs/harnesses/claude-code/claude-code-plan-mode.md`、`claude-code-edit-recovery.md` | 计划模式与修订/空会话恢复的设计说明 |
 
@@ -40,3 +41,14 @@
    npx vitest run --config tests/vitest.config.js packages/adapters/claude-code/test/claude-history.test.ts packages/adapters/claude-code/test/claude-rollback.test.ts
    CODEXHOST_RUN_CLAUDE_ADAPTER_REAL=1 npx vitest run --config tests/vitest.config.js packages/adapters/claude-code/test/claude-code-adapter.real.test.ts
    ```
+
+## 原生用量（`claude-native-usage.ts`）
+
+跨层契约见 `.atw/spec/host-runtime/node/local-usage.md`。Claude 特有规则（`test/claude-native-usage.test.ts` 固化）：
+
+- 文件：`claudeProjectsDirectory(env)` 下 `<project>/*.jsonl`（主会话）与 `<project>/<session>/subagents/*.jsonl`（子代理）。游标 `{formatVersion:1, files:{[相对路径]:{ino(字符串，bigint stat), offset}}}`；ino 变化或 offset 超过文件大小从 0 重读。
+- 只读到最后一个 `\n`，未写完的尾行下次再读。只解析含 `"usage"` 或 `"type":"user"` 的行（大段附件行不 parse）。
+- 用量：`type:"assistant"` 且有 `message.usage`；去重键 `message:<message.id>:<requestId>`（无 requestId 时省略）。同一回复会写多行：主会话每个内容块一行、用量相同；子代理先写 `stop_reason:null` 的部分用量，**工具结果可能先于最终用量行写入**。取同键的最后一行。
+- 流式等待：最后一行 `stop_reason` 为空且文件 1 小时内有写入（`STREAMING_WINDOW_MS`）时不交出，游标退回到该回复第一行；闲置超过 1 小时按最后一行交出（中断的回复）。不要用“其后是否有新消息”判断完成，这会在工具结果先写入时少计。
+- `reasoning` 恒为 0：Claude transcript 的思考量只包含在 `output_tokens` 中。全零用量（如 `<synthetic>` 错误回复）不交出。
+- 对话：只在主会话文件，`type:"user"`、非 `isSidechain`、content 为字符串或含 text 块（不计 tool_result），去重键 `prompt:<uuid>`，不带 model。与 TokenTracker 口径一致，`isMeta` 等命令回显也会计入。

@@ -1,6 +1,7 @@
 import {
   HARNESS_LAUNCH_SETTINGS_GET_METHOD,
   HARNESS_LAUNCH_SETTINGS_SET_METHOD,
+  LOCAL_USAGE_QUERY_METHOD,
   harnessIdSchema,
   harnessModelRefSchema,
   harnessPermissionModeIdSchema,
@@ -99,6 +100,34 @@ describe("Renderer fixed Model request client", () => {
     sendRequest.mockResolvedValueOnce({ path: 42 });
     await expect(client.getHarnessLaunchSettings?.({ harnessId })).rejects.toThrow();
   });
+  it("queries Local Usage with validated params and rejects results carrying extra fields", async () => {
+    const result = {
+      range: { from: "2026-03-02", to: "2026-03-08" },
+      totals: {
+        total: 3,
+        input: 1,
+        cacheRead: 1,
+        cacheWrite: 0,
+        output: 1,
+        reasoning: 0,
+        conversations: 1,
+      },
+      models: 1,
+      harnesses: [{ harnessId: "claude-code", name: "Claude Code", totalTokens: 3, models: 1 }],
+      daily: [],
+    };
+    const sendRequest = vi.fn().mockResolvedValue(result);
+    const client = createRendererModelClient([{ sendRequest }]);
+    if (!client?.queryLocalUsage) throw new Error("Expected a Local Usage client");
+    const params = { period: { kind: "week" as const }, timeZone: "Asia/Shanghai", refresh: true };
+    expect(await client.queryLocalUsage(params)).toEqual(result);
+    expect(sendRequest).toHaveBeenLastCalledWith(LOCAL_USAGE_QUERY_METHOD, params);
+    await expect(client.queryLocalUsage({ ...params, timeZone: "Mars/Olympus" })).rejects.toThrow();
+    expect(sendRequest).toHaveBeenCalledOnce();
+    sendRequest.mockResolvedValueOnce({ ...result, records: [] });
+    await expect(client.queryLocalUsage(params)).rejects.toThrow();
+  });
+
   it("reads draft quota for the selected Account without activating it", async () => {
     const result = {
       accountId: "account-b",
@@ -347,6 +376,7 @@ describe("Renderer fixed Model request client", () => {
       "listSessionImportSources",
       "listThreadOwnership",
       "openHarnessWebUi",
+      "queryLocalUsage",
       "readUpdateStatus",
       "refreshCodexAccounts",
       "selectThreadModel",

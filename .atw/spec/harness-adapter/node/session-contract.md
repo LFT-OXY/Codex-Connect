@@ -4,7 +4,7 @@
 
 ## 形状
 
-- `HarnessAdapter`：`inspect()`、`open(OpenSessionInput)`、`close()` 是必需成员，其余全是可选能力：`commandCatalog`、`liveCommandCatalog`、`sessionImport`、`subagents`、`webUi`、`inspectAccount`、`credentialExport`、`credentialImports`。
+- `HarnessAdapter`：`inspect()`、`open(OpenSessionInput)`、`close()` 是必需成员，其余全是可选能力：`commandCatalog`、`liveCommandCatalog`、`nativeUsage`、`sessionImport`、`subagents`、`webUi`、`inspectAccount`、`credentialExport`、`credentialImports`。
 - `OpenSessionInput` 按 `kind` 区分为 `create` / `resume` / `fork` / `rollbackLastTurn`。`resume` 与 `rollbackLastTurn` 可以带上次保存的 `model`、`thinkingOptionId`、`permissionModeId`，供懒初始化配置的 Harness 使用。
 - `HarnessSession.execute` 是一组重载，每种 `HostCommand` 对应自己的返回类型（`turn.start` → `TurnStartAccepted`，`model.select` → `ModelSelectCompleted`）。新增命令时要同时加重载、`HostCommand` 联合成员和返回类型，**不要**改成一个返回 `unknown` 的宽签名。
 - 输出只有一条流：`outputs: AsyncIterable<HarnessOutput>`，元素是 `{ kind: "event" }` 或 `{ kind: "interaction" }`。Adapter 用 `HarnessOutputChannel` 实现它；这个通道只允许一个消费者，第二次调用 `[Symbol.asyncIterator]()` 会抛 `"Harness outputs allow only one consumer"`。
@@ -29,6 +29,7 @@
 - `HarnessAdapter.commandCatalog`："Reading it must not inspect, connect to, or open a Native Session."
 - `inspectAccount`：返回当前原生认证的实时额度；拿不到时返回 `null`，不能返回会话花费、旧认证缓存，也不能为此发起模型 Turn。
 - `HarnessSessionImportSource` / `HarnessCredentialTransfer`：只在后端使用，不得序列化进 Desktop 响应或日志。
+- `HarnessNativeUsageRecord`：不含消息正文，也不带 Harness 字段（Host 按 Adapter 归属）；游标对 Host 不透明，Adapter 不保存读取状态；允许重复返回，但只能交出终值。完整契约见 `.atw/spec/host-runtime/node/local-usage.md`。Broker 目前不转发此能力。
 
 这些正是 `AGENTS.md` 所说的"保留 Harness 真实能力与语义"，Harness 做不到的就不声明，不要伪造等价行为。
 

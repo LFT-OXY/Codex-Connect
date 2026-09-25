@@ -167,6 +167,10 @@ Renderer 的 `listHarnessPlugins()` 使用绑定的 RequestManager 发送此固�
 
 `codexhost/harness/accounts/sources` 先返回当前连接中实现该能力的 Harness ID 与 Manifest 名称，Renderer 再为每个来源并行调用 `codexhost/harness/accounts/inspect`。Host 分别校验快照并隔离失败和超时，不透传原生错误或凭据；任一有效结果可立即显示，不等待其他 Harness。未实现、无数据或返回非法快照的插件不产生账号行。`codexhost/harness/accounts/list` 保留为旧 Renderer 的聚合兼容接口，新 Renderer 连接旧 Host 时也回退使用它。Renderer 在账号设置页只读展示，不注册 Codex 账号或参与多账号路由。Claude Code 的 Aqua Broker 转发 `adapter.inspectAccount`；旧 Broker 不支持时无数据。产品说明见[账号设置](../product/codex-accounts.md)。
 
+### 原生用量读取
+
+可选 `HarnessAdapter.nativeUsage.read(cursor)` 从原生会话记录中读取上次游标之后新增的用量事实：发生时间、Native Session ID、可选 Provider / Model / 工作目录、Token 分项（输入不含缓存）、对话数增量与稳定去重键，不含消息正文。游标对 Host 不透明，由 Host 持久化，Adapter 不保存读取状态；无法识别的游标按从头读取处理，重复返回已读事实是允许的，Host 按去重键只计一次。Host 校验每批记录，某个 Harness 失败时保留它上次的游标与统计。记录格式、文件位置与去重细节只存在于各 Adapter；目前只有 Claude Code 实现，Aqua Broker 不转发此能力。产品说明见[用量统计](../product/local-usage.md)。
+
 ## 运行中切换 Model / Thinking
 
 支持配置选择的 Adapter 不因已有活动 Turn 而拒绝 `model.select` / `thinking.select`；通过原生配置接口执行，或更新供下一次原生调用使用的配置。生效时机由 Harness 决定，Host 不承诺当前 Turn 中途换模型，也不统一排队到 Turn 结束。原生拒绝仍作为失败返回，配置成功后发布已确认的 `session.state.changed`。

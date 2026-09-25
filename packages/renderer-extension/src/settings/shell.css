@@ -23,6 +23,13 @@
   --settings-danger-bg: light-dark(#fff1f0, rgb(239 68 68 / 8%));
   --settings-danger-border: light-dark(#f3c7c3, rgb(239 68 68 / 22%));
   --settings-success: light-dark(#16784a, #4ade80);
+  /* Categorical series, e.g. the Harness share bar on the usage page. */
+  --settings-series-1: light-dark(#2563eb, #60a5fa);
+  --settings-series-2: light-dark(#d97706, #fbbf24);
+  --settings-series-3: light-dark(#059669, #34d399);
+  --settings-series-4: light-dark(#9333ea, #c084fc);
+  --settings-series-5: light-dark(#dc2626, #f87171);
+  --settings-series-6: light-dark(#0891b2, #22d3ee);
   color: var(--settings-text);
   color-scheme: inherit;
   font:
@@ -86,6 +93,11 @@
   border: 1px solid var(--settings-border);
   border-radius: 14px;
   box-shadow: light-dark(0 16px 42px rgb(0 0 0 / 16%), 0 20px 54px rgb(0 0 0 / 42%));
+}
+
+.codexhost-settings-dialog[data-size="expanded"] {
+  width: calc(100vw - 32px);
+  height: calc(100vh - var(--settings-titlebar-height) - 32px);
 }
 
 .codexhost-settings-dialog::backdrop {
@@ -300,6 +312,10 @@
 .settings-page__content {
   width: min(930px, calc(100% - 80px));
   margin-inline: auto;
+}
+
+.codexhost-settings-dialog[data-size="expanded"] .settings-page__content {
+  width: min(1400px, calc(100% - 80px));
 }
 
 .settings-page__content {
@@ -1868,7 +1884,8 @@
 }
 
 @media (max-width: 720px) {
-  .codexhost-settings-dialog {
+  .codexhost-settings-dialog,
+  .codexhost-settings-dialog[data-size="expanded"] {
     width: calc(100vw - 16px);
     height: calc(100vh - var(--settings-titlebar-height) - 16px);
     border-radius: 10px;
@@ -1922,7 +1939,8 @@
     border-radius: 10px;
   }
 
-  .settings-page__content {
+  .settings-page__content,
+  .codexhost-settings-dialog[data-size="expanded"] .settings-page__content {
     width: calc(100% - 40px);
   }
 

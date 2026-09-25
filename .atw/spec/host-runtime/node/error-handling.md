@@ -25,7 +25,7 @@
 | `-32079` | Native Session 已不存在（`sessionNotFound`） | 恢复、归档 |
 | `-32080` | Fork Checkpoint 或回滚边界不可用 | Fork/Rollback/Revert |
 | `-32081` | Mapping Store 持久化或读取失败 | Fork、归档、ownership list |
-| `-32082` | 列表聚合或会话候选读取失败 | `thread/list`、会话导入 |
+| `-32082` | 列表聚合、会话候选或 Local Usage 读取失败 | `thread/list`、会话导入、`codexhost/usage/query` |
 | `-32086` / `-32087` | Codex 账号操作失败 / `initialize` 失败 | 账号、初始化 |
 | `-32090` / `-32091` | 更新功能不可用 / 更新操作失败（message 截断到 500 字符） | `#handleUpdateRequest` |
 | `-32092` | Harness Web UI 不可用或无法打开 | `#openHarnessWebUi` |

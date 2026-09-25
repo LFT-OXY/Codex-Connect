@@ -53,6 +53,14 @@ DOM 标记是测试、焦点恢复和 forced-colors 样式共同依赖的契约�
 
 测试：纯函数在 `test/settings/accounts-usage-windows.test.ts`，渲染在 `accounts-usage.test.ts`（本地 FakeElement；重置卡的寿命比例、缺发放时间、旧字段回退、越界夹取、到期警示都经 `renderAccountResetCredits` 断言），整页分组在 `pages.test.ts`，布局与窄窗口在 `tests/e2e/renderer-settings-accounts.spec.ts`。
 
+## 放大尺寸页面与「用量」页（`settings/usage-*.ts`）
+
+- 页面在 `RendererSettingsPageDefinition.size` 声明 `"expanded"`（缺省 `"default"`，其他值注册时抛 `Unknown settings page size`）。`shell.ts#activatePage` 写入 `dialog.dataset.size`；`shell.css` 中 `[data-size="expanded"]` 让对话框四周各留 16px，内容区最宽 1400px；≤720px 媒体查询里要同时列出 expanded 选择器，否则它的更高优先级会覆盖窄布局。对话框本身是旧 CSS 元素，尺寸规则写在 `shell.css`，不加 Tailwind 类。
+- 分类色：`--settings-series-1..6`（`shell.css` 的 `:host`，`light-dark()`）映射为 Tailwind `bg-settings-series-N`。类名写成完整字面量数组（`usage-dashboard.ts#SERIES_BACKGROUNDS`）按下标取，不拼接。
+- `usage-dashboard.ts#renderLocalUsage(document, result, messages)` 只依赖 `createElement/append/setAttribute/dataset/style`，可用假 DOM 测试；`usage-page.ts` 负责周期按钮、自定义表单、刷新与请求。DOM 标记（测试与 e2e 依赖）：`[data-usage-total]`（title 为完整数）、`[data-usage-segment=<harnessId>]`（style.width 百分比）、`[data-usage-harness-card="all"|<harnessId>]`、`tr[data-usage-day=<date>]`、`[data-usage-period=<kind>]`（`aria-pressed`）、`form[data-usage-custom]`、`[data-usage-custom-from/to]`、`[data-usage-action="refresh"]`。
+- `formatUsageTokens`：<1000 原样；否则 K/M/B 两位小数去尾零，舍入到 1000 时进位（`999_999` → `1M`）。
+- 测试：`test/settings/usage-dashboard.test.ts`、`usage-page.test.ts`；布局与深色/窄窗口在 `tests/e2e/renderer-settings-usage.spec.ts`（设置 `CODEXHOST_USAGE_SCREENSHOT_DIR` 可输出截图）。
+
 ## 构建插件
 
 - `scripts/tailwind-esbuild-plugin.mjs` 只拦截 `renderer-extension/src/settings/tailwind.css`（esbuild 的 filter 是 Go 正则，不能带 JS flags），编译后以 `text` loader 导入。它会补上 `@layer properties, theme, base, components, utilities` 顺序声明，并把 `@property` 初始值展开到 `@layer properties`（Chromium 不会在 Shadow DOM 中注册 `@property`）。

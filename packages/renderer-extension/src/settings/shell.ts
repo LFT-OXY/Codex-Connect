@@ -162,6 +162,7 @@ export function mountRendererSettingsShell(
     navigationState.select(pageId);
     disposeActivePage();
     setActiveNavigation(navigationButtons, pageId);
+    dialog.dataset.size = definition.size ?? "default";
     pageContent.replaceChildren();
     const scope = new RendererSettingsPageScope();
     activeScope = scope;

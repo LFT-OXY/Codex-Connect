@@ -3,6 +3,7 @@ import {
   IDLE_RELEASE_SETTINGS_METHOD,
   restoreHarnessCommandMentions,
   LOADED_SESSIONS_METHOD,
+  LOCAL_USAGE_QUERY_METHOD,
   idleReleaseSettingsSchema,
 } from "@codexhost/shared-contracts";
 import {
@@ -93,6 +94,8 @@ import {
 } from "@codexhost/shared-contracts";
 import { executeExternalThreadFork } from "./external-thread-fork.js";
 import { isSessionImportRequest, SessionImportRequests } from "./session-import-requests.js";
+import { defaultLocalUsageDirectory } from "./local-usage-store.js";
+import { LocalUsageService } from "./local-usage-service.js";
 import {
   ExternalHistoryRequestError,
   listExternalItems,
@@ -537,6 +540,7 @@ export class AppServerHost {
   #nextQuestionRequestId = HOST_QUESTION_REQUEST_ID_MAX;
   #delegationCoordinator: HarnessDelegationCoordinator;
   #sessionImportRequests: SessionImportRequests | undefined;
+  #localUsage: LocalUsageService | undefined;
   #unregisterDelegationApi: (() => void) | undefined;
   #unsubscribeAccountState: (() => void) | undefined;
   #activeOfficialTurns = new Map<string, string>();
@@ -1158,6 +1162,10 @@ export class AppServerHost {
     }
     if (isSessionImportRequest(request.method)) {
       this.#dispatchDesktopRequest(() => this.#handleSessionImport(request));
+      return;
+    }
+    if (request.method === LOCAL_USAGE_QUERY_METHOD) {
+      this.#dispatchDesktopRequest(() => this.#handleLocalUsage(request));
       return;
     }
     if (request.method === "codexhost/thread/fork") {
@@ -2400,6 +2408,17 @@ export class AppServerHost {
     const response = await this.#sessionImportRequests.handle(request);
     await this.#writer.json(rpcEnvelope(request, response.body));
     if (response.importedThread) await this.#notifyExternalThreadStarted(response.importedThread);
+  }
+
+  async #handleLocalUsage(request: JsonRpcRequest): Promise<void> {
+    await this.#waitForPlugins();
+    this.#localUsage ??= new LocalUsageService({
+      adapters: this.#externalAdapters,
+      descriptors: () => this.#pluginDescriptors,
+      directory: defaultLocalUsageDirectory(this.#options.environment ?? process.env),
+      diagnose: (error) => this.#diagnose(error),
+    });
+    await this.#writer.json(rpcEnvelope(request, await this.#localUsage.handle(request)));
   }
 
   async #inspectThread(request: JsonRpcRequest): Promise<void> {

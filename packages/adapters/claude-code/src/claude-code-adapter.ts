@@ -19,6 +19,8 @@ import {
   type HarnessError,
   type HarnessInspection,
   type HarnessModelRef,
+  type HarnessNativeUsageBatch,
+  type HarnessNativeUsageCapability,
   type HarnessPermissionModeId,
   type HarnessOutput,
   type HarnessResult,
@@ -69,11 +71,13 @@ import {
   type HarnessSessionImportCandidate,
   type HarnessThinkingOptionId,
   type HostInteractionId,
+  type JsonValue,
   type NativeSessionRef,
   type NativeTurnRef,
 } from "@codexhost/shared-contracts";
 
 import { ClaudeBackgroundOccupancy } from "./background-occupancy.js";
+import { readClaudeNativeUsage } from "./claude-native-usage.js";
 import { ClaudeSessionImportIndex } from "./claude-session-import.js";
 import { ClaudeCodeExecutableError, resolveClaudeCodeExecutable } from "./command.js";
 import { ClaudePendingSessions, isPendingClaudeSession } from "./pending-session.js";
@@ -2491,6 +2495,13 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
           };
     },
   } satisfies HarnessSessionImportCapability);
+  readonly nativeUsage = Object.freeze({
+    read: (cursor: JsonValue | null): Promise<HarnessResult<HarnessNativeUsageBatch>> =>
+      this.#readImport(
+        (signal) => readClaudeNativeUsage(this.#environment, cursor, signal),
+        "Claude Code usage records could not be read; check storage access and retry",
+      ),
+  } satisfies HarnessNativeUsageCapability);
   readonly subagents = {
     readSnapshot: async (input: {
       parent: NativeSessionRef;
@@ -2543,6 +2554,7 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
   readonly #cancelTimeoutMs: number;
   readonly #closeTimeoutMs: number;
   readonly #dependencies: ClaudeAdapterDependencies;
+  readonly #environment: NodeJS.ProcessEnv;
   readonly #importAbort = new AbortController();
   readonly #importIndex: ClaudeSessionImportIndex;
   readonly #importRequests = new Set<Promise<unknown>>();
@@ -2559,6 +2571,7 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
 
   constructor(options: ClaudeCodeAdapterOptions = {}, dependencies?: ClaudeAdapterDependencies) {
     const environment = options.environment ?? process.env;
+    this.#environment = environment;
     this.#importIndex = new ClaudeSessionImportIndex(environment);
     this.#pendingSessions = new ClaudePendingSessions(environment);
     this.#closeTimeoutMs = options.closeTimeoutMs ?? DEFAULT_CLOSE_TIMEOUT_MS;
@@ -2622,7 +2635,10 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
     };
   }
 
-  #readImport<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<HarnessResult<T>> {
+  #readImport<T>(
+    operation: (signal: AbortSignal) => Promise<T>,
+    failureMessage = "Claude Code Session discovery failed; check storage access and duplicate Session identities, then retry after closing native clients",
+  ): Promise<HarnessResult<T>> {
     if (this.#importAbort.signal.aborted) {
       return Promise.resolve({
         ok: false,
@@ -2633,12 +2649,7 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
       .then((value): HarnessResult<T> => ({ ok: true, value }))
       .catch((): HarnessResult<T> => ({
         ok: false,
-        error: {
-          code: "unavailable",
-          message:
-            "Claude Code Session discovery failed; check storage access and duplicate Session identities, then retry after closing native clients",
-          retryable: true,
-        },
+        error: { code: "unavailable", message: failureMessage, retryable: true },
       }))
       .finally(() => this.#importRequests.delete(request));
     this.#importRequests.add(request);

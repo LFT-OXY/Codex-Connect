@@ -556,6 +556,49 @@ export interface HarnessSessionImportCapability {
   resolveCandidate?(nativeSessionId: string): Promise<HarnessResult<HarnessSessionImportSource>>;
 }
 
+/** Token counts of one native usage fact. `input` excludes cache reads and writes. */
+export interface HarnessNativeUsageTokens {
+  input: number;
+  cacheRead: number;
+  cacheWrite: number;
+  output: number;
+  /** Reported separately by the Harness; zero when it is only part of `output`. */
+  reasoning: number;
+}
+
+/** One usage fact read from native Session records. It never carries message text. */
+export interface HarnessNativeUsageRecord {
+  /** Stable across re-reads and copied records; Host counts each key once per Harness. */
+  dedupeKey: string;
+  /** Epoch milliseconds. */
+  occurredAt: number;
+  nativeSessionId: string;
+  provider?: string;
+  /** Omitted when the fact only counts a conversation. */
+  model?: string;
+  cwd?: string;
+  tokens: HarnessNativeUsageTokens;
+  /** Conversation Count increment, in this Harness's own semantics. */
+  conversations: number;
+  /** Cost the Harness itself recorded, in USD. */
+  reportedCostUsd?: number;
+}
+
+export interface HarnessNativeUsageBatch {
+  /** Facts added since the input cursor. Repeats of earlier facts are allowed. */
+  records: readonly HarnessNativeUsageRecord[];
+  cursor: JsonValue;
+}
+
+/**
+ * Optional read-only access to usage in native Session records, including sessions run outside
+ * codexhost. The cursor is opaque to Host, which persists it; the Adapter keeps no read state.
+ */
+export interface HarnessNativeUsageCapability {
+  /** `null` reads all history. An unrecognized cursor also restarts from the beginning. */
+  read(cursor: JsonValue | null): Promise<HarnessResult<HarnessNativeUsageBatch>>;
+}
+
 export interface HarnessAdapter {
   readonly credentialExport?: HarnessCredentialExport;
   readonly credentialImports?: HarnessCredentialImports;
@@ -568,6 +611,7 @@ export interface HarnessAdapter {
    * without them that they load after its first message.
    */
   readonly liveCommandCatalog?: boolean;
+  readonly nativeUsage?: HarnessNativeUsageCapability;
   readonly sessionImport?: HarnessSessionImportCapability;
   readonly subagents?: HarnessSubagentCapability;
   readonly webUi?: HarnessWebUiAction;
