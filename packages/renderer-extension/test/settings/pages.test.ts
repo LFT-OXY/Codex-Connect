@@ -1534,49 +1534,6 @@ describe("Renderer Updates page", () => {
     scope.dispose();
   });
 
-  it("renders the open-source project introduction on the About page", () => {
-    const page = createDefaultRendererSettingsPages(rendererSettingsMessages("zh-CN")).find(
-      ({ id }) => id === "about",
-    );
-    if (!page) throw new Error("About page is not registered");
-
-    const document = new FakeDocument();
-    const content = document.createElement("main");
-    const scope = new RendererSettingsPageScope();
-    const cleanup = page.mount({
-      content: content as unknown as HTMLElement,
-      signal: scope.signal,
-      runLatest: (operation, handlers) => scope.runLatest(operation, handlers),
-    });
-
-    expect(visibleText(content)).toContain("在 Codex Desktop 中运行 Pi 和其他 Harness");
-    expect(visibleText(content)).toContain(
-      "我们认为 Codex Desktop 提供了目前最好的桌面开发交互体验",
-    );
-    expect(visibleText(content)).toContain("Claude Code 和 Pi Agent");
-    expect(elementWithClass(content, "settings-about-product").textContent).toBe("Codex Connect");
-    expect(visibleText(content)).toContain("Codex Connect 让你在 Codex Desktop 中选择");
-    expect(visibleText(content)).toContain("Codex Connect 是一个开源项目");
-    expect(visibleText(content)).not.toMatch(/codexhost/i);
-    expect(visibleText(content)).toContain("请给我们一个 Star");
-    const repository = descendants(content).find(
-      ({ tagName, href }) => tagName === "a" && href === "https://github.com/LFT-OXY/Codex-Connect",
-    );
-    expect(repository).toMatchObject({ target: "_blank", rel: "noopener noreferrer" });
-    expect(visibleNotesText(repository as FakeElement)).toContain(
-      "https://github.com/LFT-OXY/Codex-Connect",
-    );
-    const upstream = descendants(content).find(
-      ({ tagName, href }) =>
-        tagName === "a" && href === "https://github.com/BytePioneer-AI/codex-host",
-    );
-    expect(upstream).toMatchObject({ target: "_blank", rel: "noopener noreferrer" });
-    expect(visibleNotesText(upstream as FakeElement)).toBe("基于开源项目 codex-host 开发");
-
-    cleanup?.();
-    scope.dispose();
-  });
-
   it("renders GitHub Release notes as structured Markdown", async () => {
     const client = {
       checkUpdate: vi.fn(async () => ({

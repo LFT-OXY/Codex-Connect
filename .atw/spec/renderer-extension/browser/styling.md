@@ -41,6 +41,6 @@
   ```
   新的深路径模块类型由 `assets.d.ts` 的通配声明覆盖。设置页图标集中在 `settings/icons.ts`，用 `satisfies Record<RendererSettingsIconName, IconNode>` 保证名称完整。
 - 设置品牌图标（设置页头部标记、应用头部设置按钮，`settings/icons.ts#createRendererSettingsBrandIcon`）是 `src/assets/codexhost-app-icon.png`：由 `crates/launcher/assets/codexhost.png` 缩放到 128×128（约 22KB，`sips -Z 128`），以 dataurl 内联；按钮显示 24px，头部显示 32px。启动器图标换了以后要重新生成这张图。不要直接引用 1024px 源图，否则 bundle 会增加约 1.2MB。产品名文字（`shell.ts` 的 `settings-brand__name`、`trigger.ts` 的按钮标签、`pages.ts` 的 `settings-about-product`）都写 `Codex Connect`。
-- "关于"页在开源地址下方渲染 `.settings-about-upstream`，链接到上游 `https://github.com/BytePioneer-AI/codex-host`，文字取 `messages.aboutUpstream`。这是设置页中唯一允许出现上游仓库地址的位置，由 `test/settings/pages.test.ts` 的 About 用例断言。
+- 设置页不提供"关于"页和导航中的"Star 支持"链接（2026-09-25 按用户要求移除），设置页中不出现上游仓库地址。上游署名只保留在 README 致谢中，由 `tools/brand-guard.test.mjs` 断言。更新页的 Star 提示（`.settings-update-star`）保留。
 - Agent 品牌图标放在 `src/assets/`，来源与许可写在 `src/assets/README.md`。新增图标时要补记来源；与 `packages/adapters/<x>/assets/icon.svg` 共用的标志保持逐字节一致。
 - `settings/*.preview.html`、`accounts-quota-interactive.prototype.html` 是静态设计稿，源码、构建脚本和测试都没有引用它们，不要把它们当作生产 UI 修改，也不要从 `src/*.ts` 引用它们。

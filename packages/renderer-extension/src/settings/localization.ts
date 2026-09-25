@@ -27,10 +27,8 @@ export interface RendererSettingsMessages {
   readonly locale: RendererSettingsLocale;
   readonly title: string;
   readonly close: string;
-  readonly starOnGitHub: string;
   readonly sectionsLabel: string;
   readonly generalSection: string;
-  readonly otherSection: string;
   readonly appearanceDescription: string;
   readonly appearanceGroup: string;
   readonly loadedSessions: {
@@ -236,12 +234,6 @@ export interface RendererSettingsMessages {
   readonly updateDownloadWindowsInstaller: string;
   readonly updateStarCallout: string;
   readonly updateStarLink: string;
-  readonly aboutTagline: string;
-  readonly aboutParagraphs: readonly string[];
-  readonly aboutOpenSource: string;
-  readonly aboutStarCallout: string;
-  readonly aboutRepository: string;
-  readonly aboutUpstream: string;
   readonly pageLabels: Readonly<Record<DefaultRendererSettingsPageId, string>>;
 }
 
@@ -250,10 +242,8 @@ const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
   locale: "en",
   title: "Settings",
   close: "Close settings",
-  starOnGitHub: "Star to support",
   sectionsLabel: "Settings sections",
   generalSection: "General",
-  otherSection: "Other",
   appearanceDescription: "Conversation display and local resource management.",
   appearanceGroup: "Appearance",
   loadedSessions: {
@@ -492,23 +482,12 @@ const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
   updateStarCallout:
     "If Codex Connect has helped you, please Star it on GitHub. It means a lot to us 👉",
   updateStarLink: "GitHub",
-  aboutTagline: "Run Pi and other Harnesses in Codex Desktop",
-  aboutParagraphs: Object.freeze([
-    "We believe Codex Desktop offers the best desktop development experience available today.",
-    "But Codex is not the only excellent Agent Harness. Some developers prefer Claude Code or Pi Agent.",
-    "Codex Connect lets you choose the Agent that actually executes tasks inside Codex Desktop, while preserving the native Codex experience and enabling them to collaborate.",
-  ]),
-  aboutOpenSource: "Codex Connect is an open-source project. The source code is available at:",
-  aboutStarCallout: "⭐ If this project helps you, please give us a Star! ⭐",
-  aboutRepository: "Open-source repository",
-  aboutUpstream: "Built on the open-source project codex-host",
   pageLabels: Object.freeze({
     connections: "Connections",
     appearance: "General",
     accounts: "Accounts",
     "session-import": "Session Import",
     updates: "Updates",
-    about: "About",
   }),
 });
 
@@ -517,10 +496,8 @@ const CHINESE_MESSAGES: RendererSettingsMessages = Object.freeze({
   locale: "zh-CN",
   title: "设置",
   close: "关闭设置",
-  starOnGitHub: "Star 支持",
   sectionsLabel: "设置分类",
   generalSection: "通用",
-  otherSection: "其他",
   appearanceDescription: "会话显示与本地资源管理。",
   appearanceGroup: "外观",
   loadedSessions: {
@@ -746,23 +723,12 @@ const CHINESE_MESSAGES: RendererSettingsMessages = Object.freeze({
   updateDownloadWindowsInstaller: "下载 Windows 安装包",
   updateStarCallout: "如果 Codex Connect 帮到了你，请在 GitHub 点个 Star，这对我们意义重大 👉",
   updateStarLink: "GitHub",
-  aboutTagline: "在 Codex Desktop 中运行 Pi 和其他 Harness",
-  aboutParagraphs: Object.freeze([
-    "我们认为 Codex Desktop 提供了目前最好的桌面开发交互体验。",
-    "但 Codex 并不是唯一优秀的 Agent Harness，也有人偏好 Claude Code 和 Pi Agent。",
-    "Codex Connect 让你在 Codex Desktop 中选择真正执行任务的 Agent，同时保留 Codex 的原生体验，并让它们协作完成任务。",
-  ]),
-  aboutOpenSource: "Codex Connect 是一个开源项目，开源地址：",
-  aboutStarCallout: "⭐ 如果这个项目对你有帮助，请给我们一个 Star！⭐",
-  aboutRepository: "开源仓库",
-  aboutUpstream: "基于开源项目 codex-host 开发",
   pageLabels: Object.freeze({
     connections: "连接",
     appearance: "通用",
     accounts: "账号",
     "session-import": "会话导入",
     updates: "更新",
-    about: "关于",
   }),
 });
 

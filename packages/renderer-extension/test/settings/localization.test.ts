@@ -34,8 +34,6 @@ describe("Renderer settings localization", () => {
     expect(english.title).toBe("Settings");
     expect(chinese.title).toBe("设置");
     expect(chinese.openSettings).toBe("打开 Codex Connect 设置");
-    expect(chinese.starOnGitHub).toBe("Star 支持");
-    expect(english.starOnGitHub).toBe("Star to support");
     expect(chinese.updateInstallation).toBe("安装方式");
     expect(chinese.updateInstallationWindowsInstaller).toBe("Windows 安装程序");
     expect(english.updateInstallationMacOsDmg).toBe("macOS DMG");
@@ -58,7 +56,6 @@ describe("Renderer settings localization", () => {
       "If Codex Connect has helped you, please Star it on GitHub. It means a lot to us 👉",
     );
     expect(chinese.updateStarLink).toBe("GitHub");
-    expect(chinese.pageLabels.about).toBe("关于");
     expect(chinese.pageLabels["session-import"]).toBe("会话导入");
     expect(chinese.sessionImportAvailabilityNote).toContain("可选 Harness 来自本地 Host");
     expect(chinese.sessionImportAvailabilityNote).toContain("先在原生客户端关闭该会话再导入");
@@ -70,10 +67,6 @@ describe("Renderer settings localization", () => {
       "close the session in its native client before importing",
     );
     expect(english.sessionImportAvailabilityNote).toContain("avoid concurrent writes");
-    expect(chinese.aboutTagline).toBe("在 Codex Desktop 中运行 Pi 和其他 Harness");
-    expect(chinese.aboutParagraphs).toHaveLength(3);
-    expect(chinese.aboutStarCallout).toContain("请给我们一个 Star");
-    expect(chinese.aboutRepository).toBe("开源仓库");
     expect(Object.keys(chinese.pageLabels)).toEqual(Object.keys(english.pageLabels));
     expect(Object.isFrozen(english)).toBe(true);
     expect(Object.isFrozen(chinese.pageLabels)).toBe(true);
@@ -84,6 +77,6 @@ describe("Renderer settings localization", () => {
       createDefaultRendererSettingsPages(rendererSettingsMessages("zh-CN")).map(
         ({ label }) => label,
       ),
-    ).toEqual(["连接", "账号", "会话导入", "通用", "更新", "关于"]);
+    ).toEqual(["连接", "账号", "会话导入", "通用", "更新"]);
   });
 });

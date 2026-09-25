@@ -18,7 +18,6 @@
   --settings-primary-hover: light-dark(#2f2f2f, #ffffff);
   --settings-primary-text: light-dark(#ffffff, #171717);
   --settings-warning: light-dark(#8a5500, #f5c96a);
-  --settings-warning-bg: light-dark(#fff8e6, rgb(245 201 106 / 8%));
   --settings-warning-border: light-dark(#ead8a8, rgb(245 201 106 / 24%));
   --settings-danger: light-dark(#b42318, #f87171);
   --settings-danger-bg: light-dark(#fff1f0, rgb(239 68 68 / 8%));
@@ -260,22 +259,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.settings-nav-star-link {
-  margin-top: 0;
-  color: var(--settings-text);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.settings-nav-star-link .codexhost-settings-icon {
-  color: var(--settings-warning);
-}
-
-.settings-nav-star-link:hover {
-  color: var(--settings-warning);
-  background: var(--settings-warning-bg);
 }
 
 .settings-icon-button {
@@ -1375,96 +1358,6 @@
   line-height: 19px;
 }
 
-.settings-about-panel {
-  display: grid;
-  max-width: 720px;
-  gap: 18px;
-  padding: 24px;
-  background: var(--settings-panel);
-  border: 1px solid var(--settings-border);
-  border-radius: 12px;
-}
-
-.settings-about-product {
-  color: var(--settings-text);
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 32px;
-}
-
-.settings-about-tagline {
-  color: var(--settings-text);
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 24px;
-}
-
-.settings-about-copy {
-  display: grid;
-  max-width: 660px;
-  gap: 12px;
-}
-
-.settings-about-copy p,
-.settings-about-repository p {
-  margin: 0;
-  color: var(--settings-muted);
-  font-size: 13px;
-  line-height: 21px;
-}
-
-.settings-about-star-callout {
-  margin: 2px 0;
-  color: var(--settings-warning);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 22px;
-}
-
-.settings-about-repository {
-  display: grid;
-  gap: 10px;
-  padding-top: 18px;
-  border-top: 1px solid var(--settings-divider);
-}
-
-.settings-about-repository-link {
-  display: flex;
-  align-items: center;
-  width: fit-content;
-  min-width: 0;
-  max-width: 100%;
-  gap: 8px;
-  color: var(--settings-focus);
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.settings-about-repository-link:hover {
-  text-decoration: underline;
-}
-
-.settings-about-upstream a {
-  color: inherit;
-  text-decoration: underline;
-}
-
-.settings-about-upstream a:hover {
-  color: var(--settings-focus);
-}
-
-.settings-about-repository-link code {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--settings-muted);
-  font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 11px;
-  font-weight: 400;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .settings-page-error {
   padding: 16px;
   color: var(--settings-text);
@@ -2029,10 +1922,6 @@
     border-radius: 10px;
   }
 
-  .settings-nav-star-link {
-    margin-top: 0;
-  }
-
   .settings-page__content {
     width: calc(100% - 40px);
   }
@@ -2102,7 +1991,6 @@
     --settings-primary-hover: Highlight;
     --settings-primary-text: ButtonText;
     --settings-warning: CanvasText;
-    --settings-warning-bg: Canvas;
     --settings-warning-border: ButtonBorder;
     --settings-danger: CanvasText;
     --settings-danger-bg: Canvas;

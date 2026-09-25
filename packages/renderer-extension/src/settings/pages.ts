@@ -43,7 +43,6 @@ import {
 } from "./update-request.js";
 
 export const CODEXHOST_GITHUB_REPOSITORY_URL = "https://github.com/LFT-OXY/Codex-Connect";
-const UPSTREAM_GITHUB_REPOSITORY_URL = "https://github.com/BytePioneer-AI/codex-host";
 export const CODEXHOST_RELEASES_LATEST_URL = `${CODEXHOST_GITHUB_REPOSITORY_URL}/releases/latest`;
 export const CODEXHOST_NPM_MANUAL_UPDATE_COMMAND = "npm install -g @chinhae/codex-connect@latest";
 
@@ -78,7 +77,6 @@ export const DEFAULT_RENDERER_SETTINGS_PAGE_IDS = [
   "session-import",
   "appearance",
   "updates",
-  "about",
 ] as const;
 
 export type DefaultRendererSettingsPageId = (typeof DEFAULT_RENDERER_SETTINGS_PAGE_IDS)[number];
@@ -156,67 +154,6 @@ function formatUpdateBytes(value: number): string {
     if (scaled < 1024 || nextUnit === units.at(-1)) break;
   }
   return `${scaled.toFixed(scaled >= 10 ? 0 : 1)} ${unit}`;
-}
-
-function aboutPage(messages: RendererSettingsMessages): RendererSettingsPageDefinition {
-  return Object.freeze({
-    id: "about",
-    label: messages.pageLabels.about,
-    icon: "about",
-    mount(context: RendererSettingsPageMountContext) {
-      const document = context.content.ownerDocument;
-      const heading = document.createElement("div");
-      heading.className = "settings-section-label";
-      heading.textContent = messages.pageLabels.about;
-
-      const panel = document.createElement("section");
-      panel.className = "settings-about-panel";
-      const product = document.createElement("strong");
-      product.className = "settings-about-product";
-      product.textContent = "Codex Connect";
-      const tagline = document.createElement("strong");
-      tagline.className = "settings-about-tagline";
-      tagline.textContent = messages.aboutTagline;
-      const introduction = document.createElement("div");
-      introduction.className = "settings-about-copy";
-      for (const paragraphText of messages.aboutParagraphs) {
-        const paragraph = document.createElement("p");
-        paragraph.textContent = paragraphText;
-        introduction.append(paragraph);
-      }
-      const starCallout = document.createElement("p");
-      starCallout.className = "settings-about-star-callout";
-      starCallout.textContent = messages.aboutStarCallout;
-      const repositorySection = document.createElement("div");
-      repositorySection.className = "settings-about-repository";
-      const openSource = document.createElement("p");
-      openSource.textContent = messages.aboutOpenSource;
-      const repository = document.createElement("a");
-      repository.className = "settings-about-repository-link";
-      repository.href = CODEXHOST_GITHUB_REPOSITORY_URL;
-      repository.target = "_blank";
-      repository.rel = "noopener noreferrer";
-      const repositoryUrl = document.createElement("code");
-      repositoryUrl.textContent = CODEXHOST_GITHUB_REPOSITORY_URL;
-      repository.append(
-        createRendererSettingsIcon("external-link", 14),
-        messages.aboutRepository,
-        repositoryUrl,
-      );
-      const upstream = document.createElement("p");
-      upstream.className = "settings-about-upstream";
-      const upstreamLink = document.createElement("a");
-      upstreamLink.href = UPSTREAM_GITHUB_REPOSITORY_URL;
-      upstreamLink.target = "_blank";
-      upstreamLink.rel = "noopener noreferrer";
-      upstreamLink.textContent = messages.aboutUpstream;
-      upstream.append(upstreamLink);
-      repositorySection.append(openSource, repository, upstream);
-      panel.append(product, tagline, introduction, starCallout, repositorySection);
-      context.content.append(heading, panel);
-      return undefined;
-    },
-  });
 }
 
 function updateStarBanner(document: Document, messages: RendererSettingsMessages): HTMLElement {
@@ -637,7 +574,6 @@ export function createDefaultRendererSettingsPages(
     createSessionImportSettingsPage(messages, getSessionImportClient, openImportedThread),
     createAppearanceSettingsPage(messages, getLoadedSessionsClient),
     updatesPage(messages, getUpdateClient),
-    aboutPage(messages),
   ]);
 }
 

@@ -44,11 +44,10 @@ const isTestSource = (file) => file.endsWith("_tests.rs");
 // 产品名的各种写法：codexhost、CodexHost、Codex Host
 const PRODUCT_NAME = /codex ?host/gi;
 
-// 上游仓库地址只允许以署名形式出现在"关于"页与 README 致谢，且各恰好一处。
+// 上游仓库地址只允许以署名形式出现在 README 致谢，中英文各恰好一处。
 const UPSTREAM_REPOSITORY = /BytePioneer-AI\/codex-?host/gi;
 const readmeAcknowledgement = /\[codex-host\]\(https:\/\/github\.com\/BytePioneer-AI\/codex-host\)/;
 const UPSTREAM_ATTRIBUTIONS = {
-  "packages/renderer-extension/src/settings/pages.ts": /^https:\/\/github\.com\/BytePioneer-AI\/codex-host$/,
   "README.md": readmeAcknowledgement,
   "docs/project/README.zh-CN.md": readmeAcknowledgement,
 };
@@ -357,7 +356,7 @@ describe("brand guard", () => {
     expect(report(scanRepository(), "productName")).toEqual([]);
   });
 
-  it("links the upstream repository only from the About page and README acknowledgements", () => {
+  it("links the upstream repository only from the README acknowledgements", () => {
     const findings = scanRepository();
     expect(report(findings, "upstreamLink")).toEqual([]);
     const attributedFiles = findings
