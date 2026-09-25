@@ -1,6 +1,9 @@
 **/*.md
 **/*.wxs
 .pi/
+# ATW 工具写入的任务状态与第三方 skill 资源，由各自工具维护格式。
+.atw/
+.agents/skills/oxy-learning-hub/
 reference/
 node_modules/
 target/

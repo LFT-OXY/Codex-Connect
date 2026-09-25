@@ -143,9 +143,7 @@ describe("Release notes Markdown", () => {
     expect(strong?.textContent).toBe("restart");
     const link = descendants(root).find((element) => element.tagName === "a");
     expect(link?.textContent).toBe("Releases");
-    expect(link?.attributes.get("href")).toBe(
-      "https://github.com/LFT-OXY/Codex-Connect/releases",
-    );
+    expect(link?.attributes.get("href")).toBe("https://github.com/LFT-OXY/Codex-Connect/releases");
     expect(link?.attributes.get("target")).toBe("_blank");
     expect(link?.attributes.get("rel")).toBe("noopener noreferrer");
   });

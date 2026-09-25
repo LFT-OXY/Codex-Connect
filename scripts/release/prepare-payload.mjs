@@ -416,7 +416,10 @@ async function requireNonEmptyArtifact(artifactPath) {
 export async function packageReleaseTarget({ target, root = repositoryRoot }) {
   const prepared = await prepareReleasePayload({ target, root });
   const extension = target.hostPlatform === "darwin" ? ".dmg" : ".exe";
-  const artifactBase = path.join(prepared.outputRoot, `codex-connect-${prepared.version}-${target.id}`);
+  const artifactBase = path.join(
+    prepared.outputRoot,
+    `codex-connect-${prepared.version}-${target.id}`,
+  );
   const artifactPath = `${artifactBase}${extension}`;
   const priorExtensions =
     target.hostPlatform === "darwin" ? [".app.zip", ".dmg"] : [".msi", ".exe"];

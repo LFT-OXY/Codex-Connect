@@ -54,7 +54,8 @@ const UPSTREAM_ATTRIBUTIONS = {
   "docs/project/README.zh-CN.md": readmeAcknowledgement,
 };
 
-const only = (...files) => new RegExp(`^(${files.map((file) => file.replaceAll(".", "\\.")).join("|")})$`);
+const only = (...files) =>
+  new RegExp(`^(${files.map((file) => file.replaceAll(".", "\\.")).join("|")})$`);
 const readmeFiles = only("README.md", "docs/project/README.zh-CN.md");
 const rustSources = /^crates\//;
 const releaseScripts = /^scripts\/release\//;
@@ -67,7 +68,8 @@ const ALLOWED_INTERNAL_NAMES = [
     reason: "术语表登记的例外：README 迁移说明写出上游旧版本的名称、旧包名与旧应用名",
     files: readmeFiles,
     pattern: /<details>\s*<summary>[^<]*codexhost[^<]*<\/summary>[\s\S]*?<\/details>/g,
-    allowInside: /@codexhost\/cli\b|\/codexhost\.app\b|(?<=<summary>[^<]*)codexhost|(?<=(?:replaces|用于替代) )codexhost/g,
+    allowInside:
+      /@codexhost\/cli\b|\/codexhost\.app\b|(?<=<summary>[^<]*)codexhost|(?<=(?:replaces|用于替代) )codexhost/g,
   },
   { reason: "环境变量 CODEXHOST_*", pattern: /CODEXHOST_[A-Z0-9_]*/g },
   {
@@ -77,10 +79,14 @@ const ALLOWED_INTERNAL_NAMES = [
   { reason: "数据目录 ~/.codexhost", pattern: /(?<!\w)\.codexhost(?![\w.-])/g },
   { reason: "LaunchAgent 标签", pattern: /ai\.bytepioneer\.codexhost\./g },
   { reason: "macOS bundle id", pattern: /com\.codexhost\.app/g },
-  { reason: "设置页 CSS 类名、DOM id 与 data 属性", pattern: /(?<![\w-])(?:data-)?codexhost-settings-[\w-]*/g },
+  {
+    reason: "设置页 CSS 类名、DOM id 与 data 属性",
+    pattern: /(?<![\w-])(?:data-)?codexhost-settings-[\w-]*/g,
+  },
   { reason: "内部 CLI 参数", pattern: /(?<=--)codexhost-[a-z][\w-]*/g },
   {
-    reason: "内部二进制与 crate：启动器、Shim、更新器、开始菜单入口、node-repl、平台层（不在用户 PATH 中）",
+    reason:
+      "内部二进制与 crate：启动器、Shim、更新器、开始菜单入口、node-repl、平台层（不在用户 PATH 中）",
     pattern: /codexhost-(?:launcher|shim|updater|start|node-repl|platform)\b/g,
   },
   { reason: "内部 Skill 名", pattern: /codexhost-(?:delegation|add-harness)\b/g },
@@ -96,7 +102,8 @@ const ALLOWED_INTERNAL_NAMES = [
   {
     reason: "Rust 层的临时目录前缀，以及更新器挂载 DMG 时的临时目录和暂存、备份 app 名",
     files: rustSources,
-    pattern: /codexhost-(?:appx-node-env|tool-override|direct-desktop|desktop-launch-args|update-mount|update|backup)\b/g,
+    pattern:
+      /codexhost-(?:appx-node-env|tool-override|direct-desktop|desktop-launch-args|update-mount|update|backup)\b/g,
   },
   {
     reason: "启动器图标资源名与 Windows 原生启动器 codexhost.exe（内部二进制）",
@@ -144,7 +151,8 @@ const ALLOWED_INTERNAL_NAMES = [
   },
   {
     reason: "stderr/控制台诊断前缀（PRD 命名规则：诊断输出保留 codexhost）",
-    files: /^(crates\/|scripts\/release\/|packages\/host-runtime\/src\/(app-server-host|remote-host-cli)\.ts$)/,
+    files:
+      /^(crates\/|scripts\/release\/|packages\/host-runtime\/src\/(app-server-host|remote-host-cli)\.ts$)/,
     pattern:
       /(?<=^|")codexhost(?: (?:launcher|updater|remote|release|release prepare|npm release|npm meta release|npm publish|Host Runtime))?(?=: )/g,
   },
@@ -162,12 +170,14 @@ const ALLOWED_INTERNAL_NAMES = [
     reason:
       "描述内部组件的诊断错误正文（PRD 命名规则：按诊断输出保留）；" +
       "更新器请求校验失败时尚未写入更新状态，只进 stderr",
-    files: /^(crates\/launcher\/|crates\/updater\/src\/request\.rs$|packages\/renderer-extension\/src\/settings\/(pages|shell|connections-page)\.ts$|packages\/host-runtime\/src\/remote-host-lifecycle\.ts$)/,
+    files:
+      /^(crates\/launcher\/|crates\/updater\/src\/request\.rs$|packages\/renderer-extension\/src\/settings\/(pages|shell|connections-page)\.ts$|packages\/host-runtime\/src\/remote-host-lifecycle\.ts$)/,
     pattern:
       /codexhost(?= (?:storage|state base|executable|Host chain|control endpoint|runtime descriptor|[Ll]auncher|Start Menu executable|settings shell|update request failed|connection diagnostics)\b)|(?<=not owned by )codexhost/g,
   },
   {
-    reason: "Adapter 的机器标识：ACP clientInfo 名、OpenCode 服务端认证用户名、Claude Code 配置目录下的暂存目录名",
+    reason:
+      "Adapter 的机器标识：ACP clientInfo 名、OpenCode 服务端认证用户名、Claude Code 配置目录下的暂存目录名",
     files: adapterSources,
     pattern: /^codexhost$/g,
   },
@@ -183,7 +193,8 @@ const ALLOWED_INTERNAL_NAMES = [
       /codexhost-(?:antigravity|agy-question|question-bridge|cursor-fork|hermes-delegation|account|commands|claude-code-adapter|sdk)\b/g,
   },
   {
-    reason: "Adapter 协议标识：Antigravity Hook 工具名、Hermes 进程内插件名、OpenCode 选择记录键、Pi 凭据归属字段",
+    reason:
+      "Adapter 协议标识：Antigravity Hook 工具名、Hermes 进程内插件名、OpenCode 选择记录键、Pi 凭据归属字段",
     files: adapterSources,
     pattern: /codexhost(?=\.ask_question\b|-runtime\b|\.selection\.v1\b|ImportId\b)/g,
   },
@@ -199,13 +210,19 @@ function tsStringLiterals(file, source) {
   const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, scriptKind);
   const literals = [];
   const add = (node, text) =>
-    literals.push({ text, line: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1 });
+    literals.push({
+      text,
+      line: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1,
+    });
   const visit = (node) => {
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
       add(node, node.text);
     } else if (ts.isTemplateExpression(node)) {
       // 插值统一记为 ${}，以便规则识别 `codexhost${suffix}` 这类拼接
-      add(node, node.head.text + node.templateSpans.map((span) => "${}" + span.literal.text).join(""));
+      add(
+        node,
+        node.head.text + node.templateSpans.map((span) => "${}" + span.literal.text).join(""),
+      );
       for (const span of node.templateSpans) visit(span.expression);
       return;
     }
@@ -235,7 +252,8 @@ function rustStringLiterals(source) {
     const char = source[index];
     // 足以容纳 br###" 前缀和 '\u{10FFFF}' 这类最长的字符字面量
     const lookahead = source.slice(index, index + 16);
-    const testAttribute = char === "#" && RUST_TEST_ATTRIBUTE.exec(source.slice(index, index + 200));
+    const testAttribute =
+      char === "#" && RUST_TEST_ATTRIBUTE.exec(source.slice(index, index + 200));
     if (testAttribute) {
       if (!skipping()) testItemPending = true;
       index += testAttribute[0].length;
@@ -366,7 +384,9 @@ function scanRepository() {
 }
 
 const report = (findings, kind) =>
-  findings.filter((finding) => finding.kind === kind).map(({ file, line, content }) => `${file}:${line}: ${content}`);
+  findings
+    .filter((finding) => finding.kind === kind)
+    .map(({ file, line, content }) => `${file}:${line}: ${content}`);
 
 describe("brand guard", () => {
   it("resolves every scanned path to at least one file", () => {
@@ -390,26 +410,59 @@ describe("brand guard", () => {
   });
 
   it.each([
-    ["packages/host-runtime/src/delegation-skill.ts", 'const usage = "codexhost delegate start --harness pi";'],
+    [
+      "packages/host-runtime/src/delegation-skill.ts",
+      'const usage = "codexhost delegate start --harness pi";',
+    ],
     ["packages/host-runtime/src/app-server-host.ts", "const hint = `codexhost thread read ${id}`;"],
-    ["packages/renderer-extension/src/settings/localization.ts", 'const title = "Restart CodexHost to apply";'],
-    ["packages/renderer-extension/src/settings/localization.ts", 'const title = "Restart the codexhost launcher";'],
-    ["packages/renderer-extension/src/settings/localization.ts", 'const title = "codexhost: update ready";'],
-    ["packages/renderer-extension/src/settings/localization.ts", "const title = `Restart codexhost${suffix}`;"],
-    ["packages/renderer-extension/src/settings/localization.ts", 'const title = "Open codexhost/settings";'],
-    ["packages/renderer-extension/src/settings/harness-installation-guides.ts", 'const hint = "Restart Codex Host";'],
+    [
+      "packages/renderer-extension/src/settings/localization.ts",
+      'const title = "Restart CodexHost to apply";',
+    ],
+    [
+      "packages/renderer-extension/src/settings/localization.ts",
+      'const title = "Restart the codexhost launcher";',
+    ],
+    [
+      "packages/renderer-extension/src/settings/localization.ts",
+      'const title = "codexhost: update ready";',
+    ],
+    [
+      "packages/renderer-extension/src/settings/localization.ts",
+      "const title = `Restart codexhost${suffix}`;",
+    ],
+    [
+      "packages/renderer-extension/src/settings/localization.ts",
+      'const title = "Open codexhost/settings";',
+    ],
+    [
+      "packages/renderer-extension/src/settings/harness-installation-guides.ts",
+      'const hint = "Restart Codex Host";',
+    ],
     ["scripts/release/prepare-npm.mjs", 'const install = "npm install -g @codexhost/cli@latest";'],
-    ["scripts/release/prepare-npm.mjs", 'const platformPackage = "@chinhae/codexhost-darwin-arm64";'],
+    [
+      "scripts/release/prepare-npm.mjs",
+      'const platformPackage = "@chinhae/codexhost-darwin-arm64";',
+    ],
     ["scripts/release/prepare-payload.mjs", "const asset = `codexhost-${version}-${target}.dmg`;"],
     ["scripts/release/prepare-payload.mjs", 'const asset = "codexhost-macos-arm64.dmg";'],
     ["scripts/release/prepare-payload.mjs", 'const asset = "codexhost-setup.exe";'],
     ["crates/launcher/src/main.rs", 'fn usage() -> &\'static str { "usage: codexhost launch" }'],
     ["crates/launcher/src/main.rs", '#[cfg(not(test))]\nconst USAGE: &str = "usage: codexhost";'],
     ["README.md", "Run `codexhost` to start."],
-    ["README.md", "<details>\n<summary>If you previously installed codexhost</summary>\n\nRun `codexhost` to start.\n</details>"],
+    [
+      "README.md",
+      "<details>\n<summary>If you previously installed codexhost</summary>\n\nRun `codexhost` to start.\n</details>",
+    ],
     ["scripts/release/windows/Installer.iss", "AppName=codexhost"],
-    ["packages/adapters/antigravity/src/permission-modes.ts", 'const description = "codexhost adds no tool approval.";'],
-    ["packages/adapters/codebuddy/src/command.ts", "const instructions = `This Session runs inside codexhost.\nUse ${cli}.`;"],
+    [
+      "packages/adapters/antigravity/src/permission-modes.ts",
+      'const description = "codexhost adds no tool approval.";',
+    ],
+    [
+      "packages/adapters/codebuddy/src/command.ts",
+      "const instructions = `This Session runs inside codexhost.\nUse ${cli}.`;",
+    ],
   ])("rejects the product name in %s: %s", (file, source) => {
     const findings = scanSource(file, source).filter((finding) => finding.kind === "productName");
     expect(findings).toHaveLength(1);
@@ -417,19 +470,43 @@ describe("brand guard", () => {
   });
 
   it.each([
-    ["packages/host-runtime/src/app-server-host.ts", 'const env = { CODEXHOST_DATA_DIR: dir, method: "codexhost/update/check" };'],
-    ["packages/renderer-extension/src/settings/shell.ts", 'import type { X } from "@codexhost/shared-contracts"; const id = "codexhost-settings-dialog";'],
-    ["crates/platform/src/macos_native_harness_broker.rs", 'const LABEL: &str = "ai.bytepioneer.codexhost.native-harness-broker";'],
+    [
+      "packages/host-runtime/src/app-server-host.ts",
+      'const env = { CODEXHOST_DATA_DIR: dir, method: "codexhost/update/check" };',
+    ],
+    [
+      "packages/renderer-extension/src/settings/shell.ts",
+      'import type { X } from "@codexhost/shared-contracts"; const id = "codexhost-settings-dialog";',
+    ],
+    [
+      "crates/platform/src/macos_native_harness_broker.rs",
+      'const LABEL: &str = "ai.bytepioneer.codexhost.native-harness-broker";',
+    ],
     ["crates/launcher/src/main.rs", 'eprintln!("codexhost launcher: {error}");'],
-    ["crates/launcher/src/main.rs", '#[cfg(test)]\nmod tests {\n    const HOME: &str = "/Applications/codexhost.app";\n}'],
-    ["crates/platform/src/installation.rs", '#[cfg(all(test, target_os = "windows"))]\nfn fixture() -> &\'static str { "codexhost-windows-installation" }'],
-    ["scripts/release/prepare-payload.mjs", "const launcher = path.join(root, `codexhost${suffix}`, \"libexec/codexhost-shim\");"],
-    ["scripts/release/windows/Installer.iss", "; Upgrade from codexhost.\nType: files; Name: \"{userprograms}\\codexhost.lnk\""],
+    [
+      "crates/launcher/src/main.rs",
+      '#[cfg(test)]\nmod tests {\n    const HOME: &str = "/Applications/codexhost.app";\n}',
+    ],
+    [
+      "crates/platform/src/installation.rs",
+      '#[cfg(all(test, target_os = "windows"))]\nfn fixture() -> &\'static str { "codexhost-windows-installation" }',
+    ],
+    [
+      "scripts/release/prepare-payload.mjs",
+      'const launcher = path.join(root, `codexhost${suffix}`, "libexec/codexhost-shim");',
+    ],
+    [
+      "scripts/release/windows/Installer.iss",
+      '; Upgrade from codexhost.\nType: files; Name: "{userprograms}\\codexhost.lnk"',
+    ],
     [
       "README.md",
       "<details>\n<summary>If you previously installed codexhost</summary>\n\nCodex Connect replaces codexhost.\n- npm: `npm rm -g @codexhost/cli`\n- macOS: delete `/Applications/codexhost.app`\n</details>",
     ],
-    ["packages/adapters/grok/src/acp-transport.ts", 'const init = { clientInfo: { name: "codexhost", version: "0.1.6" } };'],
+    [
+      "packages/adapters/grok/src/acp-transport.ts",
+      'const init = { clientInfo: { name: "codexhost", version: "0.1.6" } };',
+    ],
     ["packages/adapters/pi/src/pi-rpc-session.ts", "const id = `codexhost-${randomUUID()}`;"],
   ])("allows internal identifiers in %s: %s", (file, source) => {
     expect(scanSource(file, source)).toEqual([]);
