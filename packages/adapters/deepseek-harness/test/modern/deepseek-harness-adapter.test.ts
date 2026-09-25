@@ -2187,7 +2187,7 @@ describe("Modern DeepSeek Harness Adapter", () => {
       ok: false,
       error: {
         message:
-          "DeepSeek Harness created the Fork child, but codexhost did not adopt it because post-Fork verification failed",
+          "DeepSeek Harness created the Fork child, but Codex Connect did not adopt it because post-Fork verification failed",
         retryable: false,
       },
     });
@@ -2289,7 +2289,7 @@ describe("Modern DeepSeek Harness Adapter", () => {
         },
         code: "nativeFailure",
         message:
-          "DeepSeek Harness created the Fork child, but codexhost did not adopt it after workspace attachment failed",
+          "DeepSeek Harness created the Fork child, but Codex Connect did not adopt it after workspace attachment failed",
         forbidden: [
           "private",
           "fork-secret",
@@ -2317,7 +2317,7 @@ describe("Modern DeepSeek Harness Adapter", () => {
         },
         code: "unavailable",
         message:
-          "DeepSeek Harness created the Fork child, but codexhost did not adopt it because post-Fork verification failed",
+          "DeepSeek Harness created the Fork child, but Codex Connect did not adopt it because post-Fork verification failed",
         forbidden: ["private-child", "content.txt", "child-token"],
         orphanSafe: true,
       },
@@ -2334,7 +2334,7 @@ describe("Modern DeepSeek Harness Adapter", () => {
         },
         code: "unavailable",
         message:
-          "DeepSeek Harness created the Fork child, but codexhost did not adopt it because post-Fork verification failed",
+          "DeepSeek Harness created the Fork child, but Codex Connect did not adopt it because post-Fork verification failed",
         forbidden: ["private-source", "journal.jsonl", "source-token"],
         orphanSafe: true,
       },

@@ -27,6 +27,8 @@ const SCANNED_FILES = [
   "scripts/release/macos/package.sh",
   "scripts/release/windows/Installer.iss",
   "scripts/release/windows/package.ps1",
+  // Harness Adapter：权限模式说明、连接诊断、问答与委派提示会展示给用户或 Agent
+  "packages/adapters/*/src/**/*.ts",
   // 应用内更新：失败原因会写入更新状态并显示在设置页
   "packages/update-manager/src/*.ts",
   // Rust 平台层、启动器与更新器（只扫字符串字面量，跳过测试代码）
@@ -56,6 +58,7 @@ const only = (...files) => new RegExp(`^(${files.map((file) => file.replaceAll("
 const readmeFiles = only("README.md", "docs/project/README.zh-CN.md");
 const rustSources = /^crates\//;
 const releaseScripts = /^scripts\/release\//;
+const adapterSources = /^packages\/adapters\//;
 
 // 每条规则把允许的内部标识从文本中抹去；抹去后仍剩下的产品名即为违规。
 // 没有 files 的规则只匹配不可能是产品名文案的机器标识形状；其余规则限定在实际出现的文件。
@@ -162,6 +165,27 @@ const ALLOWED_INTERNAL_NAMES = [
     files: /^(crates\/launcher\/|crates\/updater\/src\/request\.rs$|packages\/renderer-extension\/src\/settings\/(pages|shell|connections-page)\.ts$|packages\/host-runtime\/src\/remote-host-lifecycle\.ts$)/,
     pattern:
       /codexhost(?= (?:storage|state base|executable|Host chain|control endpoint|runtime descriptor|[Ll]auncher|Start Menu executable|settings shell|update request failed|connection diagnostics)\b)|(?<=not owned by )codexhost/g,
+  },
+  {
+    reason: "Adapter 的机器标识：ACP clientInfo 名、OpenCode 服务端认证用户名、Claude Code 配置目录下的暂存目录名",
+    files: adapterSources,
+    pattern: /^codexhost$/g,
+  },
+  {
+    reason: "Adapter 发给原生进程的 RPC 请求 id 前缀，以及临时文件名前缀",
+    files: adapterSources,
+    pattern: /^\.?codexhost-(?=\$\{\})/g,
+  },
+  {
+    reason: "Adapter 的临时目录、日志、Hook 与记录文件名前缀，以及 Claude Code SDK 客户端标识",
+    files: adapterSources,
+    pattern:
+      /codexhost-(?:antigravity|agy-question|question-bridge|cursor-fork|hermes-delegation|account|commands|claude-code-adapter|sdk)\b/g,
+  },
+  {
+    reason: "Adapter 协议标识：Antigravity Hook 工具名、Hermes 进程内插件名、OpenCode 选择记录键、Pi 凭据归属字段",
+    files: adapterSources,
+    pattern: /codexhost(?=\.ask_question\b|-runtime\b|\.selection\.v1\b|ImportId\b)/g,
   },
   {
     reason: "URL 解析用的占位基址（保留域名 .invalid）",
@@ -384,6 +408,8 @@ describe("brand guard", () => {
     ["README.md", "Run `codexhost` to start."],
     ["README.md", "<details>\n<summary>If you previously installed codexhost</summary>\n\nRun `codexhost` to start.\n</details>"],
     ["scripts/release/windows/Installer.iss", "AppName=codexhost"],
+    ["packages/adapters/antigravity/src/permission-modes.ts", 'const description = "codexhost adds no tool approval.";'],
+    ["packages/adapters/codebuddy/src/command.ts", "const instructions = `This Session runs inside codexhost.\nUse ${cli}.`;"],
   ])("rejects the product name in %s: %s", (file, source) => {
     const findings = scanSource(file, source).filter((finding) => finding.kind === "productName");
     expect(findings).toHaveLength(1);
@@ -403,6 +429,8 @@ describe("brand guard", () => {
       "README.md",
       "<details>\n<summary>If you previously installed codexhost</summary>\n\nCodex Connect replaces codexhost.\n- npm: `npm rm -g @codexhost/cli`\n- macOS: delete `/Applications/codexhost.app`\n</details>",
     ],
+    ["packages/adapters/grok/src/acp-transport.ts", 'const init = { clientInfo: { name: "codexhost", version: "0.1.6" } };'],
+    ["packages/adapters/pi/src/pi-rpc-session.ts", "const id = `codexhost-${randomUUID()}`;"],
   ])("allows internal identifiers in %s: %s", (file, source) => {
     expect(scanSource(file, source)).toEqual([]);
   });

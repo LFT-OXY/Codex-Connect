@@ -84,7 +84,7 @@ import {
 const DEEPSEEK_HARNESS_ID = harnessIdSchema.parse("deepseek-harness");
 const DELEGATION_PERMISSION_PRESET = "danger-full-access";
 const FORK_ORPHAN_MESSAGE =
-  "DeepSeek Harness created the Fork child, but codexhost did not adopt it because post-Fork verification failed";
+  "DeepSeek Harness created the Fork child, but Codex Connect did not adopt it because post-Fork verification failed";
 
 interface ParsedModernForkInput {
   readonly sourceSessionId: string;
@@ -1195,7 +1195,7 @@ function forkRemoteFailure(failure: ModernRemoteFailure): HarnessError {
     return {
       code: "nativeFailure",
       message:
-        "DeepSeek Harness created the Fork child, but codexhost did not adopt it after workspace attachment failed",
+        "DeepSeek Harness created the Fork child, but Codex Connect did not adopt it after workspace attachment failed",
       retryable: false,
       diagnostic: "session/workspace-attach-failed",
     };

@@ -154,6 +154,7 @@
      - 可能出现在文案里的白名单形状（诊断前缀、内部组件错误正文、协议方法、裸机器标识）按文件限定，不对本地化文案与 README 生效。
      - README 迁移说明只放行旧名称、旧包名与旧应用名。
      - 实现时守卫拦下 3 处遗漏的用户可见文案，已改为 Codex Connect：`remote --help` 描述句、安装包与 npm 包的第三方声明标题。
+     - 后续扩大扫描范围到应用内更新链路（update-manager、updater）与全部 Harness Adapter，并把其中用户或 Agent 可见的产品名改为 Codex Connect；Adapter 内的协议与文件标识按文件限定放行。
 
 **验证方式**：运行受影响包的聚焦测试（按 `tests/vitest.config.js`）、`npm run typecheck`、`npm run lint`（含边界检查）、受影响 crate 的 `cargo test`；最后用 `npm start` 启动一次，人工检查设置页图标、关于页文案和署名链接。不默认跑全量测试。
 

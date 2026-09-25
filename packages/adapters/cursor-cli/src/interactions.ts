@@ -132,7 +132,7 @@ export class CursorInteractions {
     return {
       outcome: {
         outcome: "rejected",
-        reason: "This Cursor extension is not supported by codexhost",
+        reason: "This Cursor extension is not supported by Codex Connect",
       },
     };
   }

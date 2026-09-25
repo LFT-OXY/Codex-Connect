@@ -13,7 +13,7 @@ function finish(value) {
 function unavailable() {
   finish({
     decision: "deny",
-    reason: "codexhost question bridge is unavailable. No user answer was received. Do not report that the user skipped or selected an option."
+    reason: "Codex Connect question bridge is unavailable. No user answer was received. Do not report that the user skipped or selected an option."
   });
   if (request) request.destroy();
 }

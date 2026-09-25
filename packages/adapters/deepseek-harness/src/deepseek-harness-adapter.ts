@@ -35,7 +35,7 @@ import { deepSeekModernProfile, hasDeepSeekModernStream } from "./profiles/profi
 
 const DEEPSEEK_HARNESS_ID = harnessIdSchema.parse("deepseek-harness");
 const EXTERNAL_MODERN_WEB_MESSAGE =
-  "检测到配置的端点上已有 DeepSeek Harness Modern Web 实例，但当前 codexhost 实例没有其认证凭据。请关闭该 DSH Web 实例，然后重新运行连接诊断。\nA DeepSeek Harness Modern Web instance is listening at the configured endpoint, but this codexhost instance does not have its authentication credentials. Close that DSH Web instance, then run connection diagnostics again.";
+  "检测到配置的端点上已有 DeepSeek Harness Modern Web 实例，但当前 Codex Connect 实例没有其认证凭据。请关闭该 DSH Web 实例，然后重新运行连接诊断。\nA DeepSeek Harness Modern Web instance is listening at the configured endpoint, but this Codex Connect instance does not have its authentication credentials. Close that DSH Web instance, then run connection diagnostics again.";
 
 export interface DeepSeekHarnessAdapterOptions {
   readonly command?: string;
@@ -198,7 +198,7 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
           ok: false,
           error: {
             code: "unsupported",
-            message: "DeepSeek Harness Web is not managed by this codexhost instance",
+            message: "DeepSeek Harness Web is not managed by this Codex Connect instance",
             retryable: false,
           },
         });

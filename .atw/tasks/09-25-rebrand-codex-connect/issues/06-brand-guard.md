@@ -39,3 +39,7 @@
 - 追加扫描应用内更新链路：`packages/update-manager/src/*.ts` 与 `crates/updater/src/*.rs`。更新失败原因会写进更新状态，由设置页 `pages.ts` 原样显示。
   - 已改为 Codex Connect：`updated … did not become ready after relaunch` 与 npm 启动器标签 `npm … launcher`。
   - 保留 codexhost：更新器请求校验阶段的同名标签。这个阶段还没写更新状态，报错只进 stderr。
+- 追加扫描 Harness Adapter：`packages/adapters/*/src/**/*.ts`（用户决定改名，不登记为例外）。
+  - 已改为 Codex Connect：Antigravity 的权限模式说明与问答报错；DeepSeek Harness 的连接和 Fork 报错（测试断言同步）；Cursor 的"不支持此扩展"；CodeBuddy、WorkBuddy、Hermes 的委派提示与 Hermes 委派 Skill 描述；Pi 写入用户扩展目录的文件头注释。
+  - Pi 按 `import.json` 中保存的副本判断文件归属，改模板不影响已有导入。
+  - 保留 codexhost 的机器标识（按 Adapter 限定的白名单）：ACP `clientInfo.name`、OpenCode 服务端认证用户名、RPC 请求 id 前缀、临时与日志文件名、`codexhost.ask_question` Hook 工具名、Hermes `codexhost-runtime` 插件名、`codexhost.selection.v1`、`codexhostImportId`、Claude Code SDK 客户端标识。

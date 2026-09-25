@@ -206,7 +206,7 @@ export function readModernModelSelectionState(
   } catch {
     throw configurationError(
       "protocolError",
-      "DeepSeek Harness modelSelection projection cannot be represented by codexhost",
+      "DeepSeek Harness modelSelection projection cannot be represented by Codex Connect",
     );
   }
   return { selection, projectionSeq: row.seq, explicit: projected !== null };

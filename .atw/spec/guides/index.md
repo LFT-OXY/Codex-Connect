@@ -54,7 +54,7 @@ These guides help you **ask the right questions before coding**.
 
 ### When to Think About Product Naming（品牌守卫）
 
-- [ ] 新增或修改面向用户的文案：本地化、设置页、Harness 安装引导、CLI 帮助与委派提示、发布脚本产物、Rust 弹窗与 usage、会写进更新状态的失败原因（设置页原样显示）、README
+- [ ] 新增或修改面向用户的文案：本地化、设置页、Harness 安装引导、CLI 帮助与委派提示、发布脚本产物、Rust 弹窗与 usage、会写进更新状态的失败原因（设置页原样显示）、Harness Adapter 的权限说明、报错与委派提示、README
 - [ ] 合并上游之后
 - [ ] 新增带 `codexhost` 字样的内部标识（CSS 类名、临时目录前缀、内部二进制、诊断前缀）
 

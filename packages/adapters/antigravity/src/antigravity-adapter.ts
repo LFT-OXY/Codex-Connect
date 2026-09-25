@@ -242,7 +242,7 @@ function invalidState(message: string): HarnessError {
 }
 
 export const ANTIGRAVITY_WORKSPACE_FILE_INSTRUCTION =
-  "[System Instruction: When creating new files in the workspace, you MUST use the write_to_file tool. When modifying existing files, use the replace_file_content tool. CRITICAL: NEVER include ArtifactMetadata when calling write_to_file for workspace files (ArtifactMetadata is strictly reserved for artifacts in the brain directory, and providing it for workspace files causes a path validation rejection). Do NOT use terminal commands (such as Set-Content, Out-File, echo, or cat) to create or write code files. For clarification, ask_question is connected to the codexhost Desktop through a Hook. Use single-choice or text questions. The Hook returns the actual user response in its reason while blocking the native auto-skip behavior; do not retry merely because the native tool reports it was blocked.]\n\n";
+  "[System Instruction: When creating new files in the workspace, you MUST use the write_to_file tool. When modifying existing files, use the replace_file_content tool. CRITICAL: NEVER include ArtifactMetadata when calling write_to_file for workspace files (ArtifactMetadata is strictly reserved for artifacts in the brain directory, and providing it for workspace files causes a path validation rejection). Do NOT use terminal commands (such as Set-Content, Out-File, echo, or cat) to create or write code files. For clarification, ask_question is connected to the Codex Connect Desktop through a Hook. Use single-choice or text questions. The Hook returns the actual user response in its reason while blocking the native auto-skip behavior; do not retry merely because the native tool reports it was blocked.]\n\n";
 
 export function formatAntigravityTurnPrompt(text: string): string {
   if (text.startsWith("/") || text.includes("ArtifactMetadata")) {
@@ -263,7 +263,7 @@ export function permissionDeniedTurnError(nativeMode: string | null, denial: str
     code: "nativeFailure",
     message:
       `Antigravity denied a tool call under its${mode} permission mode and produced no response. ` +
-      "codexhost uses native Skip permissions and does not enforce tool permissions. " +
+      "Codex Connect uses native Skip permissions and does not enforce tool permissions. " +
       "Check Antigravity CLI diagnostics and native Hooks for the denial; Desktop approvals and Configured permissions are not supported.",
     retryable: false,
     diagnostic: sanitizeDiagnosticTail(denial),

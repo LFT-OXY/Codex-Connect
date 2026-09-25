@@ -180,7 +180,7 @@ export function parseDeepSeekEndpoint(endpoint = DEFAULT_DEEPSEEK_ENDPOINT): str
   if (parsed.searchParams.has("token")) {
     throw probeError(
       "authenticationRequired",
-      "DeepSeek Harness Web bootstrap URL 不可作为连接端点；请关闭该实例，让 codexhost 启动本地 DSH Web。\nA DeepSeek Harness Web bootstrap URL cannot be used as an endpoint. Close that instance and let codexhost start the local DSH Web.",
+      "DeepSeek Harness Web bootstrap URL 不可作为连接端点；请关闭该实例，让 Codex Connect 启动本地 DSH Web。\nA DeepSeek Harness Web bootstrap URL cannot be used as an endpoint. Close that instance and let Codex Connect start the local DSH Web.",
     );
   }
   if (parsed.search !== "") {

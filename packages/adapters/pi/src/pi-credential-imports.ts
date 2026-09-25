@@ -180,7 +180,7 @@ function extensionSource(
   name: string,
   owner: string,
 ): string {
-  return `// Managed by codexhost. Removing this file disables the imported Provider.\nexport default async function (pi) {\n  const moduleUrl = ${JSON.stringify(moduleUrl)};\n  const nativeModule = await import(moduleUrl);\n  const native = nativeModule.${provider === "xai" ? "xaiProvider" : "openaiCodexProvider"}();\n  const oauth = native.auth.oauth;\n  const models = native.getModels().map(model => ({ ...model, provider: ${JSON.stringify(name)} }));\n  pi.registerProvider({\n    ...native, id: ${JSON.stringify(name)}, name: ${JSON.stringify(name)},\n    auth: { oauth: { ...oauth,\n      async refresh(credential, signal) {\n        return { ...await oauth.refresh(credential, signal), codexhostImportId: ${JSON.stringify(owner)} };\n      }\n    } },\n    getModels: () => models\n  });\n}\n`;
+  return `// Managed by Codex Connect. Removing this file disables the imported Provider.\nexport default async function (pi) {\n  const moduleUrl = ${JSON.stringify(moduleUrl)};\n  const nativeModule = await import(moduleUrl);\n  const native = nativeModule.${provider === "xai" ? "xaiProvider" : "openaiCodexProvider"}();\n  const oauth = native.auth.oauth;\n  const models = native.getModels().map(model => ({ ...model, provider: ${JSON.stringify(name)} }));\n  pi.registerProvider({\n    ...native, id: ${JSON.stringify(name)}, name: ${JSON.stringify(name)},\n    auth: { oauth: { ...oauth,\n      async refresh(credential, signal) {\n        return { ...await oauth.refresh(credential, signal), codexhostImportId: ${JSON.stringify(owner)} };\n      }\n    } },\n    getModels: () => models\n  });\n}\n`;
 }
 
 export function createPiCredentialImports(

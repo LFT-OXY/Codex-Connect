@@ -203,7 +203,7 @@ export class AntigravityQuestionBridge {
     ) {
       deny(
         response,
-        "This question does not belong to the active codexhost Turn. No answer was received.",
+        "This question does not belong to the active Codex Connect Turn. No answer was received.",
       );
       return;
     }
@@ -216,7 +216,7 @@ export class AntigravityQuestionBridge {
     if (payload.toolCall.args.questions.some(({ is_multi_select }) => is_multi_select)) {
       deny(
         response,
-        "codexhost currently supports single-choice or text questions, not multi-select. Ask separate single-choice questions instead.",
+        "Codex Connect currently supports single-choice or text questions, not multi-select. Ask separate single-choice questions instead.",
       );
       return;
     }
@@ -317,7 +317,7 @@ export class AntigravityQuestionBridge {
           })),
         };
     const reason =
-      "codexhost handled this question through the Desktop. Native ask_question is blocked only to prevent automatic skipping. " +
+      "Codex Connect handled this question through the Desktop. Native ask_question is blocked only to prevent automatic skipping. " +
       "The following JSON contains the actual user response, not a tool permission decision: " +
       JSON.stringify(result);
     if (Buffer.byteLength(reason) > MAX_BYTES / 2) {
@@ -374,7 +374,7 @@ export class AntigravityQuestionBridge {
       this.#finish(
         pending,
         "cancelled",
-        "The codexhost Turn ended before an answer was received. Do not infer a user choice.",
+        "The Codex Connect Turn ended before an answer was received. Do not infer a user choice.",
       );
     }
   }

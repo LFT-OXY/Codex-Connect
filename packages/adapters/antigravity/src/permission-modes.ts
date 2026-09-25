@@ -18,7 +18,7 @@ export const ANTIGRAVITY_PERMISSION_MODE_CATALOG: HarnessPermissionModeCatalog =
         id: "dangerously-skip-permissions",
         label: "Skip permissions",
         description:
-          "Run Antigravity CLI with --dangerously-skip-permissions. codexhost adds no tool approval or workspace restrictions.",
+          "Run Antigravity CLI with --dangerously-skip-permissions. Codex Connect adds no tool approval or workspace restrictions.",
         dangerous: true,
       },
     ],
@@ -31,7 +31,7 @@ export function decodeAntigravityPermissionModeId(
   const parsed = harnessPermissionModeIdSchema.parse(value);
   if (parsed !== "dangerously-skip-permissions") {
     throw new Error(
-      "Antigravity only supports Skip permissions (dangerous). Explicitly select Skip permissions to continue; codexhost does not enforce tool permissions.",
+      "Antigravity only supports Skip permissions (dangerous). Explicitly select Skip permissions to continue; Codex Connect does not enforce tool permissions.",
     );
   }
   return "dangerously-skip-permissions";

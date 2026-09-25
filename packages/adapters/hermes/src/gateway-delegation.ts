@@ -2,7 +2,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-export const HERMES_DELEGATION_GUIDANCE = `This Session runs inside codexhost.
+export const HERMES_DELEGATION_GUIDANCE = `This Session runs inside Codex Connect.
 When the user authorizes cross-Harness delegation, discover the executable named by CODEXHOST_CLI_PATH through your native terminal tool. Read its --help and harness list, then use delegate start and thread send/read/wait/cancel as documented. Prefer --format compact. Preserve CODEXHOST_RUNTIME_ENDPOINT, CODEXHOST_RUNTIME_TOKEN and CODEXHOST_THREAD_ID in these calls: they identify the Runtime and parent Thread. Never print their values or substitute another executable. Native Hermes delegate_task remains available for Hermes subagents.`;
 const required = [
   "CODEXHOST_CLI_PATH",
@@ -24,7 +24,7 @@ export async function prepareGatewayDelegation(environment: NodeJS.ProcessEnv): 
   try {
     await writeFile(
       file,
-      `---\nname: delegation\ndescription: Discover authorized codexhost agent collaboration.\n---\n\n${HERMES_DELEGATION_GUIDANCE}\n`,
+      `---\nname: delegation\ndescription: Discover authorized Codex Connect agent collaboration.\n---\n\n${HERMES_DELEGATION_GUIDANCE}\n`,
       { mode: 0o600 },
     );
     return {
