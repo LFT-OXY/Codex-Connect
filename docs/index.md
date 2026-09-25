@@ -8,6 +8,7 @@
 | --- | --- |
 | [`project/README.zh-CN.md`](project/README.zh-CN.md) | 中文项目介绍、安装方式和功能概览；维护中文用户入口时阅读。根目录 `README.md` 为英文默认入口。 |
 | [`project/领域术语表.md`](project/领域术语表.md) | Harness、Model、Provider、Account、Thread 等领域术语；命名产品和代码概念前阅读。 |
+| [`adr/`](adr/) | 架构决策记录（ADR）：用量统计数据来源、原生用量解析归属等不易逆转的决定；改动相关领域前阅读。 |
 
 ## Harness 架构与公共能力
 

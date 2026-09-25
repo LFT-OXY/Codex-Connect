@@ -1,0 +1,25 @@
+{"file": ".atw/spec/renderer-extension/browser/index.md", "reason": "Renderer 设置页与 Host RPC 规范"}
+{"file": ".atw/spec/renderer-extension/browser/host-rpc.md", "reason": "Renderer 设置页与 Host RPC 规范"}
+{"file": ".atw/spec/renderer-extension/browser/styling.md", "reason": "Renderer 设置页与 Host RPC 规范"}
+{"file": ".atw/spec/renderer-extension/browser/dom-integration.md", "reason": "Renderer 设置页与 Host RPC 规范"}
+{"file": ".atw/spec/renderer-extension/browser/testing.md", "reason": "Renderer 设置页与 Host RPC 规范"}
+{"file": ".atw/spec/host-runtime/node/index.md", "reason": "Host 服务、错误处理与插件加载"}
+{"file": ".atw/spec/host-runtime/node/directory-structure.md", "reason": "Host 服务、错误处理与插件加载"}
+{"file": ".atw/spec/host-runtime/node/error-handling.md", "reason": "Host 服务、错误处理与插件加载"}
+{"file": ".atw/spec/host-runtime/node/plugin-loading.md", "reason": "Host 服务、错误处理与插件加载"}
+{"file": ".atw/spec/host-runtime/node/testing.md", "reason": "Host 服务、错误处理与插件加载"}
+{"file": ".atw/spec/harness-adapter/node/index.md", "reason": "Adapter 可选能力契约"}
+{"file": ".atw/spec/harness-adapter/node/session-contract.md", "reason": "Adapter 可选能力契约"}
+{"file": ".atw/spec/harness-adapter/node/testing.md", "reason": "Adapter 可选能力契约"}
+{"file": ".atw/spec/adapters/node/index.md", "reason": "各 Harness Adapter 实现规范"}
+{"file": ".atw/spec/adapters/node/plugin-structure.md", "reason": "各 Harness Adapter 实现规范"}
+{"file": ".atw/spec/adapters/node/session-contract.md", "reason": "各 Harness Adapter 实现规范"}
+{"file": ".atw/spec/adapters/node/testing.md", "reason": "各 Harness Adapter 实现规范"}
+{"file": ".atw/spec/shared-contracts/node/schema-conventions.md", "reason": "新 RPC 契约 schema"}
+{"file": ".atw/spec/guides/cross-layer-thinking-guide.md", "reason": "跨 Adapter/Host/Renderer 数据流"}
+{"file": "docs/adr/0001-local-usage-from-native-session-records.md", "reason": "数据来源决策"}
+{"file": "docs/adr/0002-native-usage-parsing-lives-in-adapters.md", "reason": "解析归属决策"}
+{"file": "docs/project/领域术语表.md", "reason": "Local Usage、Estimated Cost 等术语"}
+{"file": ".atw/tasks/09-26-session-usage-browser/research/discussion-decisions.md", "reason": "访谈结论与调研事实"}
+{"file": "docs/architecture/harness-session-import.md", "reason": "现有会话导入契约与恢复边界"}
+{"file": ".atw/tasks/09-26-usage-dashboard/prd.md", "reason": "依赖的用量读取能力与 Host 用量服务"}

@@ -1,0 +1,10 @@
+{"file": ".atw/spec/renderer-extension/browser/index.md", "reason": "Renderer 设置页实现与测试规范"}
+{"file": ".atw/spec/renderer-extension/browser/styling.md", "reason": "Renderer 设置页实现与测试规范"}
+{"file": ".atw/spec/renderer-extension/browser/dom-integration.md", "reason": "Renderer 设置页实现与测试规范"}
+{"file": ".atw/spec/renderer-extension/browser/testing.md", "reason": "Renderer 设置页实现与测试规范"}
+{"file": ".atw/spec/renderer-extension/browser/host-rpc.md", "reason": "Renderer 设置页实现与测试规范"}
+{"file": ".atw/spec/shared-contracts/node/schema-conventions.md", "reason": "重置卡契约字段变更"}
+{"file": ".atw/spec/protocol-core/node/index.md", "reason": "Codex 重置卡解析"}
+{"file": "docs/product/codex-accounts.md", "reason": "账号页现有产品行为"}
+{"file": "docs/architecture/renderer-settings-styling.md", "reason": "设置页 Tailwind 边界"}
+{"file": ".atw/tasks/09-26-quota-limits-restyle/research/discussion-decisions.md", "reason": "访谈结论与调研事实"}
