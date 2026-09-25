@@ -6,7 +6,7 @@
 
 | 域 | 位置 | 做法 |
 |---|---|---|
-| 设置页 | `src/settings/`，挂在 `settings/shell.ts` 的 `attachShadow({ mode: "open" })` 内 | Tailwind 工具类，以及遗留的 `shell.css` / `accounts.css` |
+| 设置页 | `src/settings/`，挂在 `settings/shell.ts` 的 `attachShadow({ mode: "open" })` 内 | Tailwind 工具类，以及遗留的 `shell.css` / `accounts.css`（账号页额度横条已迁到 Tailwind，见下文） |
 | 注入 Desktop 文档的控件 | Composer 尾部 chip、Model 菜单、`@` 提及菜单等 | 自带小样式表 + 内联尺寸，**禁止**使用本项目的 Tailwind 类 |
 
 - Desktop 自身也用 Tailwind v4，类名、`--tw-*` 变量和 layer 名都会冲突，所以 Tailwind 编译结果只能进入设置页的 Shadow DOM。
@@ -24,6 +24,33 @@
 - 同一个元素不要同时使用旧 CSS 类和 Tailwind 类（旧 CSS 不在 layer 里，优先级更高）。
 - 可复用控件（分组卡片、`role="switch"` 开关、带单位的数字输入、`role="tooltip"` 问号浮窗）放在 `settings/preference-ui.ts`，页面里不要复制长串类名。
 - `shell.css` / `accounts.css` 暂不整体迁移；大改某个页面时顺带把它迁到 Tailwind，并删掉对应的旧样式。
+
+## 账号页额度横条（`settings/accounts-*.ts`）
+
+「设置 → 账号」的额度是按账号分组的横条（2026-09 `quota-limits-restyle`），替代原来的 `settings-account-table`。
+
+| 模块 | 职责 |
+|---|---|
+| `accounts-usage-windows.ts` | 纯函数：`accountUsageWindowRows(credits, messages, filter?)` → `AccountUsageWindowRow[]`（`label`、`usedPercent`、可选 `resetsAt`、可选 `windowMs`）；`accountUsagePace(window, display, now?)` → `{ position, ahead } \| null`。不依赖 DOM。 |
+| `accounts-usage.ts` | `renderAccountUsage(...)` 返回一个元素：一行一个窗口，或加载/失败/空状态消息 |
+| `accounts-reset-time.ts` | 倒计时 `<time data-resets-at>`、节奏标记，以及 `mountAccountResetCountdowns` 页面本地时钟（每分钟和 `focus` 时刷新倒计时与节奏标记，不重建列表） |
+| `accounts-list.ts` | `renderAccountGroup` / `renderHarnessAccountGroup`：组头（旧 CSS 的身份块 + Pi 入口）加窗口列表 |
+
+DOM 标记是测试、焦点恢复和 forced-colors 样式共同依赖的契约，改名时要同时改这三处：
+
+- 分组：`[data-account-group][role="group"][aria-label=<账号名>]`，再加 `data-account-id` 或 `data-harness-id`。`accountListFocusRestorer` 按它恢复焦点。
+- 窗口行：`[data-usage-window][data-tone="ok|warn|hot"]`，子元素依次是：窗口名、`[role="meter"]`（首个子元素是填充）、百分比、倒计时（没有重置时间时是空 `span`，用来占位对齐）。
+- 节奏：meter 上带 `data-pace-window-ms/-resets-at/-used/-display`，子元素 `[data-pace-marker][data-state="even|ahead"]`。只有在 `windowMs` 和 `resetsAt` 都存在时才生成；已用低于 5% 时 `hidden`。
+
+规则：
+
+- 风险色按已用比例（`rendererCreditsTone`）写到行上的 `data-tone`，子元素用 `group-data-[tone=…]:` 切换颜色，不要拼接类名。
+- 窄布局用容器查询 `@max-[28rem]:`（容器是 `.settings-account-list`，它自带 `container-type`）：横条换到下一行，占满整行。
+- forced-colors 下横条和标记的颜色**不写成 Tailwind 任意值**（`bg-[Highlight]` 违反「颜色只用 `settings-*`」），而是写在 `accounts.css` 的 `@media (forced-colors: active)`，用上面的 data 属性选择器。
+- 窗口长度只来自来源显式给出的周期：产品名的英文后缀（`5-hour window`、`7-day window`、`Weekly window`、`<组> · 5-hour` 等），或主窗口的 `periodType`。月额度、`unknown` 和识别不出的产品名都没有长度，因此不画节奏标记。
+- Codex `planType === "pro"` 传 `filter: "weekly-only"`，只保留 7 天/周窗口；其他账号不过滤。
+
+测试：纯函数在 `test/settings/accounts-usage-windows.test.ts`，渲染在 `accounts-usage.test.ts`（本地 FakeElement），整页分组在 `pages.test.ts`，布局与窄窗口在 `tests/e2e/renderer-settings-accounts.spec.ts`。
 
 ## 构建插件
 

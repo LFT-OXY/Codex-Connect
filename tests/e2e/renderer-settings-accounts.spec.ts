@@ -31,7 +31,7 @@ const { outputFiles } = await build({
         let harnessAccounts = [
           {harnessId:"grok",harnessName:"Grok Build",email:"grok@example.com",credits:{usedPercent:0,periodType:"weekly",resetsAt:"2026-09-17T03:32:00Z"}},
           {harnessId:"antigravity",harnessName:"Antigravity",credits:{label:"Gemini Models · Weekly window",usedPercent:10,periodType:"weekly"}},
-          {harnessId:"claude-code",harnessName:"Claude Code",email:"claude@example.com",plan:"max",credits:{usedPercent:0,periodType:"five_hour",productUsage:[{product:"7-day window",usagePercent:50}]}},
+          {harnessId:"claude-code",harnessName:"Claude Code",email:"claude@example.com",plan:"max",credits:{usedPercent:0,periodType:"five_hour",productUsage:[{product:"7-day window",usagePercent:50,resetsAt:"2026-09-13T08:20:00Z"}]}},
         ];
         let failUsage = scenario === "error";
         const calls = { inspect:[], imports:[] };
@@ -104,17 +104,18 @@ test("shows detected Harness quota read-only and removes rows when authenticatio
   page,
 }) => {
   await setup(page, { scenario: "external" });
-  const section = page.locator(".settings-account-table");
-  const nativeAccounts = section.locator("tr[data-harness-id]");
+  const section = page.locator(".settings-account-list");
+  const nativeAccounts = section.locator("[data-account-group][data-harness-id]");
   await expect(nativeAccounts).toHaveCount(3);
   await expect(page.locator(".settings-account-count")).toHaveText("账号4");
   await expect(
     nativeAccounts.getByRole("button", { name: /切换|删除|使用重置|登录$/ }),
   ).toHaveCount(0);
-  await expect(
-    section.locator('[data-harness-id="grok"] .settings-account-person-cell'),
-  ).toHaveAttribute("title", /登录、退出和切换请在其原生客户端中完成/);
-  // The last column holds only Harness target marks: no per-row refresh or native-management text.
+  await expect(section.locator('[data-harness-id="grok"] [title*="原生客户端"]')).toHaveAttribute(
+    "title",
+    /登录、退出和切换请在其原生客户端中完成/,
+  );
+  // Each Account group holds only its limit bars and target marks: no per-row refresh or management text.
   await expect(section.getByText("原生管理")).toHaveCount(0);
   await expect(section.getByRole("button", { name: "刷新额度" })).toHaveCount(0);
   // Only logins with a verified-compatible target get the small Pi mark; every other row has none.
@@ -136,12 +137,11 @@ test("shows current Codex quota, reset-credit count, and no Host consume or logi
   page,
 }) => {
   await setup(page);
-  await expect(page.locator(".settings-account-table th")).toHaveText([
-    "账号",
-    "5 小时剩余",
-    "7 天剩余",
-    "用于 Harness",
-  ]);
+  await expect(page.locator("table")).toHaveCount(0);
+  await expect(page.locator(`${nativeRow} [role="meter"]`)).toHaveAttribute(
+    "aria-label",
+    "7 天 · 剩余",
+  );
   await expect(page.locator(`${nativeRow} .settings-account-active`)).toHaveText("当前");
   await expect(page.locator(`${nativeRow} .settings-account-plan`)).toHaveText("Pro 20x");
   await expect(page.locator(`${nativeRow} .settings-account-reset-summary`)).toContainText("2 张");
@@ -149,7 +149,9 @@ test("shows current Codex quota, reset-credit count, and no Host consume or logi
   await expect(page.getByRole("button", { name: "登录", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "使用重置", exact: true })).toHaveCount(0);
   await page.locator(`${nativeRow} .settings-account-reset-summary`).click();
-  await expect(page.locator(".settings-account-details-row:not([hidden]) li")).toHaveCount(2);
+  await expect(
+    page.locator(`${nativeRow} [id^="settings-account-reset-"]:not([hidden]) li`),
+  ).toHaveCount(2);
   await expect(page.getByRole("button", { name: "使用重置", exact: true })).toHaveCount(0);
 });
 
@@ -242,4 +244,48 @@ test("updates compact countdowns without requests or inventing a reset", async (
   expect(
     await page.evaluate(() => Reflect.get(globalThis, "accountsFixture").calls.inspect),
   ).toEqual(inspect);
+});
+
+test("draws every Harness window as a bar with a pace marker that follows the display mode", async ({
+  page,
+}) => {
+  await setup(page, { scenario: "external" });
+  const claude = page.locator('[data-account-group][data-harness-id="claude-code"]');
+  await expect(claude.locator('[role="meter"]')).toHaveCount(2);
+  // Three of seven days remain, so an even pace sits at 4/7 of the window.
+  const marker = claude.locator("[data-pace-marker]");
+  await expect(marker).toHaveCount(1);
+  await expect(marker).toBeVisible();
+  await expect(marker).toHaveAttribute("data-state", "even");
+  expect(await marker.evaluate((element) => element.style.left)).toMatch(/^42\.85/);
+  const scoped = page.locator('[data-account-group][data-harness-id="antigravity"] [role="meter"]');
+  await expect(scoped).toHaveAttribute("aria-label", "Gemini Models · 周额度 · 剩余");
+  await page.getByRole("button", { name: "已用", exact: true }).click();
+  await expect(scoped).toHaveAttribute("aria-label", "Gemini Models · 周额度 · 已用");
+  await expect(scoped).toHaveAttribute("aria-valuenow", "10");
+  expect(await marker.evaluate((element) => element.style.left)).toMatch(/^57\.14/);
+});
+
+test("stacks each bar under its label in a narrow window without clipping or scrolling", async ({
+  page,
+}) => {
+  await setup(page, { scenario: "external" });
+  await page.setViewportSize({ width: 420, height: 900 });
+  const list = page.locator(".settings-account-list");
+  await expect(list.locator("[data-account-group]")).toHaveCount(4);
+  expect(await list.evaluate((element) => element.clientWidth)).toBeLessThan(448);
+  const layout = await list
+    .locator("[data-usage-window]")
+    .first()
+    .evaluate((row) => {
+      const [label, meter] = [...row.children].map((child) => child.getBoundingClientRect());
+      return { labelBottom: label?.bottom ?? 0, meterTop: meter?.top ?? 0 };
+    });
+  expect(layout.meterTop).toBeGreaterThanOrEqual(layout.labelBottom);
+  const overflow = await list.evaluate((element) =>
+    [element, ...element.querySelectorAll("[data-account-group], [data-usage-window]")].some(
+      (node) => node.scrollWidth > node.clientWidth,
+    ),
+  );
+  expect(overflow).toBe(false);
 });

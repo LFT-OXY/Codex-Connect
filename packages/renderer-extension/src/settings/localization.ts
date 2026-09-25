@@ -102,7 +102,6 @@ export interface RendererSettingsMessages {
   readonly sessionImportRetryOpen: string;
   readonly sessionImportRetrying: string;
   readonly connectionsDescription: string;
-  readonly accountColumnAccount: string;
   readonly accountConnected: string;
   readonly accountDefaultBadge: string;
   readonly accountSearch: string;
@@ -122,6 +121,9 @@ export interface RendererSettingsMessages {
   readonly accountCreditsResetIn: string;
   readonly accountCreditsResetPending: string;
   readonly accountCreditsResetPendingHint: string;
+  readonly accountCreditsPaceUsed: string;
+  readonly accountCreditsPaceRemaining: string;
+  readonly accountCreditsPaceAhead: string;
   readonly accountCreditsPeriodWeekly: string;
   readonly accountCreditsPeriodMonthly: string;
   readonly accountCreditsPeriodFiveHour: string;
@@ -337,7 +339,6 @@ const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
     "View runtime status by Host. Select an item to inspect details or complete its setup.",
   accountConnected: "Accounts",
   accountDefaultBadge: "Current",
-  accountColumnAccount: "Account",
   accountSearch: "Search accounts or Agents…",
   accountEmpty:
     "No current identities found. Sign in through Codex Desktop or your Harness's native client.",
@@ -357,6 +358,9 @@ const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
   accountCreditsResetIn: "Quota resets in {time}",
   accountCreditsResetPending: "Awaiting refresh",
   accountCreditsResetPendingHint: "The reset time has passed; refresh to check the actual quota.",
+  accountCreditsPaceUsed: "At an even pace, about {percent} would be used by now",
+  accountCreditsPaceRemaining: "At an even pace, about {percent} would remain now",
+  accountCreditsPaceAhead: "{pace}, using faster than an even pace",
   accountCreditsPeriodWeekly: "Weekly limit",
   accountCreditsPeriodMonthly: "Monthly limit",
   accountCreditsPeriodFiveHour: "5-hour",
@@ -586,7 +590,6 @@ const CHINESE_MESSAGES: RendererSettingsMessages = Object.freeze({
   connectionsDescription: "按 Host 查看运行时状态。选择一项，在右侧检查详情或完成配置。",
   accountConnected: "账号",
   accountDefaultBadge: "当前",
-  accountColumnAccount: "账号",
   accountSearch: "搜索账号或 Agent…",
   accountEmpty: "尚未识别到当前身份，请在 Codex Desktop 或对应 Harness 的原生客户端登录。",
   accountNoMatches: "没有匹配的账号。",
@@ -605,6 +608,9 @@ const CHINESE_MESSAGES: RendererSettingsMessages = Object.freeze({
   accountCreditsResetIn: "距重置还有 {time}",
   accountCreditsResetPending: "待刷新",
   accountCreditsResetPendingHint: "重置时间已到，请刷新以确认实际额度。",
+  accountCreditsPaceUsed: "匀速使用时，此刻约应已用 {percent}",
+  accountCreditsPaceRemaining: "匀速使用时，此刻约应剩余 {percent}",
+  accountCreditsPaceAhead: "{pace}，当前用得比匀速快",
   accountCreditsPeriodWeekly: "周额度",
   accountCreditsPeriodMonthly: "月额度",
   accountCreditsPeriodFiveHour: "5 小时",

@@ -14,9 +14,8 @@ import { codexAccountDisplayName } from "../renderer-codex-account-options.js";
 import {
   accountListFocusRestorer,
   accountPlanLabel,
-  createAccountsTable,
-  renderAccountRows,
-  renderHarnessAccountRows,
+  renderAccountGroup,
+  renderHarnessAccountGroup,
 } from "./accounts-list.js";
 import { createHarnessAccounts, type RendererHarnessAccountClient } from "./harness-accounts.js";
 import { mountAccountResetCountdowns } from "./accounts-reset-time.js";
@@ -109,8 +108,6 @@ export function createAccountsSettingsPage(
       toolbar.append(connected, searchWrapper, displayControls, refreshUsage);
       const list = document.createElement("div");
       list.className = "settings-account-list";
-      const { table, body, updateDisplay } = createAccountsTable(document, messages);
-      list.append(table);
       const credentialImports = mountCredentialImports(
         context.content,
         context.signal,
@@ -134,11 +131,10 @@ export function createAccountsSettingsPage(
 
       const render = (): void => {
         const restoreFocus = accountListFocusRestorer(list, search);
-        body.replaceChildren();
+        list.replaceChildren();
         status.replaceChildren();
         if (loadMessage) status.append(loadMessage);
         connectedCount.textContent = String(accounts.length + harnessAccounts.accounts.length);
-        updateDisplay(usageDisplay);
         for (const [display, button] of displayButtons) {
           button.setAttribute("aria-pressed", String(display === usageDisplay));
         }
@@ -159,17 +155,14 @@ export function createAccountsSettingsPage(
             .includes(query),
         );
         if (visibleAccounts.length + visibleHarnessAccounts.length === 0) {
-          const emptyRow = document.createElement("tr");
-          const emptyCell = document.createElement("td");
-          emptyCell.colSpan = 4;
-          emptyCell.className = "settings-account-empty";
-          emptyCell.textContent = query ? messages.accountNoMatches : messages.accountEmpty;
-          emptyRow.append(emptyCell);
-          body.append(emptyRow);
+          const empty = document.createElement("p");
+          empty.className = "m-0 p-4 text-center text-xs text-settings-muted";
+          empty.textContent = query ? messages.accountNoMatches : messages.accountEmpty;
+          list.append(empty);
         }
         for (const account of visibleAccounts) {
-          body.append(
-            ...renderAccountRows(document, account, messages, {
+          list.append(
+            renderAccountGroup(document, account, messages, {
               current: accountPhase === "ready" && account.accountId === currentAccountId,
               importAction: credentialImports.button(
                 "codex",
@@ -190,8 +183,8 @@ export function createAccountsSettingsPage(
           );
         }
         for (const account of visibleHarnessAccounts) {
-          body.append(
-            ...renderHarnessAccountRows(
+          list.append(
+            renderHarnessAccountGroup(
               document,
               account,
               messages,

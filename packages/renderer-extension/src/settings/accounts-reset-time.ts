@@ -1,3 +1,8 @@
+import {
+  accountUsagePace,
+  type AccountUsageDisplay,
+  type AccountUsageWindowRow,
+} from "./accounts-usage-windows.js";
 import type { RendererSettingsMessages } from "./localization.js";
 
 /** At most two units; elapsed time never implies that a quota request succeeded. */
@@ -35,33 +40,10 @@ export function formatAccountResetCountdown(
   };
 }
 
-function updateCountdown(element: HTMLElement, messages: RendererSettingsMessages): void {
-  const value = formatAccountResetCountdown(element.dataset.resetsAt ?? "", messages);
-  if (!value) return;
-  element.textContent = value.text;
-  element.title = value.description;
-  element.setAttribute("aria-label", value.description);
-}
-
-export function renderAccountResetTime(
-  document: Document,
-  value: string,
-  messages: RendererSettingsMessages,
-): { countdown: HTMLElement; timestamp: HTMLTimeElement } | null {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return null;
-  const countdown = document.createElement("span");
-  countdown.className = "settings-account-usage__countdown";
-  countdown.dataset.resetsAt = date.toISOString();
-  updateCountdown(countdown, messages);
-  const timestamp = document.createElement("time");
-  timestamp.className = "settings-account-usage__sub";
-  timestamp.dateTime = date.toISOString();
-  const pad = (number: number): string => String(number).padStart(2, "0");
-  timestamp.textContent = `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  timestamp.title = messages.accountCreditsResetAt.replace(
+function fullResetTime(value: string, messages: RendererSettingsMessages): string {
+  return messages.accountCreditsResetAt.replace(
     "{time}",
-    date.toLocaleString(messages.locale, {
+    new Date(value).toLocaleString(messages.locale, {
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -71,11 +53,85 @@ export function renderAccountResetTime(
       timeZoneName: "short",
     }),
   );
-  timestamp.setAttribute("aria-label", timestamp.title);
-  return { countdown, timestamp };
 }
 
-/** One page-local clock, no Host requests or table rebuilds (and no lost focus). */
+function updateCountdown(element: HTMLElement, messages: RendererSettingsMessages): void {
+  const resetsAt = element.dataset.resetsAt ?? "";
+  const value = formatAccountResetCountdown(resetsAt, messages);
+  if (!value) return;
+  element.textContent = value.text;
+  element.title = `${value.description} · ${fullResetTime(resetsAt, messages)}`;
+  element.setAttribute("aria-label", element.title);
+}
+
+export function renderAccountResetTime(
+  document: Document,
+  value: string,
+  messages: RendererSettingsMessages,
+): HTMLElement | null {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  const countdown = document.createElement("time");
+  countdown.className =
+    "min-w-0 truncate text-right text-[11px] tabular-nums whitespace-nowrap text-settings-muted";
+  countdown.dateTime = date.toISOString();
+  countdown.dataset.resetsAt = date.toISOString();
+  updateCountdown(countdown, messages);
+  return countdown;
+}
+
+/** The marker's inputs live on the meter so the page clock can move it without a rebuild. */
+export function renderAccountPaceMarker(
+  document: Document,
+  meter: HTMLElement,
+  window: AccountUsageWindowRow,
+  display: AccountUsageDisplay,
+  messages: RendererSettingsMessages,
+): void {
+  if (!window.windowMs || !window.resetsAt) return;
+  meter.dataset.paceWindowMs = String(window.windowMs);
+  meter.dataset.paceResetsAt = window.resetsAt;
+  meter.dataset.paceUsed = String(window.usedPercent);
+  meter.dataset.paceDisplay = display;
+  const marker = document.createElement("span");
+  marker.className = [
+    "absolute top-1/2 h-3 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full",
+    "bg-settings-text ring-2 ring-settings-panel data-[state=ahead]:bg-settings-warning",
+  ].join(" ");
+  marker.dataset.paceMarker = "";
+  marker.setAttribute("aria-hidden", "true");
+  meter.append(marker);
+  updatePaceMarker(meter, marker, messages);
+}
+
+function updatePaceMarker(
+  meter: HTMLElement,
+  marker: HTMLElement,
+  messages: RendererSettingsMessages,
+): void {
+  const display = meter.dataset.paceDisplay === "remaining" ? "remaining" : "used";
+  const pace = accountUsagePace(
+    {
+      usedPercent: Number(meter.dataset.paceUsed),
+      resetsAt: meter.dataset.paceResetsAt ?? "",
+      windowMs: Number(meter.dataset.paceWindowMs),
+    },
+    display,
+  );
+  marker.hidden = !pace;
+  if (!pace) {
+    meter.title = "";
+    return;
+  }
+  marker.style.left = `${pace.position}%`;
+  marker.dataset.state = pace.ahead ? "ahead" : "even";
+  const summary = (
+    display === "remaining" ? messages.accountCreditsPaceRemaining : messages.accountCreditsPaceUsed
+  ).replace("{percent}", `${Math.round(pace.position)}%`);
+  meter.title = pace.ahead ? messages.accountCreditsPaceAhead.replace("{pace}", summary) : summary;
+}
+
+/** One page-local clock, no Host requests or list rebuilds (and no lost focus). */
 export function mountAccountResetCountdowns(
   list: HTMLElement,
   messages: RendererSettingsMessages,
@@ -87,6 +143,10 @@ export function mountAccountResetCountdowns(
     if (signal.aborted) return;
     for (const element of list.querySelectorAll<HTMLElement>("[data-resets-at]")) {
       updateCountdown(element, messages);
+    }
+    for (const meter of list.querySelectorAll<HTMLElement>("[data-pace-window-ms]")) {
+      const marker = meter.querySelector<HTMLElement>("[data-pace-marker]");
+      if (marker) updatePaceMarker(meter, marker, messages);
     }
   };
   const timer = window.setInterval(refresh, 60_000);

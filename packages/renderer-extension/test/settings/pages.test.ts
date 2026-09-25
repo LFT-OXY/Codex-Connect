@@ -1198,6 +1198,85 @@ describe("Renderer Codex Accounts page", () => {
     scope.dispose();
   });
 
+  it("groups every Account's limit windows as bars under its logo, name, and plan", async () => {
+    const client = {
+      listCodexAccounts: vi.fn(async () =>
+        accountSnapshot([{ accountId: "work", label: "Work", email: "work@example.com" }], "work"),
+      ),
+      inspectCodexAccountUsage: vi.fn(async ({ accountId }: { accountId: string }) => ({
+        accountId,
+        usage: null,
+        accountCredits: {
+          usedPercent: 27,
+          periodType: "five_hour" as const,
+          productUsage: [{ product: "7-day window", usagePercent: 12 }],
+        },
+        freshness: "live" as const,
+        observedAt: null,
+      })),
+      listHarnessAccounts: vi.fn(async () => ({
+        accounts: [
+          {
+            harnessId: harnessIdSchema.parse("claude-code"),
+            harnessName: "Claude Code",
+            email: "claude@example.com",
+            plan: "max",
+            credits: {
+              usedPercent: 10,
+              periodType: "five_hour" as const,
+              productUsage: [
+                { product: "7-day window", usagePercent: 20 },
+                { product: "Fable · 7-day", usagePercent: 30 },
+              ],
+            },
+          },
+          {
+            harnessId: harnessIdSchema.parse("grok"),
+            harnessName: "Grok Build",
+            credits: {
+              usedPercent: 40,
+              periodType: "monthly" as const,
+              productUsage: [{ product: "GrokBuild", usagePercent: 5 }],
+            },
+          },
+        ],
+      })),
+    };
+    const page = createDefaultRendererSettingsPages(
+      rendererSettingsMessages("zh-CN"),
+      () => null,
+      () => null,
+      () => client,
+    ).find(({ id }) => id === "accounts");
+    if (!page) throw new Error("Accounts page is not registered");
+    const document = new FakeDocument();
+    const content = document.createElement("main");
+    const scope = new RendererSettingsPageScope();
+    page.mount({
+      content: content as unknown as HTMLElement,
+      signal: scope.signal,
+      runLatest: (operation, handlers) => scope.runLatest(operation, handlers),
+    });
+    const groups = () => descendants(content).filter((el) => el.getAttribute("role") === "group");
+    const meterLabels = (group: FakeElement | undefined) =>
+      group
+        ? descendants(group)
+            .filter((el) => el.getAttribute("role") === "meter")
+            .map((el) => el.getAttribute("aria-label"))
+        : [];
+    await vi.waitFor(() => expect(groups()).toHaveLength(3));
+    await vi.waitFor(() => expect(meterLabels(groups()[0])).toHaveLength(2));
+    expect(descendants(content).some(({ tagName }) => tagName === "table")).toBe(false);
+    const [codex, claude, grok] = groups();
+    expect(codex?.getAttribute("aria-label")).toBe("work@example.com");
+    expect(meterLabels(codex)).toEqual(["5 小时 · 剩余", "7 天 · 剩余"]);
+    expect(claude?.getAttribute("aria-label")).toBe("claude@example.com");
+    expect(visibleText(claude as FakeElement)).toContain("max");
+    expect(meterLabels(claude)).toEqual(["5 小时 · 剩余", "7 天 · 剩余", "Fable · 7 天 · 剩余"]);
+    expect(meterLabels(grok)).toEqual(["月额度 · 剩余", "Build · 剩余"]);
+    scope.dispose();
+  });
+
   it("renders current Account quota and reset-credit count without consume or login actions", async () => {
     const inspectCodexAccountUsage = vi.fn(async ({ accountId }: { accountId: string }) => ({
       accountId,
