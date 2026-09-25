@@ -8,7 +8,7 @@
 
 - [ ] 主包名为 `@chinhae/codex-connect`，6 个平台包为 `@chinhae/codex-connect-{darwin-arm64,darwin-x64,win32-x64,win32-arm64,linux-x64,linux-arm64}`
 - [ ] 安装后可执行命令为 `codex-connect`（npm 主包 `bin`）；原生二进制 `bin/codexhost`、`codexhost-start.exe` 按实现期间的决定保持内部名
-- [ ] 跨 Harness 委派的 Agent 指令通过 `CODEXHOST_CLI_PATH` 调用，不依赖 PATH 中的命令名（远程 SSH 注入见 07）
+- [ ] 跨 Harness 委派的 Agent 指令中的命令名改为 `codex-connect`（沿用上游按命令名调用的设计），托管 Skill 升版本并登记旧摘要
 - [ ] npm 元数据中的 repository、bugs、homepage 指向 `LFT-OXY/Codex-Connect`；keywords 中的产品名更新
 - [ ] npm 安装后的提示（中英文）保留 Star 文案，仓库地址为本仓库，产品名为 Codex Connect
 - [ ] Rust 更新器的 npm 更新路径安装 `@chinhae/codex-connect`

@@ -7,8 +7,8 @@ TBD - created by archiving change add-linux-arm64-support. Update Purpose after 
 The release system SHALL define `linux-arm64` as an npm distribution target using Rust target `aarch64-unknown-linux-gnu`, npm platform `linux`, and npm CPU `arm64`. The architecture-neutral CLI package SHALL select the matching ARM64 platform package when `process.platform` is `linux` and `process.arch` is `arm64`.
 
 #### Scenario: ARM64 user installs the npm CLI
-- **WHEN** an ARM64 Linux user installs `@codexhost/cli` with optional dependencies enabled
-- **THEN** npm installs `@codexhost/cli-linux-arm64`
+- **WHEN** an ARM64 Linux user installs `@chinhae/codex-connect` with optional dependencies enabled
+- **THEN** npm installs `@chinhae/codex-connect-linux-arm64`
 - **AND** the CLI resolves that package instead of the x64 package
 
 ### Requirement: Linux Desktop discovery SHALL enforce the native architecture
@@ -27,5 +27,5 @@ CI and release workflows SHALL build and smoke-test the `linux-arm64` npm packag
 
 #### Scenario: ARM64 release package is prepared
 - **WHEN** the release workflow builds `linux-arm64`
-- **THEN** it compiles the ARM64 Rust binaries, builds browser and Host bundles, installs the platform and meta tarballs, verifies npm OS/CPU constraints and executable modes, and runs `codexhost --version` on ARM64
+- **THEN** it compiles the ARM64 Rust binaries, builds browser and Host bundles, installs the platform and meta tarballs, verifies npm OS/CPU constraints and executable modes, and runs `codex-connect --version` on ARM64
 

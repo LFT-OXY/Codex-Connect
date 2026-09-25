@@ -88,10 +88,10 @@
 - npm 包：主包 `@chinhae/codex-connect`，平台包 `@chinhae/codex-connect-{darwin-arm64,darwin-x64,win32-x64,win32-arm64,linux-x64,linux-arm64}`。npm keywords 中的产品名同步更新。发布脚本内的包名、命令名、仓库地址、keywords、tarball 基名集中在 `scripts/release/prepare-npm.mjs` 的 `NPM_*` 常量，npm 包内所有展示命令的文案都从这些常量派生。Renderer（`CODEXHOST_NPM_MANUAL_UPDATE_COMMAND`）和 Rust 更新器（`NPM_PACKAGE_NAME`）因边界限制各持一份字面量，分别由设置页渲染测试和 `npm_package_spec` 单测断言。
 - 发布产物：`codex-connect-<version>-<target>.{dmg,exe}`，npm tarball 名随包名变化，为 `chinhae-codex-connect-<version>[-<target>].tgz`；发布流水线中的产物匹配模式与上传文件列表同步修改。流水线结构（OIDC、provenance、校验步骤）不变。
 
-**跨 Harness 委派的调用方式（实现期间决定）**
+**跨 Harness 委派（只改名，实现期间决定）**
 
-- 原先 Agent 指令依赖 PATH 中的 `codexhost` 命令，npm 命令改名后，这条路径对 npm 用户失效。现在托管委派 Skill（升到 v8，并登记 v7 摘要以便自动升级）、CLI 帮助、`#` 提及指令、`next.read/wait` 提示和未知命令报错，都改为通过 Host 注入的 `CODEXHOST_CLI_PATH` 调用：POSIX 写作 `"$CODEXHOST_CLI_PATH"`，PowerShell 写作 `& $env:CODEXHOST_CLI_PATH`。帮助里的 `include_only` 建议包含 `CODEXHOST_CLI_PATH`。
-- 已知退化：远程 SSH Host 不注入 `CODEXHOST_CLI_PATH`，远程会话里的委派在第 07 票完成前不可用。
+- 沿用上游"Agent 按命令名调用委派 CLI"的设计。托管委派 Skill、CLI 帮助、`#` 提及指令、`next.read/wait` 提示和未知命令报错中的命令名，从 `codexhost` 改为 npm 暴露的 `codex-connect`。托管 Skill 升到 v8，并登记旧摘要，使已安装的副本自动升级。本机、远程 SSH、安装包三种场景的行为与上游一致。
+- 曾经尝试改为经 `CODEXHOST_CLI_PATH` 调用，因为偏离上游设计且会导致远程 SSH 委派失效，已撤回。原则：品牌替换只改名，只有纯改名解决不了的问题才改设计，并交由用户决定。
 
 **与上游的替代关系（机器标识不变）**
 

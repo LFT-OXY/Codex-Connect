@@ -28,21 +28,21 @@
 6. 发行 Bundle 相关改动完成后，跑 `tests/release/host-bundle.test.mjs`，确认 `auditHostBundleMetafile` 仍然通过：Bundle 不含 Adapter/SDK，第三方包仍只有 `diff`、`ws`、`zod`。
 7. 定向验证：`npx vitest run --config tests/vitest.config.js packages/host-runtime/test/<file>.test.ts`。依赖其他包 `dist` 或 `dist/plugins` 的用例，要先跑 `npm run build:typescript`。
 
-## 场景：委派 CLI 的调用写法
+## 场景：委派命令名随 npm 命令名改名
 
-1. **触发**：改动托管 Skill、`delegation-cli-help.ts`、mention 改写指令，或 `next.read/wait` 提示中的命令写法时。
-2. **签名**：`delegation-types.ts` 中的 `DELEGATION_CLI_PATH_ENV = "CODEXHOST_CLI_PATH"`、`DELEGATION_CLI_COMMAND = "\"$CODEXHOST_CLI_PATH\""`。所有面向 Agent 的命令都以 `DELEGATION_CLI_COMMAND` 开头，例如 `` `${DELEGATION_CLI_COMMAND} thread read ${threadId}` ``。
-3. **契约**：`CODEXHOST_CLI_PATH` 由 Host 注入。`run-host-runtime.ts#delegationCliPath` 先读取已有的 `CODEXHOST_CLI_PATH`，没有时回退到 `CODEXHOST_LAUNCHER_EXECUTABLE`。桌面会话中它通常取 Launcher 自身的原生可执行文件，npm 与安装包两种方式都是这样。npm 入口只有在执行 `delegate/thread/harness` 子命令时，才把它设为 `bin/codex-connect.js`。它被 `officialEnvironment` 放行，会进入原生 Codex 会话。npm 包暴露的命令名是 `codex-connect`，原生二进制仍叫 `codexhost`，所以 PATH 里不保证存在其中任何一个名字。
-4. **错误矩阵**：变量缺失时，`"$CODEXHOST_CLI_PATH"` 展开为空，命令失败。已知缺口：远程 SSH Host 的 `managedEnvironment` 和包装脚本都没有注入这个变量，见任务 `09-25-rebrand-codex-connect` 的第 07 票。用户的 `shell_environment_policy` 过滤掉这个变量时，结果相同，所以帮助里的 `include_only` 建议必须包含它。
+1. **触发**：npm 暴露的命令名变化，或修改托管 Skill、`delegation-cli-help.ts`、mention 改写指令、`next.read/wait` 提示、未知命令报错里的命令写法时。
+2. **签名**：沿用上游设计。面向 Agent 的命令直接写 npm 命令名 `codex-connect`（等于 `scripts/release/prepare-npm.mjs` 的 `NPM_COMMAND_NAME`），例如 `` `codex-connect thread read ${threadId}` ``。本包不能导入发布脚本，所以名字是字面量，散在 6 个源文件中：`delegation-skill.ts`、`delegation-cli-help.ts`、`delegation-cli.ts`、`delegation-mention-rewrite.ts`、`app-server-host.ts`、`harness-delegation-coordinator.ts`。同一命令名还出现在 remote 子命令的 usage 与报错里（`remote-host-cli.ts`、`remote-host-lifecycle.ts`），改名时一并处理。
+3. **契约**：Agent 靠 PATH 找到这个命令。npm 安装会把 `codex-connect` 放进 PATH，本机和远程 SSH 都一样。原生二进制仍叫 `codexhost`，但它不在 PATH 里。安装包用户的行为与上游相同。原生 Codex 会话的托管 Skill 和相关提示，不改成按 `CODEXHOST_CLI_PATH` 调用：那样偏离上游设计，而且远程 SSH Host 不注入这个变量，远程会话里的委派会失效。其他 Harness 的 Adapter（CodeBuddy、WorkBuddy、Hermes、Cursor）在上游就是按 `CODEXHOST_CLI_PATH` 调用的，保持不变。
+4. **错误矩阵**：Skill 文本变了但版本号和旧摘要没跟上 → 用户机器上的旧副本会被当作用户自管文件，报 `conflict`，保持旧文本不再更新。只改了部分文件的命令名 → Agent 按旧名调用失败。
 5. **用例**：
-   - 正常：npm 或安装包启动的本地会话，Agent 执行 `"$CODEXHOST_CLI_PATH" delegate --help`。
-   - PowerShell：命令写作 `& $env:CODEXHOST_CLI_PATH …`。这个写法已写进 Skill 和 `COMMON_HELP` 首行。
-   - 不可用：远程 SSH 会话（未修复前）。
+   - 正常：npm 用户在本机或远程会话里执行 `codex-connect delegate --help`。
+   - 基线：安装包用户，与上游一致。
+   - 反例：保留 `codexhost delegate`。npm 已不再提供这个命令。
 6. **测试**：
-   - `delegation-skill.test.ts`：断言版本号，断言 Skill 含 `"$CODEXHOST_CLI_PATH" delegate --help` 和 PowerShell 写法，不含 `codexhost delegate`。
-   - `delegation-cli.test.ts`：断言帮助用法行，以及 `include_only` 包含 `CODEXHOST_CLI_PATH`。
-   - `delegation-mention-rewrite.test.ts`：断言指令里的命令写法。
+   - `delegation-skill.test.ts`：断言版本号，断言文本含 `codex-connect delegate --help`、不含 `codexhost delegate`。
+   - `delegation-cli.test.ts`：断言各命令的帮助含 `codex-connect <group> <command>`。
+   - `delegation-mention-rewrite.test.ts`：断言指令含 `` `codex-connect delegate start --harness <id>` ``。
    - `harness-delegation-coordinator.test.ts`：断言 `next.read/wait`。
 7. **错误与正确写法**：
-   - 错误：`` read: `codexhost thread read ${threadId}` ``。这个写法依赖 PATH 中的命令名，npm 命令改名后就会失效。
-   - 正确：`` read: `${DELEGATION_CLI_COMMAND} thread read ${threadId}` ``。修改 Skill 文本时，要把 `SKILL_VERSION` 加一，并把旧文本的 digest 追加到 `PREVIOUS_MANAGED_DIGESTS`（见检查清单第 5 条）。
+   - 错误：为了修复改名引起的问题，改成另一套调用机制（例如 `"$CODEXHOST_CLI_PATH"`）。
+   - 正确：只替换命令名，把 `SKILL_VERSION` 加一，并把被替换文本的 digest 追加到 `PREVIOUS_MANAGED_DIGESTS`。

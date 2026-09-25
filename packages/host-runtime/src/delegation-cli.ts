@@ -6,7 +6,6 @@ import { compactDelegationOutput } from "./delegation-cli-output.js";
 export { DELEGATION_HELP } from "./delegation-cli-help.js";
 
 import {
-  DELEGATION_CLI_COMMAND,
   DELEGATION_RUNTIME_ENDPOINT_ENV,
   DELEGATION_RUNTIME_TOKEN_ENV,
   DELEGATION_THREAD_ID_ENV,
@@ -398,7 +397,7 @@ export async function runDelegationCli(input: {
     }
     throw new DelegationControlError(
       "INVALID_ARGUMENT",
-      `Unknown delegation command. Run '${DELEGATION_CLI_COMMAND} delegate --help'.`,
+      "Unknown delegation command. Run 'codex-connect delegate --help'.",
     );
   } catch (error) {
     const normalized =

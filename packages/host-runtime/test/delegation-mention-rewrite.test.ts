@@ -29,7 +29,7 @@ describe("delegation mention rewrite", () => {
     const body = (text as { text: string }).text;
     expect(body.startsWith("@Claude Code review this change\n\n[codexhost delegation]")).toBe(true);
     expect(body).toContain("Harness `claude-code`");
-    expect(body).toContain('`"$CODEXHOST_CLI_PATH" delegate start --harness <id>`');
+    expect(body).toContain("`codex-connect delegate start --harness <id>`");
     expect(body).not.toContain("subagent://");
   });
 

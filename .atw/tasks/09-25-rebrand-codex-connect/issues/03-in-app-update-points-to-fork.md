@@ -12,4 +12,5 @@
 - [ ] Rust 启动器的 latest release 回退地址指向本仓库
 - [ ] host-runtime、renderer 客户端、settings 测试中的 fixture URL 与断言同步更新
 - [ ] 开发预览页中的上游链接同步更新
+- [ ] 现行规格 `openspec/specs/github-release-background-update/spec.md` 中的更新端点与产物文件名同步为本仓库与 `codex-connect-*`（`openspec/changes/archive` 历史不改）
 - [ ] update-manager、shared-contracts、renderer settings、host-runtime 受影响测试通过；Rust 回退地址若已有测试覆盖则同步更新

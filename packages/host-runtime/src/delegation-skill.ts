@@ -14,6 +14,7 @@ const PREVIOUS_MANAGED_DIGESTS: readonly string[] = [
   "d3ddf6db9bc5c5df825479c885bbbf0ca08da66f7057a12e02e1fdf57525149e",
   "15eb63519ff867e1536c97188a0c43738d7a49d38d4d6adeb7a1036726e7246d",
   "b9c1cce41d2556e73a6514aa55618d7d3f2f9ef935f5ae50b0da5a04941514b4",
+  "431262754ba84c44d99de3695889d6d52c28cd38af69409999891b86cb426531",
 ];
 
 export const CODEXHOST_DELEGATION_SKILL = `---
@@ -30,12 +31,9 @@ description: >
 
 # Execute the task
 
-Before acting, run the delegation CLI at the path in the \`CODEXHOST_CLI_PATH\`
-environment variable:
+Before acting, run:
 
-\`"$CODEXHOST_CLI_PATH" delegate --help\`
-
-In PowerShell, run \`& $env:CODEXHOST_CLI_PATH delegate --help\` instead.
+\`codex-connect delegate --help\`
 
 Use CLI help as the authoritative source for commands and behavior. Consult
 command-specific help for options and the Harness listing command when the

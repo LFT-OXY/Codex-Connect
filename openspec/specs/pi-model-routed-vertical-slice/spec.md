@@ -10,13 +10,13 @@ Launcher MUST支持不带 Agent 参数启动受控 Desktop，并 MUST加载公�
 
 #### Scenario: 启动并选择 Pi Agent
 
-- **WHEN**用户通过 `codexhost launch`启动受控 Desktop，并在页面内选择 Pi 后创建新 Thread
+- **WHEN**用户通过 `codex-connect launch`启动受控 Desktop，并在页面内选择 Pi 后创建新 Thread
 - **THEN**Protocol Facade MUST在该真实 `thread/start`的接收边界建立 Pi创建路由
 - **AND**内部 transport model MUST只映射到 Pi Harness Native Mode，而不是伪装成 Pi实际调用的 Model
 
 #### Scenario: 启动并使用默认 Codex Agent
 
-- **WHEN**用户通过 `codexhost launch`启动受控 Desktop并创建新 Thread，且未切换页面内 Agent
+- **WHEN**用户通过 `codex-connect launch`启动受控 Desktop并创建新 Thread，且未切换页面内 Agent
 - **THEN**创建 Request MUST保持官方 app-server行为
 - **AND**Protocol Facade MUST NOT把官方 Model或 Thread改写为 Pi
 

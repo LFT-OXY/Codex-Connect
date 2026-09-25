@@ -4,7 +4,7 @@
 TBD - created by archiving change add-delegation-model-selection. Update Purpose after archive.
 ## Requirements
 ### Requirement: 调用方可检查目标 Harness 的 Model 与 Thinking 能力
-系统 SHALL 提供 `codexhost harness inspect <harness> [--cwd <path>] [--refresh]`，返回指定目标的可用 Model Catalog、默认 Model、Thinking 选项和配置能力。`<harness>` SHALL 接受原生 `codex` 及全部已注册外部 Harness ID。
+系统 SHALL 提供 `codex-connect harness inspect <harness> [--cwd <path>] [--refresh]`，返回指定目标的可用 Model Catalog、默认 Model、Thinking 选项和配置能力。`<harness>` SHALL 接受原生 `codex` 及全部已注册外部 Harness ID。
 
 #### Scenario: 检查外部 Harness
 - **WHEN** 调用方检查一个已注册且可用的外部 Harness
@@ -12,7 +12,7 @@ TBD - created by archiving change add-delegation-model-selection. Update Purpose
 - **AND** 响应 SHALL 保留 Adapter 拥有的 opaque Model Ref、展示标签、默认 Model、Thinking Options 和每个 Model 的 Thinking 支持关系
 
 #### Scenario: 检查原生 Codex
-- **WHEN** 调用方执行 `codexhost harness inspect codex`
+- **WHEN** 调用方执行 `codex-connect harness inspect codex`
 - **THEN** Host SHALL 通过官方 App Server 的 `model/list` 请求获取 Model Catalog
 - **AND** SHALL 将官方 Model 与 Thinking/Effort 元数据投影成结构化检查结果
 

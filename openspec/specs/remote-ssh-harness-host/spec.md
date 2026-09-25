@@ -79,7 +79,7 @@ The Host SHALL start the selected Harness with the remote cwd, remote command, a
 
 ### Requirement: Remote installation SHALL be isolated and reversible
 
-`codexhost remote install` SHALL create a managed native Shim entrypoint in a dedicated `CODEX_INSTALL_DIR`, record the installed entrypoint's SHA-256 digest, add one bounded SSH-scoped environment export block to the appropriate non-interactive shell startup file, back up that file before changing it, and preserve the existing Codex entrypoint. It SHALL refuse unmanaged entrypoint conflicts and SHALL migrate its legacy managed shell wrapper in place. In that managed environment, only an invocation containing exactly one default `app-server --listen unix://` listener and no stdio mode SHALL detach from the SSH bootstrap after a newly created expected socket accepts a connection; proxy, stdio, duplicate-listener, custom-listener, and ordinary Codex invocations SHALL retain their foreground lifecycle. `status` SHALL report missing, modified, malformed, or legacy managed resources as degraded. Install and uninstall SHALL remain fail-closed for a malformed managed profile block. `uninstall` SHALL remove only an integrity-verified managed entrypoint, manifest, and profile block while preserving backups and remote Host data.
+`codex-connect remote install` SHALL create a managed native Shim entrypoint in a dedicated `CODEX_INSTALL_DIR`, record the installed entrypoint's SHA-256 digest, add one bounded SSH-scoped environment export block to the appropriate non-interactive shell startup file, back up that file before changing it, and preserve the existing Codex entrypoint. It SHALL refuse unmanaged entrypoint conflicts and SHALL migrate its legacy managed shell wrapper in place. In that managed environment, only an invocation containing exactly one default `app-server --listen unix://` listener and no stdio mode SHALL detach from the SSH bootstrap after a newly created expected socket accepts a connection; proxy, stdio, duplicate-listener, custom-listener, and ordinary Codex invocations SHALL retain their foreground lifecycle. `status` SHALL report missing, modified, malformed, or legacy managed resources as degraded. Install and uninstall SHALL remain fail-closed for a malformed managed profile block. `uninstall` SHALL remove only an integrity-verified managed entrypoint, manifest, and profile block while preserving backups and remote Host data.
 
 #### Scenario: OpenCodex already owns the normal Codex command
 
@@ -176,50 +176,50 @@ The npm distribution SHALL provide the same managed Remote Host installation, li
 
 #### Scenario: ARM64 SSH host installs codexhost
 - **GIVEN** an ARM64 Linux SSH host has supported Node.js and an official ARM64 Codex CLI
-- **WHEN** the user installs `@codexhost/cli` and runs `codexhost remote install` followed by `codexhost remote start`
+- **WHEN** the user installs `@chinhae/codex-connect` and runs `codex-connect remote install` followed by `codex-connect remote start`
 - **THEN** the managed entrypoint uses ARM64 codexhost Launcher and Shim binaries
 - **AND** the Remote Host accepts the existing Codex WebSocket-over-Unix-socket transport
 - **AND** Harness processes remain local to the ARM64 SSH host
 
 ### Requirement: Installed Remote Hosts SHALL expose explicit lifecycle management
-On macOS and Linux, `codexhost remote start`, `stop`, and `status` SHALL manage and inspect the installed Remote Host without launching a graphical Desktop. Lifecycle operations MUST use the installation manifest as the source of executable and data paths.
+On macOS and Linux, `codex-connect remote start`, `stop`, and `status` SHALL manage and inspect the installed Remote Host without launching a graphical Desktop. Lifecycle operations MUST use the installation manifest as the source of executable and data paths.
 
 #### Scenario: Start replaces a conflicting installed stock listener
 - **GIVEN** the target control socket is owned by the current user's stock Codex executable recorded in the installation manifest
 - **AND** that process is running `app-server --listen unix://`
-- **WHEN** the user runs `codexhost remote start`
+- **WHEN** the user runs `codex-connect remote start`
 - **THEN** codexhost terminates that conflicting listener and its launcher process tree
 - **AND** starts the managed codexhost Remote Host
 - **AND** returns success only after the control socket is ready
 
 #### Scenario: Start encounters an unknown socket owner
 - **WHEN** the target control socket is active but its owner cannot be verified as either the installed codexhost Remote Host or the recorded stock Codex listener
-- **THEN** `codexhost remote start` fails without terminating the owner or unlinking the socket
+- **THEN** `codex-connect remote start` fails without terminating the owner or unlinking the socket
 
 #### Scenario: Start is repeated
 - **GIVEN** the installed codexhost Remote Host already owns the control socket
-- **WHEN** the user runs `codexhost remote start`
+- **WHEN** the user runs `codex-connect remote start`
 - **THEN** the command returns success without starting a duplicate listener
 
 #### Scenario: Stop targets the managed Remote Host
 - **GIVEN** the installed codexhost Remote Host owns the control socket
-- **WHEN** the user runs `codexhost remote stop`
+- **WHEN** the user runs `codex-connect remote stop`
 - **THEN** codexhost terminates that listener and waits for the socket to close
 - **AND** it does not terminate unrelated Codex processes
 
 #### Scenario: Status recognizes the managed Desktop SSH WebSocket transport
 - **GIVEN** the installed codexhost Remote Host owns the control socket through its Desktop SSH WebSocket transport
-- **WHEN** the user runs `codexhost remote status`
+- **WHEN** the user runs `codex-connect remote status`
 - **THEN** status probes the Unix WebSocket directly
 - **AND** reports the runtime as codexhost running without requiring stock Codex proxy transport
 
 #### Scenario: Status reports installation and runtime state
-- **WHEN** the user runs `codexhost remote status`
+- **WHEN** the user runs `codex-connect remote status`
 - **THEN** the response preserves installation integrity diagnostics
 - **AND** reports the runtime as stopped, running, conflict, or unknown
 - **AND** identifies whether the active socket serves codexhost or stock Codex when that can be verified
 
 #### Scenario: Lifecycle command runs without an installation
-- **WHEN** the user runs `codexhost remote start` or `stop` before remote installation
+- **WHEN** the user runs `codex-connect remote start` or `stop` before remote installation
 - **THEN** the command fails without modifying processes or socket files
 

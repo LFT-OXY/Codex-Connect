@@ -4,7 +4,7 @@
 TBD - created by archiving change add-cross-harness-delegation. Update Purpose after archive.
 ## Requirements
 ### Requirement: 委派能力通过两处内容一致的薄 Agent Skill 发现
-codexhost SHALL 从同一权威模板向 `~/.agents/skills/codexhost-delegation/SKILL.md` 与 `~/.claude/skills/codexhost-delegation/SKILL.md` 安装内容完全一致的用户级 Skill。Skill SHALL 仅服务发起方发现委派能力，并 SHALL 指示 Agent 在执行前通过 Host 注入的 `CODEXHOST_CLI_PATH` 运行 `"$CODEXHOST_CLI_PATH" delegate --help`（PowerShell 为 `& $env:CODEXHOST_CLI_PATH delegate --help`）获取当前版本的权威用法，不依赖 PATH 中的命令名。Host MUST NOT 为委派发现而扫描或改写用户 Turn、追加提示文本，或重写原生 Codex 请求。
+codexhost SHALL 从同一权威模板向 `~/.agents/skills/codexhost-delegation/SKILL.md` 与 `~/.claude/skills/codexhost-delegation/SKILL.md` 安装内容完全一致的用户级 Skill。Skill SHALL 仅服务发起方发现委派能力，并 SHALL 指示 Agent 在执行前运行 `codex-connect delegate --help` 获取当前版本的权威用法。Host MUST NOT 为委派发现而扫描或改写用户 Turn、追加提示文本，或重写原生 Codex 请求。
 
 #### Scenario: 首次安装 Skill
 - **WHEN** codexhost 首次执行 Skill 安装且两个目标均不存在
@@ -31,7 +31,7 @@ codexhost SHALL 从同一权威模板向 `~/.agents/skills/codexhost-delegation/
 #### Scenario: Skill 内容边界
 - **WHEN** Agent 读取任一目录中的 `codexhost-delegation` Skill
 - **THEN** Skill SHALL 说明明确委派请求或有效 `@<harnessId>` 可通过 codexhost 创建目标 Harness 的独立会话
-- **AND** SHALL 要求执行前先运行 `"$CODEXHOST_CLI_PATH" delegate --help`
+- **AND** SHALL 要求执行前先运行 `codex-connect delegate --help`
 - **AND** SHALL 指示 Agent 不要凭记忆猜测命令、参数、标识、等待或结果回流行为
 - **AND** SHALL 指示 Agent 在用户只是在讨论 Harness 时忽略该能力
 - **AND** MUST NOT 复制完整 CLI 命令文档、动态 Thread 标识或结果回流规则
@@ -159,8 +159,8 @@ Host SHALL 向它拉起的 Harness 进程提供配套 CLI 的绝对路径、Runt
 - **AND** MUST NOT 回退到 PATH 上的其他 codexhost CLI
 
 #### Scenario: 帮助文档被请求
-- **WHEN** 调用方执行 `codexhost delegate --help`
-- **THEN** CLI SHALL 输出随二进制提供的权威文档，以 `"$CODEXHOST_CLI_PATH"` 作为调用写法列出 `delegate start` 与 `thread read|wait|list` 的完整语法，并说明 PowerShell 写法
+- **WHEN** 调用方执行 `codex-connect delegate --help`
+- **THEN** CLI SHALL 输出随二进制提供的权威文档，列出 `codex-connect delegate start` 与 `codex-connect thread read|wait|list` 的完整语法
 - **AND** SHALL 说明各参数、Thread 标识形式、读取视图、等待、分页、排序、幂等语义、输出字段、错误代码及其处置
 - **AND** 该文档 SHALL 与当前 Runtime 版本一致
 
@@ -174,10 +174,10 @@ Host SHALL 向它拉起的 Harness 进程提供配套 CLI 的绝对路径、Runt
 - **AND** 失败输出 SHALL 携带可辨识的错误代码
 
 ### Requirement: 委派创建与结果观察解耦且不主动注入父 Session
-`codexhost delegate start --harness <harnessId> --task <text> [--parent-thread <thread>] [--request-id <id>]` SHALL 在创建目标 Session/Thread 并投递任务后立即返回。`--harness` 与 `--task` SHALL 为必填参数；`--parent-thread` SHALL 显式覆盖 Host 推断的调用方 Thread；`--request-id` SHALL 承载调用方提供的幂等标识。发起方 Agent SHALL 可以自主选择通过 `thread read` 读取、通过有界 `thread wait` 等待、稍后再次观察，或不再跟踪。Host MUST NOT 在子任务完成后向父 Session 注入结果、唤醒父 Agent 或为此创建自主 Turn。
+`codex-connect delegate start --harness <harnessId> --task <text> [--parent-thread <thread>] [--request-id <id>]` SHALL 在创建目标 Session/Thread 并投递任务后立即返回。`--harness` 与 `--task` SHALL 为必填参数；`--parent-thread` SHALL 显式覆盖 Host 推断的调用方 Thread；`--request-id` SHALL 承载调用方提供的幂等标识。发起方 Agent SHALL 可以自主选择通过 `thread read` 读取、通过有界 `thread wait` 等待、稍后再次观察，或不再跟踪。Host MUST NOT 在子任务完成后向父 Session 注入结果、唤醒父 Agent 或为此创建自主 Turn。
 
 #### Scenario: 委派创建成功返回
-- **WHEN** 调用方执行有效的 `codexhost delegate start --harness <harnessId> --task <text>`
+- **WHEN** 调用方执行有效的 `codex-connect delegate start --harness <harnessId> --task <text>`
 - **THEN** CLI SHALL 返回包含 `delegationId`、`threadId`、`harnessId`、`deepLink` 与当前 `status` 的 JSON 对象
 - **AND** MUST NOT 等待被委派工作完成
 - **AND** SHALL 在响应中给出可用于 `thread read` 与 `thread wait` 的下一步命令提示
@@ -223,23 +223,23 @@ Host SHALL 向它拉起的 Harness 进程提供配套 CLI 的绝对路径、Runt
 - **AND** 它 MUST NOT 仅以自由文本表述成败
 
 ### Requirement: `thread read` 返回精简的可见对话结果而非执行轨迹
-`codexhost thread read <thread> [--view result|messages] [--cursor <cursor>] [--limit <n>]` SHALL 立即读取指定 Thread 当前已由 Host 投影的可见对话结果。`<thread>` SHALL 接受裸 Thread 标识或 `codex://threads/<id>` 深度链接。`--view` 默认 SHALL 为 `result`；`--view messages` SHALL 附带有界的用户与 Agent 可见消息。首版 `thread read` MUST NOT 返回工具调用、工具参数、工具输出、文件变更、reasoning summary、隐藏推理或 Harness 私有 Transcript。
+`codex-connect thread read <thread> [--view result|messages] [--cursor <cursor>] [--limit <n>]` SHALL 立即读取指定 Thread 当前已由 Host 投影的可见对话结果。`<thread>` SHALL 接受裸 Thread 标识或 `codex://threads/<id>` 深度链接。`--view` 默认 SHALL 为 `result`；`--view messages` SHALL 附带有界的用户与 Agent 可见消息。首版 `thread read` MUST NOT 返回工具调用、工具参数、工具输出、文件变更、reasoning summary、隐藏推理或 Harness 私有 Transcript。
 
 #### Scenario: 默认读取已完成 Thread
-- **WHEN** 调用方执行 `codexhost thread read <thread>` 且最近 Turn 已完成并存在最终 Agent 消息
+- **WHEN** 调用方执行 `codex-connect thread read <thread>` 且最近 Turn 已完成并存在最终 Agent 消息
 - **THEN** CLI SHALL 返回 `threadId`、`harnessId`、`status`、最近 Turn 的 `turnId` 与 `status`、`result` 和 `nextCursor`
 - **AND** `result.availability` SHALL 为 `available`
 - **AND** `result.text` SHALL 为最近已完成 Turn 的最终 Agent 消息
 - **AND** 响应 MUST NOT 重复返回该 Turn 的用户输入或中间执行轨迹
 
 #### Scenario: 默认读取正在运行的 Thread
-- **WHEN** 调用方执行 `codexhost thread read <thread>` 且存在活跃 Turn
+- **WHEN** 调用方执行 `codex-connect thread read <thread>` 且存在活跃 Turn
 - **THEN** CLI SHALL 立即返回 `status: "running"`、活跃 Turn 的标识与状态、截至读取时最新的 Agent 可见进度消息、`result.availability: "pending"` 和 `nextCursor`
 - **AND** 没有 Agent 可见进度消息时 SHALL 返回空的 `progress` 数组
 - **AND** 读取 MUST NOT 等待 Turn 完成
 
 #### Scenario: 消息视图读取多轮对话
-- **WHEN** 调用方执行 `codexhost thread read <thread> --view messages`
+- **WHEN** 调用方执行 `codex-connect thread read <thread> --view messages`
 - **THEN** CLI SHALL 在默认结果字段之外返回按发生顺序排列的 `messages`
 - **AND** 每条消息 SHALL 包含稳定消息标识、所属 `turnId`、`role` 与文本
 - **AND** Agent 消息在 Harness 已投影阶段信息时 MAY 包含 `phase: "commentary"` 或 `phase: "final"`
@@ -268,7 +268,7 @@ Host SHALL 向它拉起的 Harness 进程提供配套 CLI 的绝对路径、Runt
 - **AND** MUST NOT 将 `activity`、`raw` 或 `full-transcript` 作为首版读取视图
 
 ### Requirement: `thread wait` 有界等待并复用 `thread read` 的结果形状
-`codexhost thread wait <thread> [--timeout-ms <n>] [--view result|messages] [--cursor <cursor>] [--limit <n>]` SHALL 有界等待指定 Thread 达到终态或等待期限到期。等待结束后 SHALL 返回与相同读取参数下 `thread read` 一致的快照字段，并额外返回 `timedOut`。`--view` 默认 SHALL 为 `result`；`--cursor` 与 `--limit` SHALL 仅在 `--view messages` 时控制消息增量与页大小。
+`codex-connect thread wait <thread> [--timeout-ms <n>] [--view result|messages] [--cursor <cursor>] [--limit <n>]` SHALL 有界等待指定 Thread 达到终态或等待期限到期。等待结束后 SHALL 返回与相同读取参数下 `thread read` 一致的快照字段，并额外返回 `timedOut`。`--view` 默认 SHALL 为 `result`；`--cursor` 与 `--limit` SHALL 仅在 `--view messages` 时控制消息增量与页大小。
 
 #### Scenario: 等待已终止 Thread
 - **WHEN** 调用方等待一个已处于终态的 Thread
@@ -291,7 +291,7 @@ Host SHALL 向它拉起的 Harness 进程提供配套 CLI 的绝对路径、Runt
 - **AND** MUST NOT 启动无界等待
 
 ### Requirement: Thread 观察与列举命令接受用户提供的标识并覆盖两类 Thread
-Thread 观察命令 SHALL 接受裸 Thread 标识与 Codex 深度链接两种形式，并可作用于外部 Harness Thread 与原生 Codex Thread，不限于调用方自己委派产生的 Thread。对原生 Codex Thread 的读取与等待 SHALL 通过对官方 App Server 的带外请求实现，且 MUST NOT 改变该 Thread 的状态。`codexhost thread list [--cwd <path>] [--parent <thread>] [--limit <n>] [--cursor <cursor>] [--sort created-asc|created-desc|updated-asc|updated-desc|recency-asc|recency-desc]` SHALL 返回结构化会话页；`--parent` SHALL 只列举该父 Thread 的 Delegation 子 Thread。
+Thread 观察命令 SHALL 接受裸 Thread 标识与 Codex 深度链接两种形式，并可作用于外部 Harness Thread 与原生 Codex Thread，不限于调用方自己委派产生的 Thread。对原生 Codex Thread 的读取与等待 SHALL 通过对官方 App Server 的带外请求实现，且 MUST NOT 改变该 Thread 的状态。`codex-connect thread list [--cwd <path>] [--parent <thread>] [--limit <n>] [--cursor <cursor>] [--sort created-asc|created-desc|updated-asc|updated-desc|recency-asc|recency-desc]` SHALL 返回结构化会话页；`--parent` SHALL 只列举该父 Thread 的 Delegation 子 Thread。
 
 #### Scenario: 用户提供深度链接
 - **WHEN** 调用方传入 Codex 深度链接形式的 Thread 标识
@@ -316,7 +316,7 @@ Thread 观察命令 SHALL 接受裸 Thread 标识与 Codex 深度链接两种形
 - **AND** 响应 SHALL 包含 `threads` 与可选 `nextCursor`
 
 #### Scenario: 列举委派血缘
-- **WHEN** 调用方执行 `codexhost thread list --parent <thread>`
+- **WHEN** 调用方执行 `codex-connect thread list --parent <thread>`
 - **THEN** 结果 SHALL 由 Delegation 关系记录解析
 - **AND** MAY 与 `--limit`、`--cursor` 及 `--sort` 组合
 - **AND** MUST NOT 依赖会话列表的父子过滤，也 MUST NOT 将委派血缘表述为 Codex Subagent 关系
@@ -327,7 +327,7 @@ Thread 观察命令 SHALL 接受裸 Thread 标识与 Codex 深度链接两种形
 - **AND** 相同请求在 Thread 未变化时 SHALL 返回语义相同的结果
 
 ### Requirement: 调用方可向已有可写 Thread 发送后续消息
-系统 SHALL 提供 `codexhost thread send <thread> --message <text>`，在用户明确指定的普通可写 Thread 中启动新的 Turn 并立即返回。该操作 SHALL 同时支持外部 Harness Thread 与原生 Codex Thread，并接受裸 Thread ID 或 `codex://threads/<id>`。
+系统 SHALL 提供 `codex-connect thread send <thread> --message <text>`，在用户明确指定的普通可写 Thread 中启动新的 Turn 并立即返回。该操作 SHALL 同时支持外部 Harness Thread 与原生 Codex Thread，并接受裸 Thread ID 或 `codex://threads/<id>`。
 
 #### Scenario: 向已完成的委派 Thread 发送第二轮消息
 - **WHEN** 调用方对没有活跃 Turn 的委派子 Thread 执行 `thread send`
@@ -346,7 +346,7 @@ Thread 观察命令 SHALL 接受裸 Thread 标识与 Codex 深度链接两种形
 - **AND** MUST NOT 排队、取消旧 Turn 或启动并发 Turn
 
 ### Requirement: 调用方可取消已有 Thread 的当前 Turn
-系统 SHALL 提供 `codexhost thread cancel <thread>`，请求取消目标 Thread 当前活跃 Turn，同时保留 Thread、既有消息和持久化映射。该操作 SHALL 同时支持外部 Harness Thread 与原生 Codex Thread。
+系统 SHALL 提供 `codex-connect thread cancel <thread>`，请求取消目标 Thread 当前活跃 Turn，同时保留 Thread、既有消息和持久化映射。该操作 SHALL 同时支持外部 Harness Thread 与原生 Codex Thread。
 
 #### Scenario: 取消外部 Harness Turn
 - **WHEN** 外部 Harness Thread 有活跃 Turn 且调用方执行 `thread cancel`

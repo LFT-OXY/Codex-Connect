@@ -126,8 +126,8 @@ describe("HarnessDelegationCoordinator", () => {
         cwd: path.resolve("/synthetic"),
         parentThreadId: "parent-thread",
         next: {
-          read: `"$CODEXHOST_CLI_PATH" thread read ${result.threadId}`,
-          wait: `"$CODEXHOST_CLI_PATH" thread wait ${result.threadId} --timeout-ms 30000`,
+          read: `codex-connect thread read ${result.threadId}`,
+          wait: `codex-connect thread wait ${result.threadId} --timeout-ms 30000`,
         },
       });
       expect(inspect).not.toHaveBeenCalled();
