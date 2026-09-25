@@ -40,18 +40,26 @@ export function formatAccountResetCountdown(
   };
 }
 
+/** 含年份与时区，用于悬停提示和辅助技术标签。 */
+export function formatAccountFullLocalTime(
+  value: string,
+  locale: RendererSettingsMessages["locale"],
+): string {
+  return new Date(value).toLocaleString(locale, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZoneName: "short",
+  });
+}
+
 function fullResetTime(value: string, messages: RendererSettingsMessages): string {
   return messages.accountCreditsResetAt.replace(
     "{time}",
-    new Date(value).toLocaleString(messages.locale, {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-      timeZoneName: "short",
-    }),
+    formatAccountFullLocalTime(value, messages.locale),
   );
 }
 

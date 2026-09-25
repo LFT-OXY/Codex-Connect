@@ -1,5 +1,6 @@
 import { parseHostUsage, type HostUsage } from "@codexhost/harness-adapter";
 import {
+  ACCOUNT_RESET_CREDITS_MAX_LENGTH,
   hostThreadIdSchema,
   hostTurnIdSchema,
   type AccountCreditsSnapshot,
@@ -191,10 +192,16 @@ export function observeCodexRateLimits(value: unknown): Partial<HostUsage> | nul
   }
 }
 
+export interface CodexRateLimitResetCredit {
+  expiresAtUnix: number;
+  grantedAtUnix?: number;
+}
+
 export interface CodexRateLimitResetCredits {
   availableCount: number;
   nextExpiresAtUnix?: number;
   expiresAtUnix?: number[];
+  credits?: CodexRateLimitResetCredit[];
 }
 
 function parseAvailableCount(value: unknown): number | undefined {
@@ -224,22 +231,31 @@ export function observeCodexRateLimitResetCredits(
   if (!summary) return null;
   const availableCount = parseAvailableCount(summary.availableCount);
   if (availableCount === undefined || availableCount === 0) return null;
-  const expiresAtUnix: number[] = [];
+  const credits: CodexRateLimitResetCredit[] = [];
   if (Array.isArray(summary.credits)) {
     for (const credit of summary.credits) {
       if (!isRecord(credit)) continue;
       if (credit.status !== undefined && credit.status !== "available") continue;
-      const expiresAt = optionalReset(credit.expiresAt);
-      if (expiresAt === undefined) continue;
-      expiresAtUnix.push(expiresAt);
+      const expiresAtUnix = optionalReset(credit.expiresAt);
+      if (expiresAtUnix === undefined) continue;
+      const grantedAtUnix = nonNegativeSafeInteger(credit.grantedAt);
+      // 发放不早于到期时无法得出寿命，只保留到期时间。
+      credits.push(
+        grantedAtUnix !== undefined && grantedAtUnix < expiresAtUnix
+          ? { expiresAtUnix, grantedAtUnix }
+          : { expiresAtUnix },
+      );
     }
   }
-  expiresAtUnix.sort((left, right) => left - right);
+  credits.sort((left, right) => left.expiresAtUnix - right.expiresAtUnix);
+  // 契约限长；超出时保留最早到期的卡，张数仍以 availableCount 为准。
+  credits.splice(ACCOUNT_RESET_CREDITS_MAX_LENGTH);
+  const expiresAtUnix = credits.map((credit) => credit.expiresAtUnix);
   const nextExpiresAtUnix = expiresAtUnix[0];
   return {
     availableCount,
     ...(nextExpiresAtUnix !== undefined ? { nextExpiresAtUnix } : {}),
-    ...(expiresAtUnix.length > 0 ? { expiresAtUnix } : {}),
+    ...(credits.length > 0 ? { expiresAtUnix, credits } : {}),
   };
 }
 
@@ -285,6 +301,16 @@ export function projectCodexRateLimitsToCredits(
             : {}),
           ...(resetCredits.expiresAtUnix && resetCredits.expiresAtUnix.length > 0
             ? { expiresAt: resetCredits.expiresAtUnix.map(isoFromUnix) }
+            : {}),
+          ...(resetCredits.credits && resetCredits.credits.length > 0
+            ? {
+                credits: resetCredits.credits.map((credit) => ({
+                  expiresAt: isoFromUnix(credit.expiresAtUnix),
+                  ...(credit.grantedAtUnix !== undefined
+                    ? { grantedAt: isoFromUnix(credit.grantedAtUnix) }
+                    : {}),
+                })),
+              }
             : {}),
         }
       : undefined;

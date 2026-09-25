@@ -1285,7 +1285,13 @@ describe("Renderer Codex Accounts page", () => {
         usedPercent: 27,
         periodType: "weekly" as const,
         resetsAt: "2026-09-10T03:32:00.000Z",
-        resetCredits: { availableCount: 2 },
+        resetCredits: {
+          availableCount: 2,
+          credits: [
+            { expiresAt: "2099-09-17T03:32:00.000Z", grantedAt: "2026-09-03T03:32:00.000Z" },
+            { expiresAt: "2099-09-24T03:32:00.000Z" },
+          ],
+        },
       },
       freshness: "cached" as const,
       observedAt: "2026-09-10T03:32:00.000Z",
@@ -1316,6 +1322,12 @@ describe("Renderer Codex Accounts page", () => {
     );
     expect(visibleText(content)).toContain("work@example.com");
     expect(visibleText(content)).toContain("2 张");
+    expect(
+      descendants(content)
+        .filter((element) => element.getAttribute("role") === "meter")
+        .map((element) => element.getAttribute("aria-label")),
+    ).toContain("重置 1 · 剩余有效期");
+    expect(visibleText(content)).toContain("重置 2");
     expect(
       descendants(content)
         .filter((element) => element.tagName === "button")

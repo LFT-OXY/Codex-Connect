@@ -26,7 +26,7 @@ const { outputFiles } = await build({
           accounts,
         });
         const snapshots = {
-          native: { usedPercent:9,periodType:"seven_day",resetsAt:"2026-09-13T13:16:00Z",resetCredits:{availableCount:2,nextExpiresAt:"2026-10-04T01:54:00Z",expiresAt:["2026-10-04T01:54:00Z","2026-10-08T01:54:00Z"]} },
+          native: { usedPercent:9,periodType:"seven_day",resetsAt:"2026-09-13T13:16:00Z",resetCredits:{availableCount:2,nextExpiresAt:"2026-09-16T08:20:00Z",expiresAt:["2026-09-16T08:20:00Z","2026-10-08T01:54:00Z"],credits:[{expiresAt:"2026-09-16T08:20:00Z",grantedAt:"2026-09-04T08:20:00Z"},{expiresAt:"2026-10-08T01:54:00Z"}]} },
         };
         let harnessAccounts = [
           {harnessId:"grok",harnessName:"Grok Build",email:"grok@example.com",credits:{usedPercent:0,periodType:"weekly",resetsAt:"2026-09-17T03:32:00Z"}},
@@ -133,26 +133,31 @@ test("shows detected Harness quota read-only and removes rows when authenticatio
   await expect(page.locator(".settings-account-count")).toHaveText("账号1");
 });
 
-test("shows current Codex quota, reset-credit count, and no Host consume or login actions", async ({
+test("shows current Codex quota, one lifetime bar per reset card, and no Host consume or login actions", async ({
   page,
 }) => {
   await setup(page);
   await expect(page.locator("table")).toHaveCount(0);
-  await expect(page.locator(`${nativeRow} [role="meter"]`)).toHaveAttribute(
+  await expect(page.locator(`${nativeRow} [data-usage-window] [role="meter"]`)).toHaveAttribute(
     "aria-label",
     "7 天 · 剩余",
   );
   await expect(page.locator(`${nativeRow} .settings-account-active`)).toHaveText("当前");
   await expect(page.locator(`${nativeRow} .settings-account-plan`)).toHaveText("Pro 20x");
-  await expect(page.locator(`${nativeRow} .settings-account-reset-summary`)).toContainText("2 张");
+  const resetCards = page.getByRole("group", { name: "重置卡", exact: true });
+  await expect(resetCards).toContainText("2 张");
+  const cards = resetCards.locator("[data-reset-credit]");
+  await expect(cards).toHaveCount(2);
+  // Six of twelve days remain on the first card; the second has no grant time, so no bar.
+  await expect(cards.nth(0).getByRole("meter")).toHaveAttribute("aria-valuenow", "50");
+  await expect(cards.nth(0).locator("time")).toHaveText("9月16日 16:20");
+  await expect(cards.nth(0).locator("time")).toHaveAttribute("title", /第 1 张 · 2026.*到期$/u);
+  await expect(cards.nth(1).getByRole("meter")).toHaveCount(0);
+  await expect(cards.nth(1).locator("time")).toHaveText("10月8日 9:54");
   await expect(page.getByRole("button", { name: "添加 Codex 账号" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "登录", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "使用重置", exact: true })).toHaveCount(0);
-  await page.locator(`${nativeRow} .settings-account-reset-summary`).click();
-  await expect(
-    page.locator(`${nativeRow} [id^="settings-account-reset-"]:not([hidden]) li`),
-  ).toHaveCount(2);
-  await expect(page.getByRole("button", { name: "使用重置", exact: true })).toHaveCount(0);
+  await expect(resetCards.getByRole("button")).toHaveCount(0);
 });
 
 test("confirms imports and lists the copy in a dedicated Pi section, including a narrow window", async ({
@@ -283,9 +288,10 @@ test("stacks each bar under its label in a narrow window without clipping or scr
     });
   expect(layout.meterTop).toBeGreaterThanOrEqual(layout.labelBottom);
   const overflow = await list.evaluate((element) =>
-    [element, ...element.querySelectorAll("[data-account-group], [data-usage-window]")].some(
-      (node) => node.scrollWidth > node.clientWidth,
-    ),
+    [
+      element,
+      ...element.querySelectorAll("[data-account-group], [data-usage-window], [data-reset-credit]"),
+    ].some((node) => node.scrollWidth > node.clientWidth),
   );
   expect(overflow).toBe(false);
 });

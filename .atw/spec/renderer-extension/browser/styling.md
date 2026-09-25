@@ -31,26 +31,27 @@
 
 | 模块 | 职责 |
 |---|---|
-| `accounts-usage-windows.ts` | 纯函数：`accountUsageWindowRows(credits, messages, filter?)` → `AccountUsageWindowRow[]`（`label`、`usedPercent`、可选 `resetsAt`、可选 `windowMs`）；`accountUsagePace(window, display, now?)` → `{ position, ahead } \| null`。不依赖 DOM。 |
-| `accounts-usage.ts` | `renderAccountUsage(...)` 返回一个元素：一行一个窗口，或加载/失败/空状态消息 |
+| `accounts-usage-windows.ts` | 纯函数：`accountUsageWindowRows(credits, messages, filter?)` → `AccountUsageWindowRow[]`（`label`、`usedPercent`、可选 `resetsAt`、可选 `windowMs`）；`accountUsagePace(window, display, now?)` → `{ position, ahead } \| null`；重置卡的 `accountResetCreditLife(credit, now?)` → 0～100 或 `null`（缺发放时间、时间无效、发放不早于到期），`accountResetCreditTone(expiresAtMs, now?)` → 距到期 ≤8h `hot`、≤24h `warn`，否则 `ok`。不依赖 DOM。 |
+| `accounts-usage.ts` | `renderAccountUsage(...)` 返回一个元素：一行一个窗口，或加载/失败/空状态消息；`renderAccountResetCredits(document, credits, messages, now?)` 返回重置卡区域或 `null`（无 `resetCredits` 时），窗口行与重置卡行共用 `renderMeter` 与行/横条类名 |
 | `accounts-reset-time.ts` | 倒计时 `<time data-resets-at>`、节奏标记，以及 `mountAccountResetCountdowns` 页面本地时钟（每分钟和 `focus` 时刷新倒计时与节奏标记，不重建列表） |
-| `accounts-list.ts` | `renderAccountGroup` / `renderHarnessAccountGroup`：组头（旧 CSS 的身份块 + Pi 入口）加窗口列表 |
+| `accounts-list.ts` | `renderAccountGroup` / `renderHarnessAccountGroup`：组头（旧 CSS 的身份块 + Pi 入口）加窗口列表；Codex 组在窗口列表后直接追加重置卡区域（不再有展开入口和页面级展开状态） |
 
 DOM 标记是测试、焦点恢复和 forced-colors 样式共同依赖的契约，改名时要同时改这三处：
 
 - 分组：`[data-account-group][role="group"][aria-label=<账号名>]`，再加 `data-account-id` 或 `data-harness-id`。`accountListFocusRestorer` 按它恢复焦点。
 - 窗口行：`[data-usage-window][data-tone="ok|warn|hot"]`，子元素依次是：窗口名、`[role="meter"]`（首个子元素是填充）、百分比、倒计时（没有重置时间时是空 `span`，用来占位对齐）。
+- 重置卡：区域 `[data-reset-credits][role="group"][aria-label="重置卡"]`，首个子元素是「图标 + 重置卡 + N 张」小标题；之后每张卡一行 `[data-reset-credit][data-tone="ok|warn|hot"]`，子元素依次是：`重置 N`、可选的 `[role="meter"]`（寿命横条，只有 `accountResetCreditLife` 非 `null` 时才有，**不留占位**）、`<time>` 到期时间（`col-start-3 col-span-2`，窄布局 `col-start-2`，所以缺横条时也能对齐；到期时间无效时省略）。行按 `credits`，旧 Host 只给 `expiresAt[]` 时按它回退、全部不画横条。寿命横条不随「已用/剩余」切换镜像，也不挂页面时钟。
 - 节奏：meter 上带 `data-pace-window-ms/-resets-at/-used/-display`，子元素 `[data-pace-marker][data-state="even|ahead"]`。只有在 `windowMs` 和 `resetsAt` 都存在时才生成；已用低于 5% 时 `hidden`。
 
 规则：
 
 - 风险色按已用比例（`rendererCreditsTone`）写到行上的 `data-tone`，子元素用 `group-data-[tone=…]:` 切换颜色，不要拼接类名。
 - 窄布局用容器查询 `@max-[28rem]:`（容器是 `.settings-account-list`，它自带 `container-type`）：横条换到下一行，占满整行。
-- forced-colors 下横条和标记的颜色**不写成 Tailwind 任意值**（`bg-[Highlight]` 违反「颜色只用 `settings-*`」），而是写在 `accounts.css` 的 `@media (forced-colors: active)`，用上面的 data 属性选择器。
+- forced-colors 下横条和标记的颜色**不写成 Tailwind 任意值**（`bg-[Highlight]` 违反「颜色只用 `settings-*`」），而是写在 `accounts.css` 的 `@media (forced-colors: active)`，用上面的 data 属性选择器（`[data-usage-window]` 与 `[data-reset-credit]` 两组 meter 并列）。
 - 窗口长度只来自来源显式给出的周期：产品名的英文后缀（`5-hour window`、`7-day window`、`Weekly window`、`<组> · 5-hour` 等），或主窗口的 `periodType`。月额度、`unknown` 和识别不出的产品名都没有长度，因此不画节奏标记。
 - Codex `planType === "pro"` 传 `filter: "weekly-only"`，只保留 7 天/周窗口；其他账号不过滤。
 
-测试：纯函数在 `test/settings/accounts-usage-windows.test.ts`，渲染在 `accounts-usage.test.ts`（本地 FakeElement），整页分组在 `pages.test.ts`，布局与窄窗口在 `tests/e2e/renderer-settings-accounts.spec.ts`。
+测试：纯函数在 `test/settings/accounts-usage-windows.test.ts`，渲染在 `accounts-usage.test.ts`（本地 FakeElement；重置卡的寿命比例、缺发放时间、旧字段回退、越界夹取、到期警示都经 `renderAccountResetCredits` 断言），整页分组在 `pages.test.ts`，布局与窄窗口在 `tests/e2e/renderer-settings-accounts.spec.ts`。
 
 ## 构建插件
 

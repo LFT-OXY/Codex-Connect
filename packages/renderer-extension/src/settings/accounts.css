@@ -195,57 +195,6 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
-.settings-account-reset-summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 24px;
-  padding: 3px 0;
-  font-size: 10px;
-  white-space: nowrap;
-  color: var(--settings-muted);
-  background: transparent;
-  border: 0;
-  border-radius: 5px;
-  cursor: pointer;
-}
-.settings-account-reset-summary:hover {
-  background: var(--settings-hover);
-}
-.settings-account-reset-summary[aria-expanded="true"] > svg:last-child {
-  transform: rotate(90deg);
-}
-.settings-account-reset-details {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.settings-account-reset-details strong {
-  font-size: 12px;
-}
-.settings-account-reset-expiry {
-  margin: 6px 0;
-  color: var(--settings-muted);
-  font-size: 11px;
-}
-.settings-account-reset-expiry.is-warn {
-  color: var(--settings-warning);
-}
-.settings-account-reset-expiry.is-hot {
-  color: var(--settings-danger);
-}
-.settings-account-reset-list {
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-  color: var(--settings-muted);
-  font-size: 11px;
-}
-.settings-account-reset-list li + li {
-  margin-top: 4px;
-}
 .settings-account-list :focus-visible,
 .settings-account-toolbar :focus-visible {
   outline: 2px solid var(--settings-focus);
@@ -517,10 +466,12 @@
   .settings-account-harness-target[data-state]::after {
     background: Highlight;
   }
-  [data-usage-window] > [role="meter"] {
+  [data-usage-window] > [role="meter"],
+  [data-reset-credit] > [role="meter"] {
     border: 1px solid CanvasText;
   }
-  [data-usage-window] > [role="meter"] > :first-child {
+  [data-usage-window] > [role="meter"] > :first-child,
+  [data-reset-credit] > [role="meter"] > :first-child {
     background: Highlight;
   }
   [data-pace-marker] {

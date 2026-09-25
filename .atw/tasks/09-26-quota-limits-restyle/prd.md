@@ -67,6 +67,7 @@
   - 已实现（用户在实现时确认）：保留两单位倒计时；原倒计时下方的短本地时间 `09/15 10:08` 去掉，完整本地重置时间（含年份、时区）并入倒计时的悬停提示与辅助技术标签。
 - **Codex 重置卡**：在重置卡契约中为每张卡补充可选的发放时间，由 Host 解析官方重置卡响应时一并读取。寿命横条长度 = 距到期剩余时长 / (到期 − 发放)。缺少发放时间的卡只显示到期时间、不画横条。继续不提供「使用重置」、不调用消耗接口。
 - **契约变更**：`accountResetCreditsSchema` 增加按卡排列的明细（每张卡：到期时间、可选发放时间），保持向后兼容——旧字段保留，Renderer 在新字段缺失时回退到仅显示到期时间。
+  - 已实现：字段名 `resetCredits.credits[]`（`expiresAt`、可选 `grantedAt`，ISO 字符串），数组上限 `ACCOUNT_RESET_CREDITS_MAX_LENGTH = 32`、时间字符串上限 64；Host 只在 `0 ≤ grantedAt < expiresAt` 时带发放时间，超过 32 张保留最早到期的。重置卡在 Codex 组下直接列出（去掉原展开入口）：小标题「重置卡 N 张」+ 每张「重置 N」行（寿命横条 + 本地到期时间，悬停看完整时间），距到期 ≤24h/≤8h 分别警示/强调色。永不过期的卡暂不列行、只计入张数。
 - **样式**：在设置页 Shadow DOM 内使用 Tailwind 工具类（遵循 `docs/architecture/renderer-settings-styling.md`），适配明暗主题；原账号页专用 CSS 中仅删除本次改造产生的孤儿规则。
   - 已实现：账号列表外框、身份块、重置卡和 Pi 专区继续使用 `accounts.css`；分组、窗口行、横条、节奏标记用 Tailwind。风险色由 `data-tone` 配合 `group-data-[tone=…]` 变体切换。forced-colors 下的横条边框和填充写在 `accounts.css` 的 forced-colors 块里，用 `[data-usage-window]` / `[data-pace-marker]` 属性选择器，不在 Tailwind 里写系统色任意值。
 - **本地化**：新增文案同时提供中英文。

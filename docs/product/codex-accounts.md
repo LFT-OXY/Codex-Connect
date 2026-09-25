@@ -57,7 +57,14 @@ ChatGPT 登录的 Codex 订阅额度耗尽时，Desktop 在 Renderer 中用两�
 
 ## 重置卡
 
-有重置卡快照时，在 Codex 组的额度横条下显示「重置卡 N 张」入口，点击可展开最近到期时间以及接口提供的逐张到期清单。没有重置卡数据时不显示入口，也不推断为零张。CodexHost 不提供「使用重置」，也不调用官方消耗接口。额度重置时间与重置卡到期时间是两类独立信息。
+有可用重置卡时，Codex 组的额度横条下方直接列出重置卡，不再需要点击展开：先是「重置卡 N 张」小标题（N 为官方 `availableCount`），再按到期时间从早到晚每张一行「重置 1」「重置 2」…。
+
+- 每行中间是剩余有效期横条，长度 = 距到期剩余时长 /（到期 − 发放），限制在 0～100%；右侧是本地到期时间（如 `9月16日 16:20`，当天为 `今天 16:20`），悬停和辅助技术可读取含年份、时区的完整到期时间。
+- 发放与到期时间来自官方 `account/rateLimits/read` 的 `rateLimitResetCredits.credits[]`（Unix 秒），只取状态为可用的卡。某张卡缺少发放时间、发放时间无效或不早于到期时间时，照常列出该卡与到期时间，只是不画横条，不编造比例；旧 Host 只提供到期时间列表时同样处理。永不过期（`expiresAt` 为空）的卡不列行，只计入小标题的张数；官方只给张数、不给明细时只显示小标题。
+- 距到期不足 24 小时的卡以警示色显示，不足 8 小时为强调色。
+- 没有重置卡数据或可用张数为 0 时整个区域不出现，不显示「0 张」。
+- 列表按渲染时刻计算横条，随额度刷新更新，不随页面时钟每分钟移动。
+- CodexHost 不提供「使用重置」，也不调用官方消耗接口。额度重置时间与重置卡到期时间是两类独立信息。
 
 ## 官方认证
 
@@ -82,8 +89,9 @@ SSH 维持远端原生单账号，不传输本地凭据。
 - `packages/renderer-extension/src/settings/credential-imports.ts`：Pi 小图标、确认对话框与「Pi 中的账号」专区。
 - `packages/adapters/pi/src/pi-credential-imports.ts`：Pi 原生存储和导入配置所有权管理。
 - `packages/host-runtime/src/credential-imports.ts`：通过公共 Adapter 契约路由后端凭证转移。
-- `packages/renderer-extension/src/settings/accounts-list.ts`：账号分组（组头身份、Pi 入口）与重置卡数量展开。
-- `packages/renderer-extension/src/settings/accounts-usage.ts`：额度窗口横条与重置卡详情。
+- `packages/renderer-extension/src/settings/accounts-list.ts`：账号分组（组头身份、Pi 入口），Codex 组下挂重置卡列表。
+- `packages/renderer-extension/src/settings/accounts-usage.ts`：额度窗口横条与逐张重置卡横条。
+- `packages/protocol-core/src/codex-native-usage.ts`：解析官方重置卡的发放/到期时间并投影到账号额度快照。
 - `packages/renderer-extension/src/settings/accounts-usage-windows.ts`：窗口行投影与节奏标记的纯函数。
 - `packages/renderer-extension/src/settings/accounts-reset-time.ts`：紧凑倒计时、节奏标记与页面本地时钟。
 - `packages/renderer-extension/src/settings/harness-accounts.ts`：其他 Harness 只读账号查询状态。

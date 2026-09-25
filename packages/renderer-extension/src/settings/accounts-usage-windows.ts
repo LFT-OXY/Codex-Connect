@@ -1,4 +1,4 @@
-import type { AccountCreditsSnapshot } from "@codexhost/shared-contracts";
+import type { AccountCreditsSnapshot, AccountResetCredit } from "@codexhost/shared-contracts";
 
 import type { RendererSettingsMessages } from "./localization.js";
 
@@ -158,4 +158,25 @@ export function accountUsagePace(
     position: display === "remaining" ? 100 - expected : expected,
     ahead: window.usedPercent - expected > PACE_AHEAD_MARGIN,
   };
+}
+
+/** 发放→到期区间中尚未流逝的比例（0～100）；区间未知或无效时为 null。 */
+export function accountResetCreditLife(
+  credit: AccountResetCredit,
+  now = Date.now(),
+): number | null {
+  if (!credit.grantedAt) return null;
+  const grantedAt = Date.parse(credit.grantedAt);
+  const expiresAt = Date.parse(credit.expiresAt);
+  if (!Number.isFinite(grantedAt) || !Number.isFinite(expiresAt) || expiresAt <= grantedAt) {
+    return null;
+  }
+  return Math.min(100, Math.max(0, ((expiresAt - now) / (expiresAt - grantedAt)) * 100));
+}
+
+export function accountResetCreditTone(expiresAt: number, now = Date.now()): "ok" | "warn" | "hot" {
+  const remaining = expiresAt - now;
+  if (remaining <= 8 * HOUR_MS) return "hot";
+  if (remaining <= 24 * HOUR_MS) return "warn";
+  return "ok";
 }

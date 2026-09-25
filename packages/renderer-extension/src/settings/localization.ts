@@ -131,7 +131,8 @@ export interface RendererSettingsMessages {
   readonly accountCreditsPeriodUnknown: string;
   readonly accountCreditsBuild: string;
   readonly accountResetCredits: string;
-  readonly accountResetCreditsDetails: string;
+  readonly accountResetCreditLabel: string;
+  readonly accountResetCreditLife: string;
   readonly accountResetCreditsCardExpiry: string;
   readonly connectionAdapter: string;
   readonly connectionHosts: string;
@@ -368,7 +369,8 @@ const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
   accountCreditsPeriodUnknown: "Limit",
   accountCreditsBuild: "Build",
   accountResetCredits: "Reset cards",
-  accountResetCreditsDetails: "Reset card details",
+  accountResetCreditLabel: "Reset {index}",
+  accountResetCreditLife: "Remaining lifetime",
   accountResetCreditsCardExpiry: "Card {index} · expires {time}",
   connectionAdapter: "Renderer adapter",
   connectionHosts: "Hosts",
@@ -618,7 +620,8 @@ const CHINESE_MESSAGES: RendererSettingsMessages = Object.freeze({
   accountCreditsPeriodUnknown: "额度",
   accountCreditsBuild: "Build",
   accountResetCredits: "重置卡",
-  accountResetCreditsDetails: "重置卡详情",
+  accountResetCreditLabel: "重置 {index}",
+  accountResetCreditLife: "剩余有效期",
   accountResetCreditsCardExpiry: "第 {index} 张 · {time}到期",
   connectionAdapter: "Renderer 适配器",
   connectionHosts: "Host 列表",

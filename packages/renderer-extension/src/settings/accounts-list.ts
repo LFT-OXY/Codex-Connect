@@ -11,8 +11,6 @@ import {
 } from "./accounts-usage.js";
 import type { RendererSettingsMessages } from "./localization.js";
 
-let resetDetailsSequence = 0;
-
 export function accountPlanLabel(planType: CodexAccountSummary["planType"]): string | null {
   if (!planType || planType === "unknown") return null;
   if (planType === "free") return "Free";
@@ -158,10 +156,8 @@ export function renderAccountGroup(
     current: boolean;
     usage: AccountUsageViewState | undefined;
     display: AccountUsageDisplay;
-    resetExpanded: boolean;
     onRetry: () => void;
     importAction?: HTMLElement | null;
-    onResetExpanded: (open: boolean) => void;
   },
 ): HTMLElement {
   const name = codexAccountDisplayName(account);
@@ -194,27 +190,11 @@ export function renderAccountGroup(
   });
   group.dataset.accountId = account.accountId;
   group.dataset.accountFocus = `${account.accountId}:group`;
-  const reset =
+  const resetCredits =
     input.usage?.status === "ready"
       ? renderAccountResetCredits(document, input.usage.credits, messages)
       : null;
-  if (!reset) return group;
-  const details = document.createElement("div");
-  details.className = "rounded-lg bg-settings-inset p-3";
-  details.id = `settings-account-reset-${++resetDetailsSequence}`;
-  details.hidden = !input.resetExpanded;
-  details.append(reset.details);
-  reset.summary.dataset.accountFocus = `${account.accountId}:reset`;
-  reset.summary.setAttribute("aria-controls", details.id);
-  reset.summary.setAttribute("aria-expanded", String(input.resetExpanded));
-  reset.summary.addEventListener("click", () => {
-    details.hidden = !details.hidden;
-    reset.summary.setAttribute("aria-expanded", String(!details.hidden));
-    input.onResetExpanded(!details.hidden);
-  });
-  const summary = document.createElement("div");
-  summary.append(reset.summary);
-  body.append(summary, details);
+  if (resetCredits) body.append(resetCredits);
   return group;
 }
 

@@ -218,7 +218,10 @@ export type {
   ThreadCommandsInspectParams,
 } from "./harness-commands.js";
 export {
+  ACCOUNT_RESET_CREDIT_TIME_MAX_LENGTH,
+  ACCOUNT_RESET_CREDITS_MAX_LENGTH,
   accountCreditsProductUsageSchema,
+  accountResetCreditSchema,
   accountResetCreditsSchema,
   accountCreditsSnapshotSchema,
   threadUsageInspectionParamsSchema,
@@ -227,6 +230,7 @@ export {
 } from "./thread-usage.js";
 export type {
   AccountCreditsSnapshot,
+  AccountResetCredit,
   AccountResetCredits,
   ThreadUsageInspection,
   ThreadUsageInspectionParams,

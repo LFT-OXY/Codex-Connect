@@ -127,7 +127,6 @@ export function createAccountsSettingsPage(
       let loadMessage: string | null = null;
       const usageByAccountId = new Map<string, AccountUsageViewState>();
       let usageDisplay: AccountUsageDisplay = "remaining";
-      const expandedResetAccounts = new Set<string>();
 
       const render = (): void => {
         const restoreFocus = accountListFocusRestorer(list, search);
@@ -170,14 +169,9 @@ export function createAccountsSettingsPage(
               ),
               usage: usageByAccountId.get(account.accountId),
               display: usageDisplay,
-              resetExpanded: expandedResetAccounts.has(account.accountId),
               onRetry: () => {
                 usageByAccountId.delete(account.accountId);
                 loadUsage(accounts);
-              },
-              onResetExpanded: (open) => {
-                if (open) expandedResetAccounts.add(account.accountId);
-                else expandedResetAccounts.delete(account.accountId);
               },
             }),
           );
@@ -265,10 +259,6 @@ export function createAccountsSettingsPage(
         accountPhase = result.phase;
         accountRevision = result.revision;
         accountInstanceId = result.instanceId;
-        for (const accountId of expandedResetAccounts) {
-          if (!accounts.some((account) => account.accountId === accountId))
-            expandedResetAccounts.delete(accountId);
-        }
         loadUsage(accounts);
       };
       const refreshInBackground = (): void => {

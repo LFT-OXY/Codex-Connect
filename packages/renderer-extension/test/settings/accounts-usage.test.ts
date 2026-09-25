@@ -8,7 +8,6 @@ vi.mock("../../src/settings/icons.js", () => ({
 import {
   renderAccountResetCredits,
   renderAccountUsage,
-  resetCreditDetailLine,
 } from "../../src/settings/accounts-usage.js";
 import { rendererSettingsMessages } from "../../src/settings/localization.js";
 
@@ -230,43 +229,97 @@ describe("Account limit pace and reset time", () => {
   });
 });
 
-describe("Account reset-card details", () => {
-  it("formats each available card's expiry", () => {
-    const now = new Date(2026, 8, 10, 12, 0, 0);
-    const expires = new Date(2026, 8, 10, 16, 12, 0);
-    const line = resetCreditDetailLine(1, expires.toISOString(), messages, now);
-    expect(line.startsWith("第 1 张 · ")).toBe(true);
-    expect(line).toContain("今天");
-    expect(line.endsWith("到期")).toBe(true);
-  });
-
-  it("does not invent a zero card count when no reset snapshot is provided", () => {
-    expect(renderAccountResetCredits(document, credits, messages)).toBeNull();
-  });
-
-  it("shows only a count without per-card expiry data", () => {
-    const result = renderAccountResetCredits(
-      document,
-      { ...credits, resetCredits: { availableCount: 2 } },
-      messages,
+describe("Account reset cards", () => {
+  const now = Date.parse("2026-09-10T12:00:00.000Z");
+  const hours = (value: number) => new Date(now + value * 3_600_000).toISOString();
+  const resetCards = (resetCredits: AccountCreditsSnapshot["resetCredits"]) =>
+    renderAccountResetCredits(document, { ...credits, resetCredits }, messages, now);
+  const rows = (root: HTMLElement | null) =>
+    root ? elements(root).filter((el) => el.dataset.resetCredit !== undefined) : [];
+  const meter = (row: FakeElement | undefined) =>
+    row?.children.find(
+      (child): child is FakeElement =>
+        child instanceof FakeElement && child.attributes.get("role") === "meter",
     );
-    if (!result) throw new Error("Expected reset details");
-    expect(text(result.summary)).toContain("2 张");
-    expect(elements(result.details).some((el) => el.tagName === "ul")).toBe(false);
-    expect(elements(result.details).some((el) => el.tagName === "button")).toBe(false);
+
+  it("does not render the area or invent a zero count without reset cards", () => {
+    expect(renderAccountResetCredits(document, credits, messages, now)).toBeNull();
   });
 
-  it("renders every expiry without a consume action", () => {
-    const expiresAt = ["2026-09-10T16:12:00.000Z", "2026-09-18T08:00:00.000Z"];
-    const result = renderAccountResetCredits(
-      document,
-      { ...credits, resetCredits: { availableCount: 2, nextExpiresAt: expiresAt[0], expiresAt } },
-      messages,
-    );
-    if (!result) throw new Error("Expected reset details");
-    expect(elements(result.details).filter((el) => el.tagName === "li")).toHaveLength(2);
-    expect(text(result.details)).toContain("第 1 张");
-    expect(text(result.details)).toContain("第 2 张");
-    expect(elements(result.details).some((el) => el.tagName === "button")).toBe(false);
+  it("draws each card's remaining lifetime and its local expiry", () => {
+    const result = resetCards({
+      availableCount: 2,
+      credits: [
+        { expiresAt: hours(24 * 3), grantedAt: hours(-24) },
+        { expiresAt: hours(24 * 7), grantedAt: hours(-24 * 3) },
+      ],
+    });
+    if (!result) throw new Error("Expected reset cards");
+    const [first, second] = rows(result);
+    if (!first || !second) throw new Error("Expected two reset cards");
+    expect(rows(result)).toHaveLength(2);
+    expect(text(first)).toContain("重置 1");
+    expect(text(second)).toContain("重置 2");
+    expect(meter(first)?.attributes.get("aria-valuenow")).toBe("75");
+    expect((meter(first)?.children[0] as FakeElement).style.width).toBe("75%");
+    expect(meter(second)?.attributes.get("aria-valuenow")).toBe("70");
+    const expiry = elements(first as unknown as HTMLElement).find((el) => el.tagName === "time");
+    expect(expiry?.dateTime).toBe(hours(24 * 3));
+    expect(expiry?.textContent).toMatch(/9月13日/u);
+    expect(expiry?.title).toContain("第 1 张");
+    expect(expiry?.title).toContain("2026");
+    expect(expiry?.title.endsWith("到期")).toBe(true);
+    expect(elements(result).some((el) => el.tagName === "button")).toBe(false);
+  });
+
+  it("shows only the expiry when the grant time is missing or unusable", () => {
+    const result = resetCards({
+      availableCount: 3,
+      credits: [
+        { expiresAt: hours(48) },
+        { expiresAt: hours(48), grantedAt: hours(48) },
+        { expiresAt: hours(48), grantedAt: "not-a-date" },
+      ],
+    });
+    expect(rows(result)).toHaveLength(3);
+    for (const row of rows(result)) {
+      expect(meter(row)).toBeUndefined();
+      expect(row.children.some((child) => (child as FakeElement).tagName === "time")).toBe(true);
+    }
+  });
+
+  it("falls back to the legacy expiry list without drawing lifetimes", () => {
+    const result = resetCards({ availableCount: 2, expiresAt: [hours(30), hours(60)] });
+    expect(rows(result)).toHaveLength(2);
+    expect(rows(result).some((row) => meter(row))).toBe(false);
+  });
+
+  it("keeps lifetimes within the bar for expired or future-granted cards", () => {
+    const result = resetCards({
+      availableCount: 2,
+      credits: [
+        { expiresAt: hours(-1), grantedAt: hours(-48) },
+        { expiresAt: hours(48), grantedAt: hours(1) },
+      ],
+    });
+    expect(rows(result).map((row) => meter(row)?.attributes.get("aria-valuenow"))).toEqual([
+      "0",
+      "100",
+    ]);
+  });
+
+  it("shows the reported count without per-card rows when details are absent", () => {
+    const result = resetCards({ availableCount: 2 });
+    if (!result) throw new Error("Expected reset cards");
+    expect(text(result)).toContain("2 张");
+    expect(rows(result)).toHaveLength(0);
+  });
+
+  it("warns as a card nears expiry", () => {
+    const result = resetCards({
+      availableCount: 3,
+      credits: [{ expiresAt: hours(4) }, { expiresAt: hours(20) }, { expiresAt: hours(30) }],
+    });
+    expect(rows(result).map((row) => row.dataset.tone)).toEqual(["hot", "warn", "ok"]);
   });
 });

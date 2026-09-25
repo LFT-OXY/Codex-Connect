@@ -1,9 +1,15 @@
-import type { AccountCreditsSnapshot } from "@codexhost/shared-contracts";
+import type { AccountCreditsSnapshot, AccountResetCredit } from "@codexhost/shared-contracts";
 
 import { formatRendererCreditsReset, rendererCreditsTone } from "../renderer-credits-control.js";
 import { formatRendererCreditsPercent } from "../renderer-usage-control.js";
-import { renderAccountPaceMarker, renderAccountResetTime } from "./accounts-reset-time.js";
 import {
+  formatAccountFullLocalTime,
+  renderAccountPaceMarker,
+  renderAccountResetTime,
+} from "./accounts-reset-time.js";
+import {
+  accountResetCreditLife,
+  accountResetCreditTone,
   accountUsageWindowRows,
   type AccountUsageDisplay,
   type AccountUsageWindowFilter,
@@ -48,17 +54,6 @@ export function formatAccountCreditsReset(
   });
 }
 
-export function resetCreditDetailLine(
-  index: number,
-  expiresAt: string,
-  messages: RendererSettingsMessages,
-  now: Date = new Date(),
-): string {
-  return messages.accountResetCreditsCardExpiry
-    .replace("{index}", String(index))
-    .replace("{time}", formatAccountCreditsReset(expiresAt, messages.locale, now));
-}
-
 const WINDOW_ROW_CLASS = [
   "group grid grid-cols-[minmax(0,9rem)_minmax(4rem,1fr)_3.5rem_3.75rem] items-center gap-x-3",
   "@max-[28rem]:grid-cols-[minmax(0,1fr)_3.5rem_3.75rem] @max-[28rem]:gap-y-1.5",
@@ -75,6 +70,26 @@ const WINDOW_PERCENT_CLASS = [
   "text-right text-xs font-semibold tabular-nums whitespace-nowrap text-settings-text",
   "group-data-[tone=warn]:text-settings-warning group-data-[tone=hot]:text-settings-danger",
 ].join(" ");
+
+function renderMeter(
+  document: Document,
+  label: string,
+  value: number,
+  valueNow: string,
+): HTMLElement {
+  const meter = document.createElement("div");
+  meter.className = WINDOW_METER_CLASS;
+  meter.setAttribute("role", "meter");
+  meter.setAttribute("aria-label", label);
+  meter.setAttribute("aria-valuemin", "0");
+  meter.setAttribute("aria-valuemax", "100");
+  meter.setAttribute("aria-valuenow", valueNow);
+  const fill = document.createElement("span");
+  fill.className = WINDOW_FILL_CLASS;
+  fill.style.width = `${Math.min(100, Math.max(0, value))}%`;
+  meter.append(fill);
+  return meter;
+}
 
 function renderUsageWindow(
   document: Document,
@@ -93,17 +108,7 @@ function renderUsageWindow(
   const value = display === "remaining" ? 100 - window.usedPercent : window.usedPercent;
   const valueLabel =
     display === "remaining" ? messages.accountCreditsRemaining : messages.accountCreditsUsed;
-  const meter = document.createElement("div");
-  meter.className = WINDOW_METER_CLASS;
-  meter.setAttribute("role", "meter");
-  meter.setAttribute("aria-label", `${window.label} · ${valueLabel}`);
-  meter.setAttribute("aria-valuemin", "0");
-  meter.setAttribute("aria-valuemax", "100");
-  meter.setAttribute("aria-valuenow", String(value));
-  const fill = document.createElement("span");
-  fill.className = WINDOW_FILL_CLASS;
-  fill.style.width = `${Math.min(100, Math.max(0, value))}%`;
-  meter.append(fill);
+  const meter = renderMeter(document, `${window.label} · ${valueLabel}`, value, String(value));
   renderAccountPaceMarker(document, meter, window, display, messages);
   const percent = document.createElement("span");
   percent.className = WINDOW_PERCENT_CLASS;
@@ -162,59 +167,88 @@ export function renderAccountUsage(
   return list;
 }
 
+const RESET_EXPIRY_CLASS = [
+  "col-span-2 col-start-3 min-w-0 truncate text-right text-[11px] tabular-nums whitespace-nowrap",
+  "text-settings-muted @max-[28rem]:col-start-2",
+  "group-data-[tone=warn]:text-settings-warning group-data-[tone=hot]:text-settings-danger",
+].join(" ");
+
+function renderResetCredit(
+  document: Document,
+  credit: AccountResetCredit,
+  index: number,
+  messages: RendererSettingsMessages,
+  now: number,
+): HTMLElement {
+  const row = document.createElement("div");
+  row.className = WINDOW_ROW_CLASS;
+  row.dataset.resetCredit = "";
+  const expiresAt = Date.parse(credit.expiresAt);
+  row.dataset.tone = Number.isFinite(expiresAt) ? accountResetCreditTone(expiresAt, now) : "ok";
+  const label = document.createElement("span");
+  label.className = "min-w-0 truncate text-xs text-settings-muted";
+  label.textContent = messages.accountResetCreditLabel.replace("{index}", String(index));
+  row.append(label);
+  const life = accountResetCreditLife(credit, now);
+  if (life !== null) {
+    row.append(
+      renderMeter(
+        document,
+        `${label.textContent} · ${messages.accountResetCreditLife}`,
+        life,
+        String(Math.round(life)),
+      ),
+    );
+  }
+  if (Number.isFinite(expiresAt)) {
+    const expiry = document.createElement("time");
+    expiry.className = RESET_EXPIRY_CLASS;
+    expiry.dateTime = new Date(expiresAt).toISOString();
+    expiry.textContent = formatAccountCreditsReset(
+      credit.expiresAt,
+      messages.locale,
+      new Date(now),
+    );
+    expiry.title = messages.accountResetCreditsCardExpiry
+      .replace("{index}", String(index))
+      .replace("{time}", formatAccountFullLocalTime(credit.expiresAt, messages.locale));
+    expiry.setAttribute("aria-label", expiry.title);
+    row.append(expiry);
+  }
+  return row;
+}
+
+/** 只读清单：每张卡一条寿命横条，不提供使用入口。 */
 export function renderAccountResetCredits(
   document: Document,
   credits: AccountCreditsSnapshot,
   messages: RendererSettingsMessages,
-): { summary: HTMLButtonElement; details: HTMLElement } | null {
+  now = Date.now(),
+): HTMLElement | null {
   const resetCredits = credits.resetCredits;
   if (!resetCredits) return null;
-  const summary = document.createElement("button");
-  summary.type = "button";
-  summary.className = "settings-account-reset-summary";
-  summary.setAttribute("aria-label", messages.accountResetCreditsDetails);
-  summary.title = messages.accountResetCreditsDetails;
+  const section = document.createElement("div");
+  section.className = "grid gap-2.5";
+  section.dataset.resetCredits = "";
+  section.setAttribute("role", "group");
+  section.setAttribute("aria-label", messages.accountResetCredits);
+  const heading = document.createElement("div");
+  heading.className = "flex items-center gap-1.5 text-[11px] text-settings-muted";
+  const label = document.createElement("span");
+  label.textContent = messages.accountResetCredits;
   const count = document.createElement("span");
+  count.className = "tabular-nums";
   count.textContent =
     messages.locale === "zh-CN"
       ? `${resetCredits.availableCount} 张`
       : String(resetCredits.availableCount);
-  const label = document.createElement("span");
-  label.textContent = messages.accountResetCredits;
-  summary.append(
-    createRendererSettingsIcon("ticket", 16),
-    label,
-    count,
-    createRendererSettingsIcon("chevron-right", 14),
-  );
-
-  const details = document.createElement("div");
-  details.className = "settings-account-reset-details";
-  const copy = document.createElement("div");
-  const heading = document.createElement("strong");
-  heading.textContent = messages.accountResetCredits;
-  copy.append(heading);
-  if (resetCredits.nextExpiresAt) {
-    const next = document.createElement("p");
-    next.className = "settings-account-reset-expiry";
-    const reset = formatAccountCreditsReset(resetCredits.nextExpiresAt, messages.locale);
-    next.textContent = messages.locale === "zh-CN" ? `最早 ${reset}到期` : `Next expires ${reset}`;
-    const remaining = Date.parse(resetCredits.nextExpiresAt) - Date.now();
-    if (remaining <= 24 * 60 * 60 * 1000) {
-      next.className += remaining <= 8 * 60 * 60 * 1000 ? " is-hot" : " is-warn";
-    }
-    copy.append(next);
+  heading.append(createRendererSettingsIcon("ticket", 14), label, count);
+  section.append(heading);
+  // 旧 Host 只给到期时间列表，按无发放时间处理。
+  const cards =
+    resetCredits.credits ?? resetCredits.expiresAt?.map((expiresAt) => ({ expiresAt })) ?? [];
+  for (const [index, credit] of cards.entries()) {
+    section.append(renderResetCredit(document, credit, index + 1, messages, now));
   }
-  if (resetCredits.expiresAt?.length) {
-    const list = document.createElement("ul");
-    list.className = "settings-account-reset-list";
-    for (const [index, expiresAt] of resetCredits.expiresAt.entries()) {
-      const item = document.createElement("li");
-      item.textContent = resetCreditDetailLine(index + 1, expiresAt, messages);
-      list.append(item);
-    }
-    copy.append(list);
-  }
-  details.append(copy);
-  return { summary, details };
+  return section;
 }
