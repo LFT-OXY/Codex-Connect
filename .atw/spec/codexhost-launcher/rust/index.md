@@ -43,11 +43,26 @@
 - Linux/Windows 在本 crate 里自定义了 `UnmanagedDesktopConflict`，文案与 `PlatformError::UnmanagedDesktopConflict` 完全相同；Windows 的重试分支同时用 `downcast_ref` 和 `error.to_string() == UNMANAGED_DESKTOP_MESSAGE` 识别它，改文案会让重试失效。
 - `CODEXHOST_HOST_NODE_PATH`、`CODEXHOST_HOST_RUNTIME_PATH` 等环境变量名在 `main.rs`、`installation_layout.rs`、`crates/shim/src/lib.rs` 各自声明了字符串常量，并未共享（platform 只导出 `CODEX_CLI_PATH_ENV`、`STOCK_CODEX_PATH_ENV` 等少数几个）。改名时要几处一起改。
 
+## 用户可见文字与诊断输出
+
+产品名规则见 `docs/project/领域术语表.md`：面向用户的文字写 `Codex Connect`，诊断输出保留内部代号 `codexhost`。
+
+| 输出 | 位置 | 写法 |
+|---|---|---|
+| 未托管 Desktop 冲突 | `main.rs#UNMANAGED_DESKTOP_MESSAGE`、`codexhost-platform` 的 `PlatformError::UnmanagedDesktopConflict` | `Codex Desktop is already running outside Codex Connect; completely quit it before starting Codex Connect`，两处逐字相同（Windows 重试分支用 `to_string()` 比较） |
+| usage | `main.rs#usage`、`native_harness_broker.rs` | 命令名写 `codex-connect`，即 npm 暴露的命令；npm 入口把用户参数原样转发给原生二进制 `bin/codexhost` |
+| Windows 错误弹窗 | `main.rs`（`--start-menu` 启动失败）、`start_menu.rs` | `Codex Connect could not start: {error}`；弹窗标题由 `codexhost-platform/windows_ui.rs` 统一为 `Codex Connect` |
+| stderr 诊断 | `main.rs` 顶层错误、`[codexhost startup …]` trace | 保留 `codexhost launcher:` 前缀 |
+| 错误正文 | 例如 `did not start the codexhost Host chain`、`codexhost control endpoint …` | 描述内部组件的诊断文字，保留 `codexhost` |
+
+- 验证：`tests/cli.rs` 断言 usage 含 `codex-connect inspect` / `codex-connect launch`，并断言源码中存在冲突文案；`codexhost-platform` 的 Linux 测试 `cleanup_failure_does_not_hide_an_unmanaged_desktop_conflict` 匹配 `outside Codex Connect`。
+- 错误示例：`show_error_dialog(&format!("codexhost launcher: {error}"))` 会把诊断前缀显示在弹窗里。正确写法：stderr 用 `eprintln!("codexhost launcher: {error}")`，弹窗用 `show_error_dialog(&format!("Codex Connect could not start: {error}"))`。
+
 ## 改动前检查清单
 
 1. 先确认改动属于"原生启动/进程编排"。要读 Thread、Harness 或 app-server 报文的逻辑应放到 TypeScript 包。
 2. 改 stdout 输出（`ready`、`inspect`、`broker` 的 `key=value`）前，先 grep 上面列出的下游消费者并同步修改。
-3. 改启动流程时保持 `tests/cli.rs` 中源码断言成立：`StartupState::{RecoverStale,CleanLaunch,Attach}`、`acquire_launcher_ownership`、"completely quit it before starting codexhost" 必须仍在 `main.rs`，且不能出现 `attach_unmanaged_desktop`。
+3. 改启动流程时保持 `tests/cli.rs` 中源码断言成立：`StartupState::{RecoverStale,CleanLaunch,Attach}`、`acquire_launcher_ownership`、"completely quit it before starting Codex Connect" 必须仍在 `main.rs`，且不能出现 `attach_unmanaged_desktop`。
 4. 新增传给 Desktop 的环境变量时，确认 macOS LaunchServices（`open --env`）和 Windows AppX 激活都能传递；只转发绝对路径，不转发认证材料（见 `desktop_path_overrides.rs` 注释）。
 5. 新增的平台分支必须让三平台都能编译；本地只能跑宿主平台，其余平台依赖 CI 四平台矩阵（`docs/operations/repository-maintenance.md`）。
 6. 改运行时描述符或更新状态文件的字段时，同时改 `crates/updater/src/main.rs#RuntimeDescriptorProbe` 和 `packages/update-manager`，并保持 `deny_unknown_fields`。

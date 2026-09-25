@@ -23,7 +23,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(target_os = "windows")]
 fn main() {
     if let Err(error) = run() {
-        codexhost_platform::show_error_dialog(&format!("codexhost could not start: {error}"));
+        codexhost_platform::show_error_dialog(&format!("Codex Connect could not start: {error}"));
     }
 }
 

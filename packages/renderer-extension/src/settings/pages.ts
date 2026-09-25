@@ -43,6 +43,7 @@ import {
 } from "./update-request.js";
 
 export const CODEXHOST_GITHUB_REPOSITORY_URL = "https://github.com/LFT-OXY/Codex-Connect";
+const UPSTREAM_GITHUB_REPOSITORY_URL = "https://github.com/BytePioneer-AI/codex-host";
 export const CODEXHOST_RELEASES_LATEST_URL = `${CODEXHOST_GITHUB_REPOSITORY_URL}/releases/latest`;
 export const CODEXHOST_NPM_MANUAL_UPDATE_COMMAND = "npm install -g @chinhae/codex-connect@latest";
 
@@ -172,7 +173,7 @@ function aboutPage(messages: RendererSettingsMessages): RendererSettingsPageDefi
       panel.className = "settings-about-panel";
       const product = document.createElement("strong");
       product.className = "settings-about-product";
-      product.textContent = "CodexHost";
+      product.textContent = "Codex Connect";
       const tagline = document.createElement("strong");
       tagline.className = "settings-about-tagline";
       tagline.textContent = messages.aboutTagline;
@@ -202,7 +203,15 @@ function aboutPage(messages: RendererSettingsMessages): RendererSettingsPageDefi
         messages.aboutRepository,
         repositoryUrl,
       );
-      repositorySection.append(openSource, repository);
+      const upstream = document.createElement("p");
+      upstream.className = "settings-about-upstream";
+      const upstreamLink = document.createElement("a");
+      upstreamLink.href = UPSTREAM_GITHUB_REPOSITORY_URL;
+      upstreamLink.target = "_blank";
+      upstreamLink.rel = "noopener noreferrer";
+      upstreamLink.textContent = messages.aboutUpstream;
+      upstream.append(upstreamLink);
+      repositorySection.append(openSource, repository, upstream);
       panel.append(product, tagline, introduction, starCallout, repositorySection);
       context.content.append(heading, panel);
       return undefined;

@@ -1415,9 +1415,7 @@ describe("Renderer Updates page", () => {
     expect(releaseLink.rel).toBe("noopener noreferrer");
 
     await vi.waitFor(() => {
-      expect(releaseLink.href).toBe(
-        "https://github.com/LFT-OXY/Codex-Connect/releases/tag/v1.2.3",
-      );
+      expect(releaseLink.href).toBe("https://github.com/LFT-OXY/Codex-Connect/releases/tag/v1.2.3");
     });
 
     const panel = elementWithClass(content, "settings-update-panel");
@@ -1429,9 +1427,7 @@ describe("Renderer Updates page", () => {
       expect(panel.dataset.updateState).toBe("failed");
     });
     expect(descendants(content)).toContain(releaseLink);
-    expect(releaseLink.href).toBe(
-      "https://github.com/LFT-OXY/Codex-Connect/releases/tag/v1.2.3",
-    );
+    expect(releaseLink.href).toBe("https://github.com/LFT-OXY/Codex-Connect/releases/tag/v1.2.3");
 
     cleanup?.();
     scope.dispose();
@@ -1481,7 +1477,10 @@ describe("Renderer Updates page", () => {
   });
 
   it.each([
-    ["npm" as const, "Windows 暂不支持自动更新。请退出 codexhost，在终端运行以下命令完成更新。"],
+    [
+      "npm" as const,
+      "Windows 暂不支持自动更新。请退出 Codex Connect，在终端运行以下命令完成更新。",
+    ],
     [
       "windows-installer" as const,
       "Windows 暂不支持自动更新。请下载并运行适用于当前系统的安装包。",
@@ -1555,16 +1554,24 @@ describe("Renderer Updates page", () => {
       "我们认为 Codex Desktop 提供了目前最好的桌面开发交互体验",
     );
     expect(visibleText(content)).toContain("Claude Code 和 Pi Agent");
-    expect(visibleText(content)).toContain("codexhost 是一个开源项目");
+    expect(elementWithClass(content, "settings-about-product").textContent).toBe("Codex Connect");
+    expect(visibleText(content)).toContain("Codex Connect 让你在 Codex Desktop 中选择");
+    expect(visibleText(content)).toContain("Codex Connect 是一个开源项目");
+    expect(visibleText(content)).not.toMatch(/codexhost/i);
     expect(visibleText(content)).toContain("请给我们一个 Star");
     const repository = descendants(content).find(
-      ({ tagName, href }) =>
-        tagName === "a" && href === "https://github.com/LFT-OXY/Codex-Connect",
+      ({ tagName, href }) => tagName === "a" && href === "https://github.com/LFT-OXY/Codex-Connect",
     );
     expect(repository).toMatchObject({ target: "_blank", rel: "noopener noreferrer" });
     expect(visibleNotesText(repository as FakeElement)).toContain(
       "https://github.com/LFT-OXY/Codex-Connect",
     );
+    const upstream = descendants(content).find(
+      ({ tagName, href }) =>
+        tagName === "a" && href === "https://github.com/BytePioneer-AI/codex-host",
+    );
+    expect(upstream).toMatchObject({ target: "_blank", rel: "noopener noreferrer" });
+    expect(visibleNotesText(upstream as FakeElement)).toBe("基于开源项目 codex-host 开发");
 
     cleanup?.();
     scope.dispose();
@@ -1612,7 +1619,7 @@ describe("Renderer Updates page", () => {
     expect(content.children.indexOf(starBanner)).toBeLessThan(
       content.children.indexOf(elementWithClass(content, "settings-update-notes-section")),
     );
-    expect(visibleText(starBanner)).toContain("如果 CodexHost 帮到了你，请在 GitHub 点个 Star");
+    expect(visibleText(starBanner)).toContain("如果 Codex Connect 帮到了你，请在 GitHub 点个 Star");
     const starLink = descendants(starBanner).find(({ tagName }) => tagName === "a");
     expect(starLink).toMatchObject({
       href: "https://github.com/LFT-OXY/Codex-Connect",

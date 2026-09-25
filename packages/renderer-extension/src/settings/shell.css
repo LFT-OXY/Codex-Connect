@@ -1445,6 +1445,15 @@
   text-decoration: underline;
 }
 
+.settings-about-upstream a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.settings-about-upstream a:hover {
+  color: var(--settings-focus);
+}
+
 .settings-about-repository-link code {
   min-width: 0;
   overflow: hidden;

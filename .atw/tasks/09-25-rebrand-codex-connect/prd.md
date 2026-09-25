@@ -164,6 +164,6 @@
 - 访谈的完整决策记录见 `research/interview-decisions.md`。
 - 长期同步上游的风险：上游新增的本地化文案、设置页链接、发布脚本改动可能重新带回 `codexhost` 产品名或上游仓库地址。品牌守卫测试负责在合并后拦住这种回退。
 - macOS 上从 codexhost 切换的用户会同时留有 `codexhost.app` 与 `Codex Connect.app`（bundle id 相同），README 的迁移说明提示删除旧 app。
-- 原生 Rust 层的 usage 文字（`crates/launcher/src/main.rs`、`native_harness_broker.rs`）以原生二进制名 `codexhost` 书写。npm 用户经 `codex-connect broker …` 传错参数时会看到这个名字，由第 04 票判断是否调整。
+- 原生 Rust 层的 usage 文字（`crates/launcher/src/main.rs`、`native_harness_broker.rs`）以原生二进制名 `codexhost` 书写。第 04 票已将其改为 `codex-connect`，与 npm 暴露的命令一致（安装包用户不会直接在终端调用原生二进制）。
 - 第 02 票注意：Rust 更新器的 macOS DMG 安装路径按 `codexhost.app` 在 DMG 内查找应用（`crates/updater/src/install.rs`），`.app` 改名时要同步修改。
 - 首次 npm 发布前，需要在 npmjs 上为 7 个包配置指向 `LFT-OXY/Codex-Connect` 的 `release-packages.yml` 的 Trusted Publisher；如果 npm 要求包先存在才能配置，就需要在本地手动首发一次。

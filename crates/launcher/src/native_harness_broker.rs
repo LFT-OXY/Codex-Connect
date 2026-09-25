@@ -41,7 +41,7 @@ pub fn parse_native_harness_broker_cli(
 ) -> Result<NativeHarnessBrokerCli, String> {
     let Some(command) = arguments.first() else {
         return Err(
-            "usage: codexhost broker install|status|stop|uninstall [--harness <id>] [--node <absolute-file> --host-runtime <absolute-file>]".to_owned(),
+            "usage: codex-connect broker install|status|stop|uninstall [--harness <id>] [--node <absolute-file> --host-runtime <absolute-file>]".to_owned(),
         );
     };
     let command = match command.as_str() {

@@ -90,7 +90,7 @@ const CONTROLLER_STOP_GRACE: Duration = Duration::from_secs(1);
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 const DESKTOP_TREE_REFRESH_INTERVAL: Duration = Duration::from_millis(500);
 #[cfg(any(target_os = "windows", target_os = "linux"))]
-const UNMANAGED_DESKTOP_MESSAGE: &str = "Codex Desktop is already running outside codexhost; completely quit it before starting codexhost";
+const UNMANAGED_DESKTOP_MESSAGE: &str = "Codex Desktop is already running outside Codex Connect; completely quit it before starting Codex Connect";
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 fn desktop_tree_refresh_due(last_refresh: Instant, now: Instant) -> bool {
@@ -124,7 +124,7 @@ impl Error for UnmanagedDesktopConflict {}
 
 fn usage() {
     eprintln!(
-        "usage:\n  codexhost\n  codexhost inspect [--custom-install <absolute-directory>]\n  codexhost launch [--shim <absolute-file>] [--node <absolute-file>] [--host-runtime <absolute-file>] [--desktop-controller <absolute-file>] [--renderer <absolute-file>] [--pi <absolute-file>] [--custom-install <absolute-directory>]\n  codexhost broker install|status|stop|uninstall\n  codexhost delegate --help\n  codexhost harness inspect ...\n  codexhost delegate start ...\n  codexhost thread send|cancel|read|wait|list ..."
+        "usage:\n  codex-connect\n  codex-connect inspect [--custom-install <absolute-directory>]\n  codex-connect launch [--shim <absolute-file>] [--node <absolute-file>] [--host-runtime <absolute-file>] [--desktop-controller <absolute-file>] [--renderer <absolute-file>] [--pi <absolute-file>] [--custom-install <absolute-directory>]\n  codex-connect broker install|status|stop|uninstall\n  codex-connect delegate --help\n  codex-connect harness inspect ...\n  codex-connect delegate start ...\n  codex-connect thread send|cancel|read|wait|list ..."
     );
 }
 
@@ -1241,11 +1241,10 @@ fn main() -> ExitCode {
     match run(&arguments) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            let message = format!("codexhost launcher: {error}");
-            eprintln!("{message}");
+            eprintln!("codexhost launcher: {error}");
             #[cfg(target_os = "windows")]
             if start_menu_launch {
-                show_error_dialog(&message);
+                show_error_dialog(&format!("Codex Connect could not start: {error}"));
             }
             ExitCode::FAILURE
         }

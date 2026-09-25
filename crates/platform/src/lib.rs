@@ -182,7 +182,7 @@ impl Display for PlatformError {
             Self::Unsupported(message) => write!(formatter, "{message}"),
             Self::NotFound(message) => write!(formatter, "{message}"),
             Self::UnmanagedDesktopConflict => formatter.write_str(
-                "Codex Desktop is already running outside codexhost; completely quit it before starting codexhost",
+                "Codex Desktop is already running outside Codex Connect; completely quit it before starting Codex Connect",
             ),
             Self::Invalid(message) => write!(formatter, "{message}"),
             Self::ProcessInspection {

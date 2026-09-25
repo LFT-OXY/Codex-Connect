@@ -1180,7 +1180,7 @@ mod tests {
         );
         assert!(match result {
             PlatformError::UnmanagedDesktopConflict => true,
-            PlatformError::Invalid(message) => message.contains("outside codexhost"),
+            PlatformError::Invalid(message) => message.contains("outside Codex Connect"),
             _ => false,
         });
     }

@@ -5,13 +5,14 @@ source and `codex-logo-transparent.png` is its white-background-free square
 variant. `codex-logo-bright.png` recolors that mark in the official bright
 Codex blue so it stays visible on dark surfaces.
 
-`codexhost-app-icon.svg` is the vector master of the codexhost brand icon: a
-light gray rounded tile with a charcoal C and central rounded square, padded to
-the macOS icon grid. It is the Renderer settings brand icon (settings header
-mark and the application-header settings trigger button).
-The application and installer icons come from the separate Codex Connect
-artwork in `crates/launcher/assets/codexhost.png`; see
-`crates/launcher/assets/README.md`.
+`codexhost-app-icon.png` is the Codex Connect brand icon (holographic double
+brackets) resized to 128×128 from `crates/launcher/assets/codexhost.png`, the
+same artwork used for the application and installer icons (see
+`crates/launcher/assets/README.md`). It is the Renderer settings brand icon
+(settings header mark and the application-header settings trigger button) and
+is bundled as a data URL. Regenerate it with
+`sips -Z 128 crates/launcher/assets/codexhost.png --out packages/renderer-extension/src/assets/codexhost-app-icon.png`
+when the launcher artwork changes.
 
 `codex-agent.png` is the Codex App GA mark distributed with OpenAI's official
 `openai.chatgpt` VS Code extension. It is bundled as a data URL so the Renderer

@@ -12,3 +12,5 @@
 - [ ] 面向用户的 `codexhost` / `CodexHost` 产品名被拒绝；内部标识符（包名、协议方法、环境变量、CSS 类名、数据目录、bundle id、LaunchAgent 标签、内部二进制名、stderr 诊断日志前缀）按显式白名单放行，每条注明理由
 - [ ] 测试纳入现有测试配置，可用聚焦命令单独运行
 - [ ] 当前代码下测试通过；人为改回一处上游链接或产品名时测试失败，失败信息指出文件与内容
+
+**第 04 票留下的白名单候选（诊断输出，保留 codexhost）：** `renderer-extension/src/settings/connections-page.ts` 中复制用的诊断文本标题 `codexhost connection diagnostics`；Rust 启动器中描述内部组件的错误正文（如 `did not start the codexhost Host chain`、`codexhost control endpoint …`）；`desktop-control/src/renderer-draft-prewarm-runtime.ts` 中 PowerShell 诊断报错 `CodexHost Remote Control runtime is not running`（驼峰写法，需判断是否纳入扫描）。
