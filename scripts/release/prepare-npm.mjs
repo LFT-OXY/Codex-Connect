@@ -22,14 +22,26 @@ import { hostReleaseTarget, npmReleaseUsage, releaseTargetForHost } from "./targ
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../..");
 
-export const NPM_PACKAGE_NAME = "@codexhost/cli";
+export const NPM_PACKAGE_NAME = "@chinhae/codex-connect";
+// 按主包名派生（@scope/name → scope-name），与 npm pack 对主包的默认文件名一致。
+export const NPM_TARBALL_BASE_NAME = NPM_PACKAGE_NAME.slice(1).replace("/", "-");
+export const NPM_COMMAND_NAME = "codex-connect";
+export const NPM_REPOSITORY_URL = "https://github.com/LFT-OXY/Codex-Connect";
+export const NPM_KEYWORDS = Object.freeze([
+  "codex",
+  "codex-connect",
+  "pi",
+  "claude-code",
+  "agent",
+  "harness",
+]);
 export const NPM_PLATFORM_PACKAGE_NAMES = Object.freeze({
-  "macos-arm64": "@codexhost/cli-darwin-arm64",
-  "macos-x64": "@codexhost/cli-darwin-x64",
-  "windows-x64": "@codexhost/cli-win32-x64",
-  "windows-arm64": "@codexhost/cli-win32-arm64",
-  "linux-x64": "@codexhost/cli-linux-x64",
-  "linux-arm64": "@codexhost/cli-linux-arm64",
+  "macos-arm64": "@chinhae/codex-connect-darwin-arm64",
+  "macos-x64": "@chinhae/codex-connect-darwin-x64",
+  "windows-x64": "@chinhae/codex-connect-win32-x64",
+  "windows-arm64": "@chinhae/codex-connect-win32-arm64",
+  "linux-x64": "@chinhae/codex-connect-linux-x64",
+  "linux-arm64": "@chinhae/codex-connect-linux-arm64",
 });
 export const NPM_RUNTIME_PLATFORM_PACKAGES = Object.freeze({
   "darwin-arm64": NPM_PLATFORM_PACKAGE_NAMES["macos-arm64"],
@@ -263,15 +275,15 @@ export function createNpmPackageManifest({ version, target }) {
     },
     os: npmPackageOs(target),
     cpu: npmPackageCpu(target),
-    keywords: ["codex", "codexhost", "pi", "claude-code", "agent", "harness"],
+    keywords: [...NPM_KEYWORDS],
     repository: {
       type: "git",
-      url: "git+https://github.com/BytePioneer-AI/codex-host.git",
+      url: `git+${NPM_REPOSITORY_URL}.git`,
     },
     bugs: {
-      url: "https://github.com/BytePioneer-AI/codex-host/issues",
+      url: `${NPM_REPOSITORY_URL}/issues`,
     },
-    homepage: "https://github.com/BytePioneer-AI/codex-host#readme",
+    homepage: `${NPM_REPOSITORY_URL}#readme`,
     publishConfig: {
       access: "public",
     },
@@ -289,7 +301,7 @@ import { fileURLToPath } from "node:url";
 
 const version = ${JSON.stringify(version)};
 const userArguments = process.argv.slice(2);
-const repositoryUrl = "https://github.com/BytePioneer-AI/codex-host";
+const repositoryUrl = ${JSON.stringify(NPM_REPOSITORY_URL)};
 const startupTraceStartedAt = Date.now();
 function startupTrace(stage) {
   if (process.env.CODEXHOST_STARTUP_TRACE !== "1") return;
@@ -368,7 +380,7 @@ try {
 }
 if (platformVersion !== version) {
   fail(
-    \`platform package version mismatch: '\${platformPackage}' at '\${packageRoot}' has \${JSON.stringify(platformVersion) ?? "no version"}; expected \${version}. Close Codex Desktop, then run: npm install -g @codexhost/cli@\${version} \${platformPackage}@\${version}\`,
+    \`platform package version mismatch: '\${platformPackage}' at '\${packageRoot}' has \${JSON.stringify(platformVersion) ?? "no version"}; expected \${version}. Close Codex Desktop, then run: npm install -g ${NPM_PACKAGE_NAME}@\${version} \${platformPackage}@\${version}\`,
   );
 }
 startupTrace("platform package resolved");
@@ -380,7 +392,7 @@ const desktopController = path.join(packageRoot, "app", "desktop-controller.mjs"
 const rendererExtension = path.join(packageRoot, "app", "renderer-extension.js");
 
 function fail(message) {
-  console.error(\`codexhost: \${message}\`);
+  console.error(\`${NPM_COMMAND_NAME}: \${message}\`);
   process.exit(1);
 }
 
@@ -523,16 +535,16 @@ if (userArguments.length === 0) {
   console.log(
     [
       "usage:",
-      "  codexhost",
-      "  codexhost --version",
-      "  codexhost inspect",
-      "  codexhost launch [launcher options]",
-      "  codexhost remote install|start|stop|status|uninstall",
-      "  codexhost broker install|status|stop|uninstall",
-      "  codexhost delegate --help",
-      "  codexhost harness inspect ...",
-      "  codexhost delegate start ...",
-      "  codexhost thread send|cancel|read|wait|list ...",
+      "  ${NPM_COMMAND_NAME}",
+      "  ${NPM_COMMAND_NAME} --version",
+      "  ${NPM_COMMAND_NAME} inspect",
+      "  ${NPM_COMMAND_NAME} launch [launcher options]",
+      "  ${NPM_COMMAND_NAME} remote install|start|stop|status|uninstall",
+      "  ${NPM_COMMAND_NAME} broker install|status|stop|uninstall",
+      "  ${NPM_COMMAND_NAME} delegate --help",
+      "  ${NPM_COMMAND_NAME} harness inspect ...",
+      "  ${NPM_COMMAND_NAME} delegate start ...",
+      "  ${NPM_COMMAND_NAME} thread send|cancel|read|wait|list ...",
       "",
       "This npm package uses the current Node.js runtime and the packaged",
       "Rust launcher/shim. Codex Desktop must already be installed.",
@@ -541,7 +553,7 @@ if (userArguments.length === 0) {
   process.exit(0);
 } else {
   fail(
-    \`unknown command '\${userArguments[0]}'. Run 'codexhost --help' for usage.\`,
+    \`unknown command '\${userArguments[0]}'. Run '${NPM_COMMAND_NAME} --help' for usage.\`,
   );
 }
 
@@ -765,19 +777,19 @@ This package is platform-specific (\`os=${npmPackageOs(target).join(",")}\`, \`c
 ## Usage
 
 \`\`\`bash
-codexhost
-codexhost --version
-codexhost inspect
-codexhost launch
-codexhost remote install
-codexhost remote start
-codexhost remote stop
-codexhost remote status
-codexhost remote uninstall
-codexhost broker status
+${NPM_COMMAND_NAME}
+${NPM_COMMAND_NAME} --version
+${NPM_COMMAND_NAME} inspect
+${NPM_COMMAND_NAME} launch
+${NPM_COMMAND_NAME} remote install
+${NPM_COMMAND_NAME} remote start
+${NPM_COMMAND_NAME} remote stop
+${NPM_COMMAND_NAME} remote status
+${NPM_COMMAND_NAME} remote uninstall
+${NPM_COMMAND_NAME} broker status
 \`\`\`
 
-The \`codexhost\` command launches the packaged Rust launcher with:
+The \`${NPM_COMMAND_NAME}\` command launches the packaged Rust launcher with:
 
 - the current Node.js executable as Host Runtime
 - packaged \`host-runtime\`, Desktop Controller, Renderer, and Shim binaries
@@ -1077,7 +1089,7 @@ export async function prepareNpmPackage({
 }
 
 export function npmTarballFileName({ version, target }) {
-  return `codexhost-cli-${version}-${target.id}.tgz`;
+  return `${NPM_TARBALL_BASE_NAME}-${version}-${target.id}.tgz`;
 }
 
 export async function packNpmPackage({ packageRoot, outputRoot, version, target }) {

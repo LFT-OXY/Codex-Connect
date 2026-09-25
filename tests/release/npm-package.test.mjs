@@ -106,19 +106,19 @@ async function createHomebrewNodeLayout(root) {
 async function createGlobalCodexhostInstall(prefix) {
   const platformPackage =
     process.platform === "win32"
-      ? `@codexhost/cli-win32-${process.arch}`
-      : `@codexhost/cli-darwin-${process.arch}`;
+      ? `@chinhae/codex-connect-win32-${process.arch}`
+      : `@chinhae/codex-connect-darwin-${process.arch}`;
   const packageRoot = path.join(prefix, "lib", "node_modules", platformPackage);
   const launcherPath = path.join(
     prefix,
     "lib",
     "node_modules",
-    "@codexhost",
-    "cli",
+    "@chinhae",
+    "codex-connect",
     "bin",
-    "codexhost.js",
+    "codex-connect.js",
   );
-  const userBin = path.join(prefix, "bin", "codexhost");
+  const userBin = path.join(prefix, "bin", "codex-connect");
   await writeExecutable(launcherPath, createNpmBinLauncherSource({ version: "0.1.5" }));
   await mkdir(path.dirname(userBin), { recursive: true });
   await symlink(path.relative(path.dirname(userBin), launcherPath), userBin);
@@ -161,7 +161,7 @@ async function createNpmMetaPackageFixture(root) {
         absolute,
         `${JSON.stringify(createNpmMetaPackageManifest({ version: "0.1.0" }), null, 2)}\n`,
       );
-    } else if (relative === "bin/codexhost.js") {
+    } else if (relative === "bin/codex-connect.js") {
       await writeFile(absolute, createNpmBinLauncherSource({ version: "0.1.0" }));
     } else {
       await writeFile(absolute, `npm-meta-package:${relative}\n`);
@@ -170,8 +170,15 @@ async function createNpmMetaPackageFixture(root) {
 }
 
 async function createLauncherLifecycleFixture(root, platform) {
-  const launcherPath = path.join(root, "node_modules", "@codexhost", "cli", "bin", "codexhost.js");
-  const platformPackage = `@codexhost/cli-${platform}-x64`;
+  const launcherPath = path.join(
+    root,
+    "node_modules",
+    "@chinhae",
+    "codex-connect",
+    "bin",
+    "codex-connect.js",
+  );
+  const platformPackage = `@chinhae/codex-connect-${platform}-x64`;
   const platformRoot = path.join(root, "node_modules", ...platformPackage.split("/"));
   const executableSuffix = platform === "win32" ? ".exe" : "";
   const npmCliPath = path.join(root, "npm-cli.js");
@@ -240,7 +247,7 @@ async function runLauncherLifecycle(
       await createLauncherLifecycleFixture(root, platform);
     await writeFile(
       path.join(platformRoot, "package.json"),
-      JSON.stringify({ name: `@codexhost/cli-${platform}-x64`, version: platformVersion }),
+      JSON.stringify({ name: `@chinhae/codex-connect-${platform}-x64`, version: platformVersion }),
     );
     const environment = {
       ...process.env,
@@ -430,7 +437,7 @@ describe("npm package release", () => {
   it("publishes a scoped platform package with platform constraints", () => {
     const target = releaseTarget("macos-arm64");
     const manifest = createNpmPackageManifest({ version: "0.1.0", target });
-    expect(manifest.name).toBe("@codexhost/cli-darwin-arm64");
+    expect(manifest.name).toBe("@chinhae/codex-connect-darwin-arm64");
     expect(npmPlatformPackageName(target)).toBe(manifest.name);
     expect(manifest.private).toBeUndefined();
     expect(manifest.bin).toBeUndefined();
@@ -451,12 +458,41 @@ describe("npm package release", () => {
   it("publishes one meta package with exact optional platform dependencies", () => {
     const manifest = createNpmMetaPackageManifest({ version: "0.1.0" });
     expect(manifest.name).toBe(NPM_PACKAGE_NAME);
-    expect(manifest.bin.codexhost).toBe("bin/codexhost.js");
+    expect(manifest.bin["codex-connect"]).toBe("bin/codex-connect.js");
     expect(manifest.os).toBeUndefined();
     expect(manifest.cpu).toBeUndefined();
     expect(manifest.optionalDependencies).toEqual(
       Object.fromEntries(Object.values(NPM_PLATFORM_PACKAGE_NAMES).map((name) => [name, "0.1.0"])),
     );
+  });
+
+  it("points npm package metadata at the Codex Connect repository", () => {
+    for (const manifest of [
+      createNpmMetaPackageManifest({ version: "0.1.0" }),
+      createNpmPackageManifest({ version: "0.1.0", target: releaseTarget("linux-x64") }),
+    ]) {
+      expect(manifest.repository).toEqual({
+        type: "git",
+        url: "git+https://github.com/LFT-OXY/Codex-Connect.git",
+      });
+      expect(manifest.bugs).toEqual({ url: "https://github.com/LFT-OXY/Codex-Connect/issues" });
+      expect(manifest.homepage).toBe("https://github.com/LFT-OXY/Codex-Connect#readme");
+      expect(manifest.keywords).toContain("codex-connect");
+      expect(manifest.keywords).not.toContain("codexhost");
+    }
+  });
+
+  it("documents the codex-connect command in the npm meta README and CLI usage", () => {
+    const readme = createNpmMetaReadme({ version: "0.1.0" });
+    const source = createNpmBinLauncherSource({ version: "0.1.0" });
+    expect(readme).toContain("# @chinhae/codex-connect");
+    expect(readme).toContain("npm install -g @chinhae/codex-connect@0.1.0");
+    expect(readme).toContain("codex-connect --version");
+    expect(readme).toContain("The `codex-connect` command starts Codex Desktop.");
+    expect(readme).not.toMatch(/\bcodexhost\b/u);
+    expect(source).toContain('"  codex-connect remote install|start|stop|status|uninstall"');
+    expect(source).toContain("Run 'codex-connect --help' for usage.");
+    expect(source).not.toContain('"  codexhost');
   });
 
   it("prints the star prompt before npm launch setup begins", () => {
@@ -469,11 +505,11 @@ describe("npm package release", () => {
     expect(source.match(/\n {2}printStarPrompt\(\);/gu)).toHaveLength(1);
   });
 
-  it("injects package resources when the user runs codexhost with no args", () => {
+  it("injects package resources when the user runs codex-connect with no args", () => {
     const source = createNpmBinLauncherSource({ version: "0.1.0" });
-    expect(source).toContain('"darwin-arm64": "@codexhost/cli-darwin-arm64"');
-    expect(source).toContain('"linux-x64": "@codexhost/cli-linux-x64"');
-    expect(source).toContain('"linux-arm64": "@codexhost/cli-linux-arm64"');
+    expect(source).toContain('"darwin-arm64": "@chinhae/codex-connect-darwin-arm64"');
+    expect(source).toContain('"linux-x64": "@chinhae/codex-connect-linux-x64"');
+    expect(source).toContain('"linux-arm64": "@chinhae/codex-connect-linux-arm64"');
     expect(source).toContain("require.resolve");
     expect(source).toContain("--omit=optional");
     expect(source).toContain('launchArguments = ["launch"]');
@@ -585,7 +621,7 @@ describe("npm package release", () => {
     expect(result.stderr).toContain("Launcher exited after ready");
     expect(result.stdout).toContain(
       "⭐ If this project helps you, please give us a Star ⭐\n" +
-        "https://github.com/BytePioneer-AI/codex-host",
+        "https://github.com/LFT-OXY/Codex-Connect",
     );
     expect(readme).toContain("On Windows, the command remains attached until Codex Desktop exits");
     expect(readme).toContain("process trees of completed commands");
@@ -598,10 +634,10 @@ describe("npm package release", () => {
         const result = await runLauncherLifecycle(platform, { platformVersion });
         expect(result.status, result.stderr).toBe(1);
         expect(result.stderr).toContain("platform package version mismatch");
-        expect(result.stderr).toContain(`@codexhost/cli-${platform}-x64`);
+        expect(result.stderr).toContain(`@chinhae/codex-connect-${platform}-x64`);
         expect(result.stderr).toContain("expected 0.1.0");
         expect(result.stderr).toContain(
-          `npm install -g @codexhost/cli@0.1.0 @codexhost/cli-${platform}-x64@0.1.0`,
+          `npm install -g @chinhae/codex-connect@0.1.0 @chinhae/codex-connect-${platform}-x64@0.1.0`,
         );
         expect(result.stderr).not.toContain("received Launcher ready");
         expect(result.stdout).not.toContain("startup:");
@@ -618,7 +654,7 @@ describe("npm package release", () => {
     expect(result.stderr).not.toContain("Launcher exited after ready");
     expect(result.stdout).toBe(
       "⭐ If this project helps you, please give us a Star ⭐\n" +
-        "https://github.com/BytePioneer-AI/codex-host\n",
+        "https://github.com/LFT-OXY/Codex-Connect\n",
     );
   });
 
@@ -628,7 +664,7 @@ describe("npm package release", () => {
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toBe(
       "⭐ 如果这个项目对你有帮助，请给我们一个 Star ⭐\n" +
-        "https://github.com/BytePioneer-AI/codex-host\n",
+        "https://github.com/LFT-OXY/Codex-Connect\n",
     );
   });
 
@@ -639,12 +675,12 @@ describe("npm package release", () => {
     expect(colored.status, colored.stderr).toBe(0);
     expect(colored.stdout).toBe(
       "\u001B[33m⭐ If this project helps you, please give us a Star ⭐\u001B[0m\n" +
-        "\u001B[36mhttps://github.com/BytePioneer-AI/codex-host\u001B[0m\n",
+        "\u001B[36mhttps://github.com/LFT-OXY/Codex-Connect\u001B[0m\n",
     );
     expect(plain.status, plain.stderr).toBe(0);
     expect(plain.stdout).toBe(
       "⭐ If this project helps you, please give us a Star ⭐\n" +
-        "https://github.com/BytePioneer-AI/codex-host\n",
+        "https://github.com/LFT-OXY/Codex-Connect\n",
     );
   });
 
@@ -766,36 +802,33 @@ describe("npm package release", () => {
     }
   });
 
-  it("keeps all published package names under the codexhost npm org", async () => {
-    const source = await readFile(
-      path.resolve(import.meta.dirname, "../../scripts/release/prepare-npm.mjs"),
-      "utf8",
-    );
-    expect(source).toContain('NPM_PACKAGE_NAME = "@codexhost/cli"');
+  it("keeps all published package names under the chinhae npm scope", () => {
+    expect(createNpmMetaPackageManifest({ version: "0.1.0" }).name).toBe("@chinhae/codex-connect");
     expect(Object.values(NPM_PLATFORM_PACKAGE_NAMES)).toEqual([
-      "@codexhost/cli-darwin-arm64",
-      "@codexhost/cli-darwin-x64",
-      "@codexhost/cli-win32-x64",
-      "@codexhost/cli-win32-arm64",
-      "@codexhost/cli-linux-x64",
-      "@codexhost/cli-linux-arm64",
+      "@chinhae/codex-connect-darwin-arm64",
+      "@chinhae/codex-connect-darwin-x64",
+      "@chinhae/codex-connect-win32-x64",
+      "@chinhae/codex-connect-win32-arm64",
+      "@chinhae/codex-connect-linux-x64",
+      "@chinhae/codex-connect-linux-arm64",
     ]);
-    expect(source).toContain("publishConfig");
-    expect(source).toContain('access: "public"');
+    expect(createNpmMetaPackageManifest({ version: "0.1.0" }).publishConfig).toEqual({
+      access: "public",
+    });
   });
 
   it("names npm tarballs with the release target so four matrix jobs do not collide", () => {
     expect(npmTarballFileName({ version: "0.1.0", target: releaseTarget("macos-arm64") })).toBe(
-      "codexhost-cli-0.1.0-macos-arm64.tgz",
+      "chinhae-codex-connect-0.1.0-macos-arm64.tgz",
     );
     expect(npmTarballFileName({ version: "0.1.0", target: releaseTarget("windows-x64") })).toBe(
-      "codexhost-cli-0.1.0-windows-x64.tgz",
+      "chinhae-codex-connect-0.1.0-windows-x64.tgz",
     );
     expect(npmTarballFileName({ version: "0.1.0", target: releaseTarget("linux-x64") })).toBe(
-      "codexhost-cli-0.1.0-linux-x64.tgz",
+      "chinhae-codex-connect-0.1.0-linux-x64.tgz",
     );
     expect(npmTarballFileName({ version: "0.1.0", target: releaseTarget("linux-arm64") })).toBe(
-      "codexhost-cli-0.1.0-linux-arm64.tgz",
+      "chinhae-codex-connect-0.1.0-linux-arm64.tgz",
     );
   });
 });

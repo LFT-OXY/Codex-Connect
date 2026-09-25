@@ -4,7 +4,7 @@
 TBD - created by archiving change add-cross-harness-delegation. Update Purpose after archive.
 ## Requirements
 ### Requirement: 委派能力通过两处内容一致的薄 Agent Skill 发现
-codexhost SHALL 从同一权威模板向 `~/.agents/skills/codexhost-delegation/SKILL.md` 与 `~/.claude/skills/codexhost-delegation/SKILL.md` 安装内容完全一致的用户级 Skill。Skill SHALL 仅服务发起方发现委派能力，并 SHALL 指示 Agent 在执行前运行 `codexhost delegate --help` 获取当前版本的权威用法。Host MUST NOT 为委派发现而扫描或改写用户 Turn、追加提示文本，或重写原生 Codex 请求。
+codexhost SHALL 从同一权威模板向 `~/.agents/skills/codexhost-delegation/SKILL.md` 与 `~/.claude/skills/codexhost-delegation/SKILL.md` 安装内容完全一致的用户级 Skill。Skill SHALL 仅服务发起方发现委派能力，并 SHALL 指示 Agent 在执行前通过 Host 注入的 `CODEXHOST_CLI_PATH` 运行 `"$CODEXHOST_CLI_PATH" delegate --help`（PowerShell 为 `& $env:CODEXHOST_CLI_PATH delegate --help`）获取当前版本的权威用法，不依赖 PATH 中的命令名。Host MUST NOT 为委派发现而扫描或改写用户 Turn、追加提示文本，或重写原生 Codex 请求。
 
 #### Scenario: 首次安装 Skill
 - **WHEN** codexhost 首次执行 Skill 安装且两个目标均不存在
@@ -31,7 +31,7 @@ codexhost SHALL 从同一权威模板向 `~/.agents/skills/codexhost-delegation/
 #### Scenario: Skill 内容边界
 - **WHEN** Agent 读取任一目录中的 `codexhost-delegation` Skill
 - **THEN** Skill SHALL 说明明确委派请求或有效 `@<harnessId>` 可通过 codexhost 创建目标 Harness 的独立会话
-- **AND** SHALL 要求执行前先运行 `codexhost delegate --help`
+- **AND** SHALL 要求执行前先运行 `"$CODEXHOST_CLI_PATH" delegate --help`
 - **AND** SHALL 指示 Agent 不要凭记忆猜测命令、参数、标识、等待或结果回流行为
 - **AND** SHALL 指示 Agent 在用户只是在讨论 Harness 时忽略该能力
 - **AND** MUST NOT 复制完整 CLI 命令文档、动态 Thread 标识或结果回流规则
@@ -160,7 +160,7 @@ Host SHALL 向它拉起的 Harness 进程提供配套 CLI 的绝对路径、Runt
 
 #### Scenario: 帮助文档被请求
 - **WHEN** 调用方执行 `codexhost delegate --help`
-- **THEN** CLI SHALL 输出随二进制提供的权威文档，列出 `codexhost delegate start` 与 `codexhost thread read|wait|list` 的完整语法
+- **THEN** CLI SHALL 输出随二进制提供的权威文档，以 `"$CODEXHOST_CLI_PATH"` 作为调用写法列出 `delegate start` 与 `thread read|wait|list` 的完整语法，并说明 PowerShell 写法
 - **AND** SHALL 说明各参数、Thread 标识形式、读取视图、等待、分页、排序、幂等语义、输出字段、错误代码及其处置
 - **AND** 该文档 SHALL 与当前 Runtime 版本一致
 

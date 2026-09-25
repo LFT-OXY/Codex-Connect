@@ -14,10 +14,10 @@
 在被控机器上执行：
 
 ```bash
-npm install -g @codexhost/cli
-codexhost remote install
-codexhost remote start
-codexhost remote status
+npm install -g @chinhae/codex-connect
+codex-connect remote install
+codex-connect remote start
+codex-connect remote status
 ```
 
 `remote install` 只在 SSH 会话的 Shell 配置中加入一段带标记的配置（修改前会自动备份），不影响本地 Shell 和原有 `codex` 命令。在 macOS 上还会安装一个当前用户的 LaunchAgent，用于在登录会话中启动 Claude Code；它不读取 Keychain 或任何凭据。
@@ -31,21 +31,21 @@ codexhost remote status
 ## 常用命令
 
 ```bash
-codexhost remote status     # 查看运行状态和安装完整性
-codexhost remote start      # 启动（可重复执行）
-codexhost remote stop       # 停止，不影响其他 Codex 进程
-codexhost remote uninstall  # 卸载，保留 Thread 映射数据
+codex-connect remote status     # 查看运行状态和安装完整性
+codex-connect remote start      # 启动（可重复执行）
+codex-connect remote stop       # 停止，不影响其他 Codex 进程
+codex-connect remote uninstall  # 卸载，保留 Thread 映射数据
 ```
 
 启动、停止或卸载后，需要在 Desktop 中重新连接 SSH 工作区。
 
 ## 升级
 
-在两台机器上用相同的包管理器升级到同一版本，然后在被控机器上重新执行 `codexhost remote install` 和 `codexhost remote start`，再重新连接 SSH 工作区。
+在两台机器上用相同的包管理器升级到同一版本，然后在被控机器上重新执行 `codex-connect remote install` 和 `codex-connect remote start`，再重新连接 SSH 工作区。
 
 ## 常见问题
 
 - **`codexhost/harness/inspect is unsupported on this Host connection`**：当前 SSH 连接没有接入 codexhost。确认被控机器已安装并启动相同版本的 codexhost，然后重新连接 SSH 工作区。
-- **`remote status` 提示 degraded 或需要重新安装**：重新执行 `codexhost remote install`，再执行 `codexhost remote start`。
+- **`remote status` 提示 degraded 或需要重新安装**：重新执行 `codex-connect remote install`，再执行 `codex-connect remote start`。
 - **看不到某个 Harness**：在被控机器上检查该 Harness 是否已安装并登录，然后在设置中点击「重新诊断连接」。
-- **macOS 上安装失败，提示 launchd / `gui/$UID` 错误**：被控机器需要有已登录的图形会话，登录后重新执行 `codexhost remote install`。
+- **macOS 上安装失败，提示 launchd / `gui/$UID` 错误**：被控机器需要有已登录的图形会话，登录后重新执行 `codex-connect remote install`。

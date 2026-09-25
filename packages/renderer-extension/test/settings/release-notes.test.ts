@@ -76,8 +76,8 @@ describe("Release notes Markdown", () => {
         "### npm",
         "",
         "```bash",
-        "npm install -g @codexhost/cli",
-        "codexhost",
+        "npm install -g @chinhae/codex-connect",
+        "codex-connect",
         "```",
       ].join("\n"),
     );
@@ -94,13 +94,13 @@ describe("Release notes Markdown", () => {
     expect(visibleText(root)).toContain("本次发布");
     expect(visibleText(root)).not.toContain("##");
     expect(visibleText(root)).not.toContain("- 新增");
-    expect(visibleText(root)).toContain("npm install -g @codexhost/cli");
+    expect(visibleText(root)).toContain("npm install -g @chinhae/codex-connect");
 
     const list = descendants(root).find((element) => element.tagName === "ul");
     expect(list?.children).toHaveLength(2);
     const code = descendants(root).find((element) => element.tagName === "code");
     expect(code?.className).toBe("language-bash");
-    expect(code?.textContent).toBe("npm install -g @codexhost/cli\ncodexhost");
+    expect(code?.textContent).toBe("npm install -g @chinhae/codex-connect\ncodex-connect");
   });
 
   it("sets the translation line of a bilingual paragraph apart", () => {

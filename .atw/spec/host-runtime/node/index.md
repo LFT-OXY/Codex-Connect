@@ -27,3 +27,22 @@
 5. 修改委派 Skill 文本（`src/delegation-skill.ts` 的 `CODEXHOST_DELEGATION_SKILL`）时，把旧版本 digest 追加到 `PREVIOUS_MANAGED_DIGESTS`。否则用户机器上的旧副本会被判定为用户自管文件并报 conflict。
 6. 发行 Bundle 相关改动完成后，跑 `tests/release/host-bundle.test.mjs`，确认 `auditHostBundleMetafile` 仍然通过：Bundle 不含 Adapter/SDK，第三方包仍只有 `diff`、`ws`、`zod`。
 7. 定向验证：`npx vitest run --config tests/vitest.config.js packages/host-runtime/test/<file>.test.ts`。依赖其他包 `dist` 或 `dist/plugins` 的用例，要先跑 `npm run build:typescript`。
+
+## 场景：委派 CLI 的调用写法
+
+1. **触发**：改动托管 Skill、`delegation-cli-help.ts`、mention 改写指令，或 `next.read/wait` 提示中的命令写法时。
+2. **签名**：`delegation-types.ts` 中的 `DELEGATION_CLI_PATH_ENV = "CODEXHOST_CLI_PATH"`、`DELEGATION_CLI_COMMAND = "\"$CODEXHOST_CLI_PATH\""`。所有面向 Agent 的命令都以 `DELEGATION_CLI_COMMAND` 开头，例如 `` `${DELEGATION_CLI_COMMAND} thread read ${threadId}` ``。
+3. **契约**：`CODEXHOST_CLI_PATH` 由 Host 注入。`run-host-runtime.ts#delegationCliPath` 先读取已有的 `CODEXHOST_CLI_PATH`，没有时回退到 `CODEXHOST_LAUNCHER_EXECUTABLE`。桌面会话中它通常取 Launcher 自身的原生可执行文件，npm 与安装包两种方式都是这样。npm 入口只有在执行 `delegate/thread/harness` 子命令时，才把它设为 `bin/codex-connect.js`。它被 `officialEnvironment` 放行，会进入原生 Codex 会话。npm 包暴露的命令名是 `codex-connect`，原生二进制仍叫 `codexhost`，所以 PATH 里不保证存在其中任何一个名字。
+4. **错误矩阵**：变量缺失时，`"$CODEXHOST_CLI_PATH"` 展开为空，命令失败。已知缺口：远程 SSH Host 的 `managedEnvironment` 和包装脚本都没有注入这个变量，见任务 `09-25-rebrand-codex-connect` 的第 07 票。用户的 `shell_environment_policy` 过滤掉这个变量时，结果相同，所以帮助里的 `include_only` 建议必须包含它。
+5. **用例**：
+   - 正常：npm 或安装包启动的本地会话，Agent 执行 `"$CODEXHOST_CLI_PATH" delegate --help`。
+   - PowerShell：命令写作 `& $env:CODEXHOST_CLI_PATH …`。这个写法已写进 Skill 和 `COMMON_HELP` 首行。
+   - 不可用：远程 SSH 会话（未修复前）。
+6. **测试**：
+   - `delegation-skill.test.ts`：断言版本号，断言 Skill 含 `"$CODEXHOST_CLI_PATH" delegate --help` 和 PowerShell 写法，不含 `codexhost delegate`。
+   - `delegation-cli.test.ts`：断言帮助用法行，以及 `include_only` 包含 `CODEXHOST_CLI_PATH`。
+   - `delegation-mention-rewrite.test.ts`：断言指令里的命令写法。
+   - `harness-delegation-coordinator.test.ts`：断言 `next.read/wait`。
+7. **错误与正确写法**：
+   - 错误：`` read: `codexhost thread read ${threadId}` ``。这个写法依赖 PATH 中的命令名，npm 命令改名后就会失效。
+   - 正确：`` read: `${DELEGATION_CLI_COMMAND} thread read ${threadId}` ``。修改 Skill 文本时，要把 `SKILL_VERSION` 加一，并把旧文本的 digest 追加到 `PREVIOUS_MANAGED_DIGESTS`（见检查清单第 5 条）。

@@ -35,7 +35,7 @@ describe("delegation CLI", () => {
     expect(await runDelegationCli({ arguments: [group, command, help], output, fetchImpl })).toBe(
       0,
     );
-    expect(outputText(output)).toContain(`codexhost ${group} ${command}`);
+    expect(outputText(output)).toContain(`"$CODEXHOST_CLI_PATH" ${group} ${command}`);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -474,7 +474,19 @@ describe("delegation CLI", () => {
   it("documents the safe native Codex environment-policy recovery", () => {
     expect(DELEGATION_HELP).toContain("shell_environment_policy");
     expect(DELEGATION_HELP).toContain("ignore_default_excludes = true");
-    expect(DELEGATION_HELP).toContain('include_only containing "CODEXHOST_RUNTIME_ENDPOINT"');
+    expect(DELEGATION_HELP).toContain(
+      'include_only containing "CODEXHOST_CLI_PATH", "CODEXHOST_RUNTIME_ENDPOINT"',
+    );
     expect(DELEGATION_HELP).toContain('Avoid unconstrained inherit = "all"');
+  });
+
+  it("invokes the delegation CLI through the Host-provided executable path", () => {
+    expect(DELEGATION_HELP).toContain(
+      '  "$CODEXHOST_CLI_PATH" delegate start --harness <id> --task <text>',
+    );
+    expect(DELEGATION_HELP).not.toMatch(/^ {2}codexhost /mu);
+    expect(DELEGATION_HELP).toContain(
+      'in PowerShell replace "$CODEXHOST_CLI_PATH" with & $env:CODEXHOST_CLI_PATH.',
+    );
   });
 });

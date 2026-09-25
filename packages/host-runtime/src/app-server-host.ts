@@ -125,6 +125,7 @@ import {
   sameWorkspace,
 } from "./live-command-catalog-cache.js";
 import {
+  DELEGATION_CLI_COMMAND,
   DELEGATION_CLI_PATH_ENV,
   DELEGATION_RUNTIME_ENDPOINT_ENV,
   DELEGATION_RUNTIME_TOKEN_ENV,
@@ -1893,8 +1894,8 @@ export class AppServerHost {
         deepLink: `codex://threads/${existing.childHostThreadId}`,
         status: existing.status,
         next: {
-          read: `codexhost thread read ${existing.childHostThreadId}`,
-          wait: `codexhost thread wait ${existing.childHostThreadId} --timeout-ms 30000`,
+          read: `${DELEGATION_CLI_COMMAND} thread read ${existing.childHostThreadId}`,
+          wait: `${DELEGATION_CLI_COMMAND} thread wait ${existing.childHostThreadId} --timeout-ms 30000`,
         },
       };
     }
@@ -2007,8 +2008,8 @@ export class AppServerHost {
             }
           : {}),
         next: {
-          read: `codexhost thread read ${threadId}`,
-          wait: `codexhost thread wait ${threadId} --timeout-ms 30000`,
+          read: `${DELEGATION_CLI_COMMAND} thread read ${threadId}`,
+          wait: `${DELEGATION_CLI_COMMAND} thread wait ${threadId} --timeout-ms 30000`,
         },
       };
     } catch (error) {
@@ -2068,8 +2069,8 @@ export class AppServerHost {
       harnessId: "codex",
       status: "running",
       next: {
-        read: `codexhost thread read ${input.threadId}`,
-        wait: `codexhost thread wait ${input.threadId} --timeout-ms 30000`,
+        read: `${DELEGATION_CLI_COMMAND} thread read ${input.threadId}`,
+        wait: `${DELEGATION_CLI_COMMAND} thread wait ${input.threadId} --timeout-ms 30000`,
       },
     };
   }

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { verifyLinuxGlibcBaseline } from "./linux-glibc.mjs";
 import {
+  NPM_COMMAND_NAME,
   NPM_PLATFORM_PACKAGE_NAMES,
   npmTarballFileName,
   packNpmPackage,
@@ -86,13 +87,13 @@ export async function smokeNpmPackage({ targetName, version, workDirectory }) {
       directory,
       "node_modules",
       ".bin",
-      process.platform === "win32" ? "codexhost.cmd" : "codexhost",
+      process.platform === "win32" ? `${NPM_COMMAND_NAME}.cmd` : NPM_COMMAND_NAME,
     );
     const output = execFileSync(command, ["--version"], {
       cwd: directory,
       encoding: "utf8",
     }).trim();
-    if (output !== version) throw new Error(`installed codexhost reported '${output}'`);
+    if (output !== version) throw new Error(`installed ${NPM_COMMAND_NAME} reported '${output}'`);
     return { platformTarball, metaTarball, packageName };
   } finally {
     await rm(directory, { recursive: true, force: true });

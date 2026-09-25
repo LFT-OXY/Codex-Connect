@@ -19,6 +19,7 @@ import {
 import { harnessIdSchema, hostThreadIdSchema, hostTurnIdSchema } from "@codexhost/shared-contracts";
 
 import {
+  DELEGATION_CLI_COMMAND,
   DELEGATION_THREAD_ID_ENV,
   DelegationControlError,
   type DelegationConfigurationResult,
@@ -655,8 +656,8 @@ export class HarnessDelegationCoordinator {
       harnessId,
       status: "running",
       next: {
-        read: `codexhost thread read ${threadId}`,
-        wait: `codexhost thread wait ${threadId} --timeout-ms 30000`,
+        read: `${DELEGATION_CLI_COMMAND} thread read ${threadId}`,
+        wait: `${DELEGATION_CLI_COMMAND} thread wait ${threadId} --timeout-ms 30000`,
       },
     };
   }
@@ -682,8 +683,8 @@ export class HarnessDelegationCoordinator {
         ? { configuration }
         : {}),
       next: {
-        read: `codexhost thread read ${threadId}`,
-        wait: `codexhost thread wait ${threadId} --timeout-ms 30000`,
+        read: `${DELEGATION_CLI_COMMAND} thread read ${threadId}`,
+        wait: `${DELEGATION_CLI_COMMAND} thread wait ${threadId} --timeout-ms 30000`,
       },
     };
   }

@@ -3,8 +3,8 @@
 codexhost 通过 npm 包支持 x64 和 ARM64 Linux。请先安装与当前架构匹配的官方 ChatGPT App，再安装 codexhost：
 
 ```bash
-npm install -g @codexhost/cli
-codexhost
+npm install -g @chinhae/codex-connect
+codex-connect
 ```
 
 ## 支持范围
@@ -28,8 +28,8 @@ codexhost 不会接管独立运行的 ChatGPT App。启动 codexhost 前，请�
 ## 诊断
 
 ```bash
-codexhost inspect
-codexhost --version
+codex-connect inspect
+codex-connect --version
 ```
 
 `inspect` 会报告识别出的包身份、版本、启动器、可执行文件和运行进程 ID。ChatGPT App 更新后，可用它确认 codexhost 仍能识别已安装的 Desktop。受支持的 Renderer 表面暂时不可用时，集成会自动重试。

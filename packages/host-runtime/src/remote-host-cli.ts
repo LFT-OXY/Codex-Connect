@@ -78,11 +78,11 @@ export async function runRemoteHostCli(input: {
       output.write(
         [
           "usage:",
-          "  codexhost remote install [--stock-codex PATH]",
-          "  codexhost remote start",
-          "  codexhost remote stop",
-          "  codexhost remote status",
-          "  codexhost remote uninstall",
+          "  codex-connect remote install [--stock-codex PATH]",
+          "  codex-connect remote start",
+          "  codex-connect remote stop",
+          "  codex-connect remote status",
+          "  codex-connect remote uninstall",
           "",
           "Installs and manages a headless codexhost Remote Host for SSH sessions.",
         ].join("\n") + "\n",

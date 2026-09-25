@@ -193,8 +193,8 @@ jobs:
           path: |
             build/release/${{ needs.prepare.outputs.version }}/${{ matrix.target }}/codexhost-*.dmg
             build/release/${{ needs.prepare.outputs.version }}/${{ matrix.target }}/codexhost-*.exe
-            build/npm/${{ needs.prepare.outputs.version }}/${{ matrix.target }}/codexhost-cli-*-${{ matrix.target }}.tgz
-            build/npm/${{ needs.prepare.outputs.version }}/meta/codexhost-cli-${{ needs.prepare.outputs.version }}.tgz
+            build/npm/${{ needs.prepare.outputs.version }}/${{ matrix.target }}/chinhae-codex-connect-*-${{ matrix.target }}.tgz
+            build/npm/${{ needs.prepare.outputs.version }}/meta/chinhae-codex-connect-${{ needs.prepare.outputs.version }}.tgz
           if-no-files-found: error
           retention-days: 7
 

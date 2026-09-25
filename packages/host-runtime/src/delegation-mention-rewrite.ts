@@ -2,6 +2,7 @@ import { stripDelegationMentions, type DelegationMention } from "@codexhost/shar
 import type { JsonObject, JsonValue } from "@codexhost/protocol-core";
 
 import { DELEGATION_SKILL_NAME } from "./delegation-skill.js";
+import { DELEGATION_CLI_COMMAND } from "./delegation-types.js";
 
 /** Native Codex `skill` UserInput pointing at the managed delegation Skill. */
 export interface DelegationSkillReference {
@@ -22,7 +23,7 @@ export function delegationMentionInstruction(mentions: readonly DelegationMentio
   return [
     `[codexhost delegation] The user mentioned ${describeTargets(mentions)}.`,
     `Use the ${DELEGATION_SKILL_NAME} skill to delegate this request to ${plural ? "each mentioned Harness" : "that Harness"}`,
-    "with `codexhost delegate start --harness <id>`, instead of doing the task yourself.",
+    `with \`${DELEGATION_CLI_COMMAND} delegate start --harness <id>\`, instead of doing the task yourself.`,
   ].join(" ");
 }
 

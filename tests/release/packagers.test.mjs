@@ -67,7 +67,9 @@ describe("platform packagers", () => {
     expect(linuxPackageCommand).not.toContain("--skip-build");
     expect(workflow).toContain("--skip-build");
     expect(workflow).toContain("--pack");
-    expect(workflow).toContain("codexhost-cli-*-${{ matrix.target }}.tgz");
+    expect(workflow).toContain("chinhae-codex-connect-*-${{ matrix.target }}.tgz");
+    expect(workflow).toContain("chinhae-codex-connect-${{ needs.prepare.outputs.version }}.tgz");
+    expect(workflow).not.toContain("codexhost-cli-");
     expect(workflow).toContain("Build installer package");
     expect(workflow).toContain("if: runner.os != 'Linux'");
     expect(workflow).toContain("target: linux-x64");
@@ -93,7 +95,7 @@ describe("platform packagers", () => {
     expect(publishRelease).toContain('"codexhost-${VERSION}-windows-arm64.exe"');
     expect(publishRelease).toContain('"codexhost-${VERSION}-macos-x64.dmg"');
     expect(publishRelease).toContain('"codexhost-${VERSION}-macos-arm64.dmg"');
-    expect(publishRelease).not.toContain('"codexhost-cli-${VERSION}');
+    expect(publishRelease).not.toContain('"chinhae-codex-connect-${VERSION}');
     expect(workflow).not.toContain("softprops/action-gh-release");
     expect(workflow).not.toContain("codexhost-*.sha256");
     expect(workflow).not.toContain("checksums.txt");

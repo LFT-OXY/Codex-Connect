@@ -79,11 +79,13 @@ describe("delegation Skill installation", () => {
   });
 
   it("routes natural agent requests and points execution to the authoritative help", () => {
-    expect(CODEXHOST_DELEGATION_SKILL).toContain("version: 7");
+    expect(CODEXHOST_DELEGATION_SKILL).toContain("version: 8");
     expect(CODEXHOST_DELEGATION_SKILL).toContain("@agent) to independently perform a task");
     expect(CODEXHOST_DELEGATION_SKILL).toContain("session's content, progress, or results");
     expect(CODEXHOST_DELEGATION_SKILL).toContain("Not for recapping the current conversation");
-    expect(CODEXHOST_DELEGATION_SKILL).toContain("codexhost delegate --help");
+    expect(CODEXHOST_DELEGATION_SKILL).toContain('`"$CODEXHOST_CLI_PATH" delegate --help`');
+    expect(CODEXHOST_DELEGATION_SKILL).toContain("`& $env:CODEXHOST_CLI_PATH delegate --help`");
+    expect(CODEXHOST_DELEGATION_SKILL).not.toContain("codexhost delegate");
     expect(CODEXHOST_DELEGATION_SKILL).toContain("send a follow-up message");
     expect(CODEXHOST_DELEGATION_SKILL).toContain("cancel its current Turn");
     expect(CODEXHOST_DELEGATION_SKILL).not.toContain("--timeout-ms");

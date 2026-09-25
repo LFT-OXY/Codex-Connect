@@ -32,10 +32,10 @@ describe("remote SSH Host CLI", () => {
         diagnosticOutput: stderr.output,
       }),
     ).resolves.toBe(0);
-    expect(stdout.text()).toContain("codexhost remote install");
-    expect(stdout.text()).toContain("codexhost remote start");
-    expect(stdout.text()).toContain("codexhost remote stop");
-    expect(stdout.text()).toContain("codexhost remote uninstall");
+    expect(stdout.text()).toContain("codex-connect remote install");
+    expect(stdout.text()).toContain("codex-connect remote start");
+    expect(stdout.text()).toContain("codex-connect remote stop");
+    expect(stdout.text()).toContain("codex-connect remote uninstall");
     expect(stdout.text()).not.toContain("--claude-command");
     expect(stderr.text()).toBe("");
   });

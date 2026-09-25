@@ -1,0 +1,7 @@
+{"file": ".atw/tasks/09-25-rebrand-codex-connect/research/interview-decisions.md", "reason": "访谈确认的全部品牌替换决策与改动点"}
+{"file": "docs/project/领域术语表.md", "reason": "产品名 Codex Connect 与内部代号 codexhost 的用语边界"}
+{"file": ".atw/spec/update-manager/node/index.md", "reason": "更新发现与 Release URL 校验约定"}
+{"file": ".atw/spec/shared-contracts/node/index.md", "reason": "更新契约 schema 的浏览器安全与校验约定"}
+{"file": ".atw/spec/renderer-extension/browser/index.md", "reason": "设置页、本地化文案与品牌资源约定"}
+{"file": ".atw/spec/codexhost-platform/rust/index.md", "reason": "LaunchAgent 标签与机器标识不变的约束"}
+{"file": ".atw/spec/codexhost-launcher/rust/index.md", "reason": "启动器图标资源与终端输出约定"}

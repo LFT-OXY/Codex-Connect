@@ -23,7 +23,7 @@ use crate::request::{
 #[cfg(target_os = "macos")]
 use crate::status::unix_seconds;
 
-const NPM_PACKAGE_NAME: &str = "@codexhost/cli";
+const NPM_PACKAGE_NAME: &str = "@chinhae/codex-connect";
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 const DISTRIBUTION_FILE: &str = "codexhost-distribution.json";
 
@@ -101,12 +101,16 @@ fn run_checked(command: &mut Command, label: &str) -> Result<(), Box<dyn Error>>
     Ok(())
 }
 
+fn npm_package_spec(version: &str) -> String {
+    format!("{NPM_PACKAGE_NAME}@{version}")
+}
+
 fn install_npm(request: &UpdateRequest, npm: &NpmInstallation) -> Result<(), Box<dyn Error>> {
     run_checked(
         Command::new(&npm.node_path)
             .arg(&npm.npm_cli_path)
             .args(["install", "--global", "--no-audit", "--no-fund"])
-            .arg(format!("{NPM_PACKAGE_NAME}@{}", request.version)),
+            .arg(npm_package_spec(&request.version)),
         "npm update",
     )
 }
@@ -264,10 +268,18 @@ pub(crate) fn relaunch(request: &UpdateRequest) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-#[cfg(all(test, any(target_os = "windows", target_os = "macos")))]
+#[cfg(test)]
 mod tests {
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     use super::DistributionMetadata;
+    use super::npm_package_spec;
 
+    #[test]
+    fn npm_update_installs_the_codex_connect_package() {
+        assert_eq!(npm_package_spec("1.2.3"), "@chinhae/codex-connect@1.2.3");
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     #[test]
     fn distribution_metadata_rejects_unknown_fields() {
         let metadata = br#"{"schemaVersion":1,"version":"1.2.3","distribution":"npm","target":"macos-arm64","extra":true}"#;

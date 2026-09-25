@@ -80,8 +80,8 @@ fi
 npm "${PACKAGE_ARGUMENTS[@]}"
 npm run release:npm:meta -- --version "$VERSION" --pack
 
-PLATFORM_TARBALL="$REPOSITORY_ROOT/build/npm/$VERSION/$TARGET/codexhost-cli-$VERSION-$TARGET.tgz"
-META_TARBALL="$REPOSITORY_ROOT/build/npm/$VERSION/meta/codexhost-cli-$VERSION.tgz"
+PLATFORM_TARBALL="$REPOSITORY_ROOT/build/npm/$VERSION/$TARGET/chinhae-codex-connect-$VERSION-$TARGET.tgz"
+META_TARBALL="$REPOSITORY_ROOT/build/npm/$VERSION/meta/chinhae-codex-connect-$VERSION.tgz"
 for artifact in "$PLATFORM_TARBALL" "$META_TARBALL"; do
   if [[ ! -s "$artifact" ]]; then
     echo "error: expected npm package is missing or empty: $artifact" >&2
@@ -95,14 +95,14 @@ echo "codexhost local install: installing npm packages"
 npm install --global --offline "$PLATFORM_TARBALL" "$META_TARBALL"
 
 NPM_PREFIX="$(npm prefix --global)"
-CODEXHOST_BIN="$NPM_PREFIX/bin/codexhost"
+CODEXHOST_BIN="$NPM_PREFIX/bin/codex-connect"
 if [[ ! -x "$CODEXHOST_BIN" ]]; then
-  echo "error: installed codexhost command is unavailable: $CODEXHOST_BIN" >&2
+  echo "error: installed codex-connect command is unavailable: $CODEXHOST_BIN" >&2
   exit 1
 fi
 INSTALLED_VERSION="$("$CODEXHOST_BIN" --version)"
 if [[ "$INSTALLED_VERSION" != "$VERSION" ]]; then
-  echo "error: installed codexhost version is $INSTALLED_VERSION; expected $VERSION" >&2
+  echo "error: installed codex-connect version is $INSTALLED_VERSION; expected $VERSION" >&2
   exit 1
 fi
 

@@ -9,6 +9,8 @@ import type {
 export const DELEGATION_RUNTIME_ENDPOINT_ENV = "CODEXHOST_RUNTIME_ENDPOINT";
 export const DELEGATION_RUNTIME_TOKEN_ENV = "CODEXHOST_RUNTIME_TOKEN";
 export const DELEGATION_CLI_PATH_ENV = "CODEXHOST_CLI_PATH";
+/** 会话里调用委派 CLI 的写法：走 Host 注入的可执行文件路径，不依赖 PATH 中的命令名。 */
+export const DELEGATION_CLI_COMMAND = `"$${DELEGATION_CLI_PATH_ENV}"`;
 export const DELEGATION_THREAD_ID_ENV = "CODEXHOST_THREAD_ID";
 
 export type DelegationThreadStatus =

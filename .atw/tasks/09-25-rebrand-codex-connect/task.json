@@ -1,0 +1,28 @@
+{
+  "id": "rebrand-codex-connect",
+  "name": "rebrand-codex-connect",
+  "title": "品牌替换为 Codex Connect",
+  "description": "将面向用户的产品名、图标、仓库/更新链接、npm 包名、CLI 命令、发布产物名与 README 从上游 codexhost 替换为 Codex Connect，内部代号与机器标识保持不变以便长期同步上游。",
+  "status": "implement",
+  "dev_type": null,
+  "scope": null,
+  "package": "adapters",
+  "priority": "P1",
+  "creator": "CHINHAE",
+  "assignee": "CHINHAE",
+  "createdAt": "2026-09-25",
+  "completedAt": null,
+  "branch": "main",
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "implementation_base_sha": "7e6128d1e7a03706b2a9b64f6c967767832ee79b"
+  }
+}

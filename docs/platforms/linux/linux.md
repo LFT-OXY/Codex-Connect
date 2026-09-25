@@ -3,8 +3,8 @@
 codexhost supports x64 and ARM64 Linux through the npm package. Install the official ChatGPT App matching the current architecture first, then install codexhost:
 
 ```bash
-npm install -g @codexhost/cli
-codexhost
+npm install -g @chinhae/codex-connect
+codex-connect
 ```
 
 ## Supported environment
@@ -28,8 +28,8 @@ codexhost refuses to take over an independently running ChatGPT App. Quit ChatGP
 ## Diagnosis
 
 ```bash
-codexhost inspect
-codexhost --version
+codex-connect inspect
+codex-connect --version
 ```
 
 `inspect` reports the recognized package identity, version, launcher, executable, and running process IDs. After a ChatGPT App update, use it to confirm that codexhost still recognizes the installed Desktop. Renderer integration retries automatically when a supported surface is temporarily unavailable.

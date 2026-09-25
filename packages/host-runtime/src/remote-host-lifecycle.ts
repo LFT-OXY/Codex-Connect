@@ -218,7 +218,7 @@ async function probeProtocol(
 
 function installedManifest(status: RemoteHostInstallationStatus): RemoteHostManifestV1 {
   if (status.state === "not-installed") {
-    throw new Error("Remote Host is not installed. Run: codexhost remote install");
+    throw new Error("Remote Host is not installed. Run: codex-connect remote install");
   }
   if (status.state === "degraded") {
     throw new Error(`Remote Host installation is degraded: ${status.issues.join("; ")}`);

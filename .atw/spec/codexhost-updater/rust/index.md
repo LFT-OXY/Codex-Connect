@@ -38,7 +38,7 @@
 1. 解析并校验请求，写 `waiting-for-exit`。
 2. `wait_for_launcher_exit`：确认 `wait_pid` 仍存在且可执行文件与 `wait_executable` 相同（Windows 忽略大小写和分隔符），然后每 100ms 轮询，最多 180s。PID 已不存在也按失败处理（"Launcher exited before the background Updater started"）。
 3. `install`（`install.rs`）：
-   - npm：`<node> <npm-cli> install --global --no-audit --no-fund @codexhost/cli@<version>`。
+   - npm：`<node> <npm-cli> install --global --no-audit --no-fund @chinhae/codex-connect@<version>`（包名由 `npm_package_spec` 拼接，有单测）。
    - Windows：先校验安装器 SHA-256，再以 `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-` 运行，最后校验 `<install_root>/app/codexhost-distribution.json` 的 `version` 和 `distribution == "installer"`。
    - macOS：校验 DMG SHA-256 → `hdiutil attach -nobrowse -readonly` → `ditto` 到同目录的 `.codexhost-update-<id>.app` → 校验分发元数据和 `codesign --verify --deep --strict` → 旧 app 改名为 `.codexhost-backup-<id>.app` → 新 app 换入 → 再校验，失败时回滚备份。
 4. `relaunch`：npm 用 `node <npm_launcher_path>`，Windows 用 `<install_root>/bin/codexhost-start.exe`，macOS 用 `/usr/bin/open <app_path>`；标准流全部重定向到 null。
