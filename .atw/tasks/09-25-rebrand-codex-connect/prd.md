@@ -146,6 +146,11 @@
    - 不含上游仓库地址 `BytePioneer-AI/codex-host`。唯一例外是"关于"页和 README 致谢中的上游署名链接，这两处必须恰好存在。
    - 不含面向用户的 `codexhost` / `CodexHost` 产品名。内部标识符（包名、协议方法、环境变量、CSS 类名、数据目录、bundle id、LaunchAgent 标签、内部二进制名）按显式白名单放行。
    - 白名单与被扫描的文件范围写在测试内，逐条注明理由。合并上游后如有新增误报，由维护者判断是改文案还是扩白名单。
+   - 实现为 `tools/brand-guard.test.mjs`：
+     - 只扫字符串字面量和 README，跳过注释与 Rust 测试项；产品名还包括 `Codex Host` 写法。
+     - 可能出现在文案里的白名单形状（诊断前缀、内部组件错误正文、协议方法、裸机器标识）按文件限定，不对本地化文案与 README 生效。
+     - README 迁移说明只放行旧名称、旧包名与旧应用名。
+     - 实现时守卫拦下 3 处遗漏的用户可见文案，已改为 Codex Connect：`remote --help` 描述句、安装包与 npm 包的第三方声明标题。
 
 **验证方式**：运行受影响包的聚焦测试（按 `tests/vitest.config.js`）、`npm run typecheck`、`npm run lint`（含边界检查）、受影响 crate 的 `cargo test`；最后用 `npm start` 启动一次，人工检查设置页图标、关于页文案和署名链接。不默认跑全量测试。
 
