@@ -7,6 +7,8 @@ export const LOCAL_USAGE_QUERY_METHOD = "codexhost/usage/query";
 export const LOCAL_USAGE_CUSTOM_RANGE_MAX_DAYS = 3_660;
 export const LOCAL_USAGE_DAILY_MAX_LENGTH = LOCAL_USAGE_CUSTOM_RANGE_MAX_DAYS + 1;
 export const LOCAL_USAGE_HARNESS_MAX_LENGTH = 128;
+export const LOCAL_USAGE_PROVIDER_MAX_LENGTH = 128;
+export const LOCAL_USAGE_PROVIDER_NAME_MAX_LENGTH = 1_024;
 export const LOCAL_USAGE_TIME_ZONE_MAX_LENGTH = 64;
 
 const DAY_MS = 86_400_000;
@@ -100,13 +102,30 @@ export const localUsageQueryResultSchema = z.strictObject({
   models: countSchema,
   harnesses: z
     .array(
-      z.strictObject({
-        /** Official Codex or an installed Harness plugin. */
-        harnessId: z.union([z.literal("codex"), harnessPluginIdSchema]),
-        name: z.string().trim().min(1).max(128),
-        totalTokens: countSchema,
-        models: countSchema,
-      }),
+      z
+        .strictObject({
+          /** Official Codex or an installed Harness plugin. */
+          harnessId: z.union([z.literal("codex"), harnessPluginIdSchema]),
+          name: z.string().trim().min(1).max(128),
+          totalTokens: countSchema,
+          models: countSchema,
+          /** Providers the Harness recorded, by usage; empty when it records none. */
+          providers: z
+            .array(
+              z.strictObject({
+                provider: z.string().min(1).max(LOCAL_USAGE_PROVIDER_NAME_MAX_LENGTH),
+                totalTokens: countSchema,
+                models: countSchema,
+              }),
+            )
+            .max(LOCAL_USAGE_PROVIDER_MAX_LENGTH),
+        })
+        .refine(
+          (harness) =>
+            harness.providers.reduce((sum, provider) => sum + provider.totalTokens, 0) <=
+            harness.totalTokens,
+          { path: ["providers"], message: "Providers are part of their Harness" },
+        ),
     )
     .max(LOCAL_USAGE_HARNESS_MAX_LENGTH),
   /** Days with usage, newest first. `cacheRead` is the daily cache column. */

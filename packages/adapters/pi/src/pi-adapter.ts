@@ -15,6 +15,8 @@ import {
   type HarnessError,
   type HarnessInspection,
   type HarnessModelRef,
+  type HarnessNativeUsageBatch,
+  type HarnessNativeUsageCapability,
   type HarnessOutput,
   type HarnessResult,
   type HarnessSession,
@@ -87,6 +89,7 @@ import { parsePiWorkflowSubagentId } from "./pi-subagent-workflow.js";
 import { readPiWorkflowChild } from "./pi-workflow-child-history.js";
 import { restorePiSubagents } from "./pi-subagent-history.js";
 import { rollbackPiLastTurn } from "./pi-last-turn-rollback.js";
+import { readPiNativeUsage } from "./pi-native-usage.js";
 import { PiSessionImportIndex } from "./pi-session-import.js";
 import {
   PiRpcFaultError,
@@ -2070,6 +2073,14 @@ export class PiAdapter implements HarnessAdapter {
           };
     },
   } satisfies HarnessSessionImportCapability);
+  readonly nativeUsage = Object.freeze({
+    read: (cursor: JsonValue | null): Promise<HarnessResult<HarnessNativeUsageBatch>> =>
+      this.#readImport(
+        (signal) => readPiNativeUsage(this.#environment, cursor, signal),
+        "Pi usage records could not be read; check storage access and retry",
+      ),
+  } satisfies HarnessNativeUsageCapability);
+  readonly #environment: NodeJS.ProcessEnv;
   readonly #importIndex: PiSessionImportIndex;
   readonly #importAbort = new AbortController();
   readonly #importRequests = new Set<Promise<unknown>>();
@@ -2103,24 +2114,23 @@ export class PiAdapter implements HarnessAdapter {
       remove: (name) => updateCatalog(imports.remove(name)),
     };
     this.#createTransport = dependencies.createTransport;
-    this.#importIndex = new PiSessionImportIndex({ ...process.env, ...options.environment });
+    this.#environment = { ...process.env, ...options.environment };
+    this.#importIndex = new PiSessionImportIndex(this.#environment);
     this.#closeTimeoutMs = options.closeTimeoutMs ?? 2_000;
     this.#toolOutputLimit = options.toolOutputLimit ?? DEFAULT_TOOL_OUTPUT_LIMIT;
   }
 
-  #readImport<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<HarnessResult<T>> {
+  #readImport<T>(
+    operation: (signal: AbortSignal) => Promise<T>,
+    failureMessage = "Pi Session discovery failed; check storage access and duplicate Session identities, then retry after closing native clients",
+  ): Promise<HarnessResult<T>> {
     if (this.#importAbort.signal.aborted)
       return Promise.resolve({ ok: false, error: invalidState("Pi Adapter is closed") });
     const request = operation(this.#importAbort.signal)
       .then((value): HarnessResult<T> => ({ ok: true, value }))
       .catch((): HarnessResult<T> => ({
         ok: false,
-        error: {
-          code: "unavailable",
-          message:
-            "Pi Session discovery failed; check storage access and duplicate Session identities, then retry after closing native clients",
-          retryable: true,
-        },
+        error: { code: "unavailable", message: failureMessage, retryable: true },
       }))
       .finally(() => this.#importRequests.delete(request));
     this.#importRequests.add(request);

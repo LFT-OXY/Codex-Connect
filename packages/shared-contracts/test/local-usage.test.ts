@@ -62,7 +62,15 @@ describe("Local Usage query contracts", () => {
       totals: { ...tokens, conversations: 2 },
       estimatedCostUsd: 0.125,
       models: 1,
-      harnesses: [{ harnessId: "claude-code", name: "Claude Code", totalTokens: 10, models: 1 }],
+      harnesses: [
+        {
+          harnessId: "claude-code",
+          name: "Claude Code",
+          totalTokens: 10,
+          models: 1,
+          providers: [],
+        },
+      ],
       daily: [
         {
           date: "2026-03-02",
@@ -105,13 +113,38 @@ describe("Local Usage query contracts", () => {
       }).success,
     ).toBe(false);
     // Official Codex is a usage source without a plugin identity.
-    const codex = { harnessId: "codex", name: "Codex", totalTokens: 10, models: 1 };
+    const codex = { harnessId: "codex", name: "Codex", totalTokens: 10, models: 1, providers: [] };
     expect(localUsageQueryResultSchema.parse({ ...result, harnesses: [codex] }).harnesses).toEqual([
       codex,
     ]);
     for (const harnessId of ["", "Codex", "not a plugin id"]) {
       expect(
         localUsageQueryResultSchema.safeParse({ ...result, harnesses: [{ ...codex, harnessId }] })
+          .success,
+      ).toBe(false);
+    }
+    // Pi-like Harnesses break their share down by Provider.
+    const pi = {
+      harnessId: "pi",
+      name: "Pi",
+      totalTokens: 10,
+      models: 2,
+      providers: [
+        { provider: "openai-codex", totalTokens: 9, models: 1 },
+        { provider: "anthropic", totalTokens: 1, models: 1 },
+      ],
+    };
+    expect(localUsageQueryResultSchema.parse({ ...result, harnesses: [pi] }).harnesses).toEqual([
+      pi,
+    ]);
+    for (const providers of [
+      [{ provider: "openai-codex", totalTokens: 11, models: 1 }],
+      [{ provider: "", totalTokens: 1, models: 1 }],
+      [{ provider: "openai-codex", totalTokens: 1, models: 1, cwd: "/work" }],
+      undefined,
+    ]) {
+      expect(
+        localUsageQueryResultSchema.safeParse({ ...result, harnesses: [{ ...pi, providers }] })
           .success,
       ).toBe(false);
     }

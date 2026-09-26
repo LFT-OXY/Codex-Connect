@@ -42,6 +42,11 @@ function sharePercent(part: number, total: number): number {
   return total > 0 ? (part / total) * 100 : 0;
 }
 
+/** Two decimals; a nonzero share below that is not shown as zero. */
+export function formatUsageShare(percent: number): string {
+  return percent > 0 && percent < 0.005 ? "<0.01%" : `${percent.toFixed(2)}%`;
+}
+
 function element<K extends keyof HTMLElementTagNameMap>(
   document: Document,
   tagName: K,
@@ -59,9 +64,61 @@ const CARD_CLASS = [
   "border border-settings-border bg-settings-panel",
 ].join(" ");
 
+type UsageHarness = LocalUsageQueryResult["harnesses"][number];
+
+/** Each Provider's share of its Harness, collapsed until opened. */
+function providerBreakdown(
+  document: Document,
+  harness: UsageHarness,
+  messages: RendererSettingsMessages["usage"],
+): HTMLElement {
+  const details = element(document, "details", "mt-1 text-xs");
+  details.dataset.usageProviders = harness.harnessId;
+  details.append(
+    element(
+      document,
+      "summary",
+      "cursor-pointer text-settings-muted select-none hover:text-settings-text",
+      messages.providers.replace("{count}", String(harness.providers.length)),
+    ),
+  );
+  const list = element(document, "ul", "m-0 mt-1.5 flex list-none flex-col gap-1 p-0");
+  for (const provider of harness.providers) {
+    const row = element(document, "li", "flex items-baseline gap-2");
+    row.dataset.usageProvider = provider.provider;
+    const name = element(document, "span", "min-w-0 flex-1 truncate", provider.provider);
+    name.title = provider.provider;
+    row.append(
+      name,
+      element(
+        document,
+        "span",
+        "font-medium tabular-nums",
+        formatUsageShare(sharePercent(provider.totalTokens, harness.totalTokens)),
+      ),
+      element(
+        document,
+        "span",
+        "text-settings-muted",
+        messages.models.replace("{count}", String(provider.models)),
+      ),
+    );
+    list.append(row);
+  }
+  details.append(list);
+  return details;
+}
+
 function harnessCard(
   document: Document,
-  input: { id: string; name: string; share: string; models: string; series?: string },
+  input: {
+    id: string;
+    name: string;
+    share: string;
+    models: string;
+    series?: string;
+    providers?: HTMLElement;
+  },
 ): HTMLElement {
   const card = element(document, "div", CARD_CLASS);
   card.dataset.usageHarnessCard = input.id;
@@ -79,6 +136,7 @@ function harnessCard(
     element(document, "span", "text-lg leading-7 font-semibold tabular-nums", input.share),
     element(document, "span", "text-xs text-settings-muted", input.models),
   );
+  if (input.providers) card.append(input.providers);
   return card;
 }
 
@@ -270,15 +328,18 @@ export function renderLocalUsage(
     const segment = element(document, "span", `h-full ${series}`);
     segment.dataset.usageSegment = harness.harnessId;
     segment.style.width = `${percent}%`;
-    segment.title = `${harness.name} ${percent.toFixed(2)}%`;
+    segment.title = `${harness.name} ${formatUsageShare(percent)}`;
     bar.append(segment);
     cards.append(
       harnessCard(document, {
         id: harness.harnessId,
         name: harness.name,
-        share: `${percent.toFixed(2)}%`,
+        share: formatUsageShare(percent),
         models: messages.models.replace("{count}", String(harness.models)),
         series,
+        ...(harness.providers.length > 0
+          ? { providers: providerBreakdown(document, harness, messages) }
+          : {}),
       }),
     );
   });

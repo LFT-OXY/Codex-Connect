@@ -31,6 +31,20 @@
 | `pi-subagent-workflow.ts` / `pi-workflow-child-history.ts` | 同步 workflow `workflowChildren` 摘要与只读子 Session 读取 |
 | `pi-model-catalog.ts` / `pi-usage.ts` / `pi-slash-commands.ts` | Model Ref 编解码与 Thinking 目录；Usage；实时命令目录 |
 | `pi-session-import.ts` / `pi-credential-imports.ts` | 原生 Session 导入索引；订阅凭据导入（写 Pi `auth.json` 与扩展） |
+| `pi-native-usage.ts` | `nativeUsage.read` 的原生用量解析，规则见下文「原生用量」 |
+
+## 原生用量（`pi-native-usage.ts`）
+
+跨层契约见 `.atw/spec/host-runtime/node/local-usage.md`。Pi 特有规则（`test/pi-native-usage.test.ts` 固化；本机 786 个文件、19,028 条去重记录与独立脚本逐项一致）：
+
+- 目录：复用 `piSessionImportDirectory`（`PI_CODING_AGENT_SESSION_DIR`，否则 `$PI_CODING_AGENT_DIR/sessions`，默认 `~/.pi/agent/sessions`），但**递归**列出所有 `*.jsonl`，不跟随符号链接。子代理扩展把子会话放在父会话目录内（`<project>/<session>/tasks/*.jsonl`、`<project>/<hash>/run-N/*.jsonl`，头部带 `parentSession`），本机约占 Pi 用量两成。会话导入的 `sessionFiles` 只扫一层是为了不把子会话当可导入会话，不要为用量改它。
+- 游标 `{ formatVersion: 1, files: { [相对 sessions 目录的路径]: { ino, offset, session: {id, cwd?} | null } } }`。`session` 是第一行会话头（`type:"session"` 且有 `id`），用于解析 offset 之后的行；第一行不是会话头 → `session: null`，整个文件不计。Adapter 没有 zod 依赖，`parseCursor` 手写校验，**任一项不合法整个游标作废**（等同 `null`，从头读），不要逐项丢弃。inode 变化或文件变短从头读。只读到最后一个 `\n`。
+- 用量：`type:"message"`、`message.role === "assistant"` 且有 `message.usage` 的行（先用 `'"usage"'` 字符串预过滤）。`@earendil-works/pi-ai` 的 `Usage.reasoning` 是 `output` 的子集 → `reasoning = min(reasoning, output)`，`output = output − reasoning`（契约允许的「从 output 中扣除」；Token 总数与费用不变，推理列有值）。`input`、`cacheRead`、`cacheWrite` 原样（Pi 的 `input` 本就不含缓存）。
+- 身份：`dedupeKey = message:<entry.id>:<entry.timestamp>`。Fork/恢复把 entry 连 id 与时间戳原样复制（本机 146 例全部相同）；entry id 只有 8 位十六进制，加时间戳避免无关会话撞键。`occurredAt` = `entry.timestamp`；`nativeSessionId`、`cwd` 取本文件会话头。
+- `provider`、`model` 取消息自身字段。对话数：每条 assistant 消息 `conversations: 1`，包括失败/中止、Token 全 0 的回复（本机约 300 条）；这类记录省略 `model`（契约：只计对话的记录）与费用，保留 `provider`。
+- `reportedCostUsd`：只在 `usage.cost.total > 0` 且有 Token 时填写。Pi 对订阅通道和未配置价格的自定义 Provider 都写 0，无法区分免费与未知（本机几乎全部为 0，只有 `xai` 有正值），按契约「未知不能记 0」交给 Host 按 LiteLLM 估价。
+- Pi 只在 `message_end` 后整条追加，不存在流式部分用量，不需要 Claude 那样的等待窗口。
+- `completeLines` 等辅助函数与 Claude、Codex 读取器各有一份：Adapter 之间、Adapter 与 host-runtime 之间不能共享（ADR-0002、边界规则），oh-my-pi 接入时同样自带一份。
 
 ## 技术债
 
@@ -50,6 +64,7 @@
 ## 定向验证
 
 ```bash
+npx vitest run --config tests/vitest.config.js packages/adapters/pi/test/pi-native-usage.test.ts packages/host-runtime/test/local-usage.test.ts
 npx vitest run --config tests/vitest.config.js packages/adapters/pi/test/pi-rpc-session.test.ts packages/adapters/pi/test/pi-adapter.test.ts
 npx vitest run --config tests/vitest.config.js packages/adapters/pi/test/pi-history.test.ts packages/adapters/pi/test/pi-empty-session.test.ts packages/adapters/pi/test/pi-session-file.test.ts
 npx vitest run --config tests/vitest.config.js packages/adapters/pi/test/pi-subagents.test.ts packages/adapters/pi/test/pi-subagent-workflow.test.ts packages/adapters/pi/test/pi-subagent-rpc.test.ts packages/adapters/pi/test/pi-subagent-history.test.ts

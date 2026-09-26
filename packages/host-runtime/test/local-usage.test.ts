@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { ClaudeCodeAdapter } from "@codexhost/adapter-claude-code";
+import { PiAdapter } from "@codexhost/adapter-pi";
 import type { HarnessAdapter } from "@codexhost/harness-adapter";
 import {
   harnessPluginDescriptorSchema,
@@ -161,7 +162,7 @@ async function fixture() {
       diagnose: () => undefined,
       now: options.now ?? (() => NOW),
     });
-  return { project, mainFile, codexHome, read, service };
+  return { root, project, mainFile, codexHome, read, service };
 }
 
 async function query(service: LocalUsageService, params: unknown): Promise<JsonObject> {
@@ -198,7 +199,13 @@ describe("Local Usage query", () => {
     });
     expect(week.models).toBe(2);
     expect(week.harnesses).toEqual([
-      { harnessId: "claude-code", name: "Claude Code", totalTokens: 345, models: 2 },
+      {
+        harnessId: "claude-code",
+        name: "Claude Code",
+        totalTokens: 345,
+        models: 2,
+        providers: [],
+      },
     ]);
     expect(week.daily).toEqual([
       {
@@ -409,8 +416,20 @@ describe("Local Usage query", () => {
 
     const first = await result(service, { kind: "week" }, "UTC", true);
     expect(first.harnesses).toEqual([
-      { harnessId: "codex", name: "Codex", totalTokens: 1_100, models: 1 },
-      { harnessId: "claude-code", name: "Claude Code", totalTokens: 229, models: 1 },
+      {
+        harnessId: "codex",
+        name: "Codex",
+        totalTokens: 1_100,
+        models: 1,
+        providers: [{ provider: "openai", totalTokens: 1_100, models: 1 }],
+      },
+      {
+        harnessId: "claude-code",
+        name: "Claude Code",
+        totalTokens: 229,
+        models: 1,
+        providers: [],
+      },
     ]);
 
     await appendFile(
@@ -431,6 +450,7 @@ describe("Local Usage query", () => {
       name: "Codex",
       totalTokens: 1_100 + 550,
       models: 1,
+      providers: [{ provider: "openai", totalTokens: 1_650, models: 1 }],
     });
     expect(week.models).toBe(2);
     expect(week.totals).toEqual({
@@ -466,6 +486,125 @@ describe("Local Usage query", () => {
     const codexCost = (400 * 1 + 600 * 0.1 + 100 * 10 + (100 * 1 + 400 * 0.1 + 50 * 10)) / 1e6;
     const claudeCost = (2 * 2 + 7 * 4 + 200 * 0.2 + 20 * 2) / 1e6;
     expect(week.estimatedCostUsd).toBeCloseTo(codexCost + claudeCost, 12);
+  });
+
+  it("adds native Pi usage as a Pi card broken down by Provider", async () => {
+    const f = await fixture();
+    const agent = path.join(f.root, "pi");
+    const project = path.join(agent, "sessions", "--work-pi--");
+    await mkdir(project, { recursive: true });
+    const header = (id: string) => ({
+      type: "session",
+      version: 3,
+      id,
+      timestamp: "2026-03-03T07:59:00.000Z",
+      cwd: "/work/pi",
+    });
+    const reply = (
+      id: string,
+      timestamp: string,
+      provider: string,
+      model: string,
+      usage: {
+        input: number;
+        output: number;
+        cacheRead: number;
+        cacheWrite: number;
+        reasoning: number;
+      },
+    ) => ({
+      type: "message",
+      id,
+      parentId: null,
+      timestamp,
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "synthetic answer" }],
+        provider,
+        model,
+        usage: {
+          ...usage,
+          totalTokens: usage.input + usage.output + usage.cacheRead + usage.cacheWrite,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "stop",
+      },
+    });
+    const main = reply("a-1", "2026-03-03T08:00:00.000Z", "openai-codex", "gpt-synthetic-3", {
+      input: 1_000,
+      output: 400,
+      cacheRead: 5_000,
+      cacheWrite: 0,
+      reasoning: 100,
+    });
+    const file = path.join(project, "pi-session-1.jsonl");
+    await writeFile(
+      file,
+      lines(
+        header("pi-session-1"),
+        main,
+        reply("a-2", "2026-03-03T08:01:00.000Z", "anthropic", "claude-synthetic-1", {
+          input: 10,
+          output: 20,
+          cacheRead: 30,
+          cacheWrite: 40,
+          reasoning: 0,
+        }),
+      ),
+    );
+    // A fork copies the original entry; only its own reply is new.
+    await writeFile(path.join(project, "pi-session-2.jsonl"), lines(header("pi-session-2"), main));
+    const pi = new PiAdapter({ environment: { PI_CODING_AGENT_DIR: agent } });
+    cleanup.push(() => pi.close());
+    const service = f.service({
+      others: [["pi", pi]],
+      names: () => ({ "claude-code": "Claude Code", pi: "Pi" }),
+    });
+
+    const first = await result(service, { kind: "week" }, "UTC", true);
+    expect(first.harnesses[0]).toEqual({
+      harnessId: "pi",
+      name: "Pi",
+      totalTokens: 6_400 + 100,
+      models: 2,
+      providers: [
+        { provider: "openai-codex", totalTokens: 6_400, models: 1 },
+        { provider: "anthropic", totalTokens: 100, models: 1 },
+      ],
+    });
+
+    await appendFile(
+      file,
+      lines(
+        reply("a-3", "2026-03-03T09:00:00.000Z", "anthropic", "claude-synthetic-1", {
+          input: 1,
+          output: 2,
+          cacheRead: 3,
+          cacheWrite: 4,
+          reasoning: 0,
+        }),
+      ),
+    );
+    const week = await result(service, { kind: "week" }, "UTC", true);
+    expect(week.harnesses[0]?.providers).toEqual([
+      { provider: "openai-codex", totalTokens: 6_400, models: 1 },
+      { provider: "anthropic", totalTokens: 110, models: 1 },
+    ]);
+    const piDay = week.daily.find((day) => day.date === "2026-03-03");
+    // Pi's reasoning is split out of its output; each assistant message is one conversation.
+    expect(piDay).toEqual({
+      date: "2026-03-03",
+      total: 6_510,
+      input: 1_011,
+      output: 300 + 22,
+      cacheRead: 5_033,
+      reasoning: 100,
+      conversations: 3,
+    });
+    const piCost =
+      (1_000 * 1 + 5_000 * 0.1 + 400 * 10 + (11 * 1 + 22 * 2 + 33 * 0.1 + 44 * 1)) / 1e6;
+    const claudeCost = (2 * 2 + 7 * 4 + 200 * 0.2 + 20 * 2) / 1e6;
+    expect(week.estimatedCostUsd).toBeCloseTo(piCost + claudeCost, 12);
   });
 
   it("reports rolling 7- and 30-day totals, the active-day average and usage history", async () => {

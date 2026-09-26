@@ -29,8 +29,8 @@ const { outputFiles } = await build({
               estimatedCostUsd: 4213.58,
               models: 4,
               harnesses: [
-                { harnessId: "claude-code", name: "Claude Code", totalTokens: 5035507564, models: 3 },
-                { harnessId: "pi", name: "Pi", totalTokens: 1000000000, models: 1 },
+                { harnessId: "claude-code", name: "Claude Code", totalTokens: 5035507564, models: 3, providers: [] },
+                { harnessId: "pi", name: "Pi", totalTokens: 1000000000, models: 1, providers: [{ provider: "openai-codex-with-a-long-provider-name", totalTokens: 999999999, models: 1 }, { provider: "anthropic", totalTokens: 1, models: 1 }] },
               ],
               daily: [
                 { date: "2026-03-04", total: 1035507564, input: 200000, output: 4307564, cacheRead: 1000000000, reasoning: 0, conversations: 331 },
@@ -115,6 +115,12 @@ test("stays readable in the dark theme and at a narrow window width", async ({ p
       path: path.join(process.env.CODEXHOST_USAGE_SCREENSHOT_DIR, "usage-dark.png"),
     });
   }
+  const providers = page.locator('[data-usage-providers="pi"]');
+  await providers.locator("summary").click();
+  await expect(providers.locator("[data-usage-provider]")).toHaveText([
+    /openai-codex-with-a-long-provider-name\s*100\.00%/u,
+    /anthropic\s*<0\.01%/u,
+  ]);
   await page.setViewportSize({ width: 640, height: 900 });
   const overflow = await page.evaluate(() => {
     const shadow = document.querySelector("[data-codexhost-settings-shell]")?.shadowRoot;

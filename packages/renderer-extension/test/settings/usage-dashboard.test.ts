@@ -3,6 +3,7 @@ import { localUsageQueryResultSchema } from "@codexhost/shared-contracts";
 
 import {
   formatUsageCost,
+  formatUsageShare,
   formatUsageTokens,
   renderLocalUsage,
 } from "../../src/settings/usage-dashboard.js";
@@ -69,8 +70,23 @@ const result = {
   estimatedCostUsd: 1234.567,
   models: 3,
   harnesses: [
-    { harnessId: "claude-code", name: "Claude Code", totalTokens: 1_000_000, models: 2 },
-    { harnessId: "pi", name: "Pi", totalTokens: 234_567, models: 1 },
+    {
+      harnessId: "claude-code",
+      name: "Claude Code",
+      totalTokens: 1_000_000,
+      models: 2,
+      providers: [],
+    },
+    {
+      harnessId: "pi",
+      name: "Pi",
+      totalTokens: 234_567,
+      models: 2,
+      providers: [
+        { provider: "openai-codex", totalTokens: 234_560, models: 1 },
+        { provider: "anthropic", totalTokens: 7, models: 1 },
+      ],
+    },
   ],
   daily: [
     {
@@ -153,6 +169,7 @@ describe("Local Usage dashboard", () => {
     expect(claude).toContain("Claude Code");
     expect(claude).toContain("81.00%");
     expect(claude).toContain("2 个模型");
+    expect(segments[1]?.title).toBe("Pi 19.00%");
 
     const headers = all(root).filter((element) => element.tagName === "th");
     expect(headers.map((header) => header.textContent)).toEqual([
@@ -175,6 +192,40 @@ describe("Local Usage dashboard", () => {
       "0",
       "7",
     ]);
+  });
+
+  it("formats shares with two decimals without showing a used Harness as zero", () => {
+    expect(formatUsageShare(0)).toBe("0.00%");
+    expect(formatUsageShare(0.004)).toBe("<0.01%");
+    expect(formatUsageShare(0.005)).toBe("0.01%");
+    expect(formatUsageShare(81)).toBe("81.00%");
+  });
+
+  it("expands a Harness card into its Providers' shares of that Harness", () => {
+    const root = render({
+      ...result,
+      harnesses: [
+        ...result.harnesses,
+        { harnessId: "codex", name: "Codex", totalTokens: 1, models: 1, providers: [] },
+      ],
+    });
+    const cards = all(root).filter((element) => element.dataset.usageHarnessCard !== undefined);
+    const card = (id: string) =>
+      cards.find((element) => element.dataset.usageHarnessCard === id) as FakeElement;
+    expect(text(card("codex"))).toContain("<0.01%");
+
+    // Harnesses that record no Provider have nothing to expand.
+    const breakdowns = all(root).filter((element) => element.dataset.usageProviders !== undefined);
+    expect(breakdowns.map((element) => element.dataset.usageProviders)).toEqual(["pi"]);
+    const [details] = breakdowns;
+    expect(details?.tagName).toBe("details");
+    expect(all(card("pi"))).toContain(details);
+    expect(details?.children[0]?.tagName).toBe("summary");
+    expect(details?.children[0]?.textContent).toBe("Provider（2）");
+    const rows = all(details as FakeElement).filter(
+      (element) => element.dataset.usageProvider !== undefined,
+    );
+    expect(rows.map(text)).toEqual(["openai-codex 100.00% 1 个模型", "anthropic <0.01% 1 个模型"]);
   });
 
   it("shows rolling totals, the daily average, range conversations and usage history", () => {

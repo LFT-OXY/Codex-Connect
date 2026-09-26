@@ -121,7 +121,14 @@ export function buildLocalUsageView(input: {
   };
   let estimatedCostUsd = 0;
   const models = new Set<string>();
-  const harnesses = new Map<string, { totalTokens: number; models: Set<string> }>();
+  const harnesses = new Map<
+    string,
+    {
+      totalTokens: number;
+      models: Set<string>;
+      providers: Map<string, { totalTokens: number; models: Set<string> }>;
+    }
+  >();
   const daily = new Map<string, DailyRow>();
   const dayTotals = new Map<string, number>();
   for (const bucket of input.buckets) {
@@ -154,7 +161,7 @@ export function buildLocalUsageView(input: {
     if (total === 0) continue;
     let harness = harnesses.get(bucket.harnessId);
     if (!harness) {
-      harness = { totalTokens: 0, models: new Set() };
+      harness = { totalTokens: 0, models: new Set(), providers: new Map() };
       harnesses.set(bucket.harnessId, harness);
     }
     harness.totalTokens += total;
@@ -162,6 +169,14 @@ export function buildLocalUsageView(input: {
       harness.models.add(bucket.model);
       models.add(JSON.stringify([bucket.harnessId, bucket.model]));
     }
+    if (bucket.provider === null) continue;
+    let provider = harness.providers.get(bucket.provider);
+    if (!provider) {
+      provider = { totalTokens: 0, models: new Set() };
+      harness.providers.set(bucket.provider, provider);
+    }
+    provider.totalTokens += total;
+    if (bucket.model !== null) provider.models.add(bucket.model);
   }
   return {
     range,
@@ -174,6 +189,13 @@ export function buildLocalUsageView(input: {
         name: input.harnessName(harnessId),
         totalTokens: harness.totalTokens,
         models: harness.models.size,
+        providers: [...harness.providers]
+          .map(([provider, usage]) => ({
+            provider,
+            totalTokens: usage.totalTokens,
+            models: usage.models.size,
+          }))
+          .sort((left, right) => right.totalTokens - left.totalTokens),
       }))
       .sort((left, right) => right.totalTokens - left.totalTokens),
     daily: [...daily.values()].sort((left, right) => right.date.localeCompare(left.date)),
