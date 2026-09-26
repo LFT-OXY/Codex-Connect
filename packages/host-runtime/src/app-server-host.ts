@@ -3,6 +3,7 @@ import {
   IDLE_RELEASE_SETTINGS_METHOD,
   restoreHarnessCommandMentions,
   LOADED_SESSIONS_METHOD,
+  LOCAL_SESSIONS_QUERY_METHOD,
   LOCAL_USAGE_QUERY_METHOD,
   idleReleaseSettingsSchema,
 } from "@codexhost/shared-contracts";
@@ -97,7 +98,7 @@ import { executeExternalThreadFork } from "./external-thread-fork.js";
 import { isSessionImportRequest, SessionImportRequests } from "./session-import-requests.js";
 import { fetchLiteLlmPrices } from "./local-usage-prices.js";
 import { defaultLocalUsageDirectory } from "./local-usage-store.js";
-import { LocalUsageService } from "./local-usage-service.js";
+import { LocalUsageService, localSessionMappings } from "./local-usage-service.js";
 import {
   ExternalHistoryRequestError,
   listExternalItems,
@@ -1168,6 +1169,10 @@ export class AppServerHost {
     }
     if (request.method === LOCAL_USAGE_QUERY_METHOD) {
       this.#dispatchDesktopRequest(() => this.#handleLocalUsage(request));
+      return;
+    }
+    if (request.method === LOCAL_SESSIONS_QUERY_METHOD) {
+      this.#dispatchDesktopRequest(() => this.#handleLocalSessions(request));
       return;
     }
     if (request.method === "codexhost/thread/fork") {
@@ -2412,17 +2417,28 @@ export class AppServerHost {
     if (response.importedThread) await this.#notifyExternalThreadStarted(response.importedThread);
   }
 
-  async #handleLocalUsage(request: JsonRpcRequest): Promise<void> {
+  async #localUsageService(): Promise<LocalUsageService> {
     await this.#waitForPlugins();
     this.#localUsage ??= new LocalUsageService({
       adapters: this.#externalAdapters,
       officialCodexUsage: codexNativeUsage(this.#officialRuntimeScope.permanentHome),
       descriptors: () => this.#pluginDescriptors,
+      mappings: async () => localSessionMappings(await this.#repository.list()),
       directory: defaultLocalUsageDirectory(this.#options.environment ?? process.env),
       fetchLiteLlm: fetchLiteLlmPrices,
       diagnose: (error) => this.#diagnose(error),
     });
-    await this.#writer.json(rpcEnvelope(request, await this.#localUsage.handle(request)));
+    return this.#localUsage;
+  }
+
+  async #handleLocalUsage(request: JsonRpcRequest): Promise<void> {
+    const service = await this.#localUsageService();
+    await this.#writer.json(rpcEnvelope(request, await service.handle(request)));
+  }
+
+  async #handleLocalSessions(request: JsonRpcRequest): Promise<void> {
+    const service = await this.#localUsageService();
+    await this.#writer.json(rpcEnvelope(request, await service.handleSessions(request)));
   }
 
   async #inspectThread(request: JsonRpcRequest): Promise<void> {

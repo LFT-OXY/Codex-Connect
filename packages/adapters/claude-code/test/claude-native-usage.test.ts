@@ -278,4 +278,89 @@ describe("Claude Code native usage", () => {
 
     expect((await f.read({ unknown: true })).records).toHaveLength(1);
   });
+  it("summarizes each transcript without message text, continuing from the cursor", async () => {
+    const f = await fixture();
+    await writeFile(
+      f.mainFile,
+      lines(
+        user("u-1", SECRET),
+        assistant("msg-1", USAGE, {
+          message: {
+            id: "msg-1",
+            model: "claude-synthetic-1",
+            role: "assistant",
+            stop_reason: "tool_use",
+            content: [{ type: "tool_use", id: "t-1", name: "NotebookEdit", input: { x: SECRET } }],
+            usage: USAGE,
+          },
+        }),
+        { type: "custom-title", customTitle: "Named by user", sessionId: SESSION },
+        { type: "ai-title", aiTitle: "Named by Claude", sessionId: SESSION },
+        assistant("msg-synthetic", USAGE, {
+          message: {
+            id: "s",
+            model: "<synthetic>",
+            role: "assistant",
+            stop_reason: "end_turn",
+            content: [],
+            usage: USAGE,
+          },
+        }),
+      ),
+    );
+    await mkdir(path.dirname(f.subagentFile), { recursive: true });
+    await writeFile(f.subagentFile, lines(user("u-2", "task", { isSidechain: true })));
+    const first = await f.read();
+    expect(JSON.stringify(first.sessions)).not.toContain(SECRET);
+    expect(first.sessions).toEqual(
+      expect.arrayContaining([
+        {
+          key: path.relative(path.join(f.config, "projects"), f.mainFile),
+          nativeSessionId: SESSION,
+          title: "Named by user",
+          cwd: "/work/project",
+          model: "claude-synthetic-1",
+          firstActivityAt: Date.parse("2026-03-02T10:00:00.000Z"),
+          lastActivityAt: Date.parse("2026-03-02T10:00:05.000Z"),
+          activeMs: 5_000,
+          turns: 1,
+          edits: 1,
+        },
+        expect.objectContaining({
+          nativeSessionId: `${SESSION}/agent-a1`,
+          parentSessionId: SESSION,
+          turns: 1,
+        }),
+      ]),
+    );
+    expect(first.sessions).toHaveLength(2);
+    // Nothing changed: no summaries to replace.
+    expect((await f.read(first.cursor)).sessions).toEqual([]);
+
+    // A streaming response is read again next time; its lines are summarized once.
+    await appendFile(
+      f.mainFile,
+      lines(
+        user("u-3", "again", { timestamp: "2026-03-02T10:01:00.000Z" }),
+        assistant("msg-2", USAGE, { timestamp: "2026-03-02T10:01:30.000Z" }, null),
+      ),
+    );
+    const streaming = await f.read(first.cursor);
+    await appendFile(
+      f.mainFile,
+      lines(assistant("msg-2", USAGE, { timestamp: "2026-03-02T10:02:00.000Z" }, "end_turn")),
+    );
+    const finished = await f.read(streaming.cursor);
+    expect(finished.records).toHaveLength(1);
+    expect(finished.sessions).toEqual([
+      expect.objectContaining({ nativeSessionId: SESSION, turns: 2, edits: 1, activeMs: 120_000 }),
+    ]);
+
+    // A replaced file starts its summary over.
+    await rm(f.mainFile);
+    await writeFile(f.mainFile, lines(user("u-4", "new")));
+    expect((await f.read(finished.cursor)).sessions).toEqual([
+      expect.objectContaining({ nativeSessionId: SESSION, turns: 1, edits: 0, activeMs: 0 }),
+    ]);
+  });
 });

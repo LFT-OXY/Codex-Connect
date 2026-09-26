@@ -10,6 +10,17 @@ import { z } from "zod";
 const HALF_HOUR_MS = 30 * 60_000;
 const countSchema = z.number().int().nonnegative().safe();
 const textSchema = z.string().min(1).max(1_024);
+const cwdSchema = z.string().max(16_384);
+const titleSchema = z.string().min(1).max(4_096);
+
+const sessionSummaryFields = {
+  nativeSessionId: textSchema,
+  firstActivityAt: countSchema,
+  lastActivityAt: countSchema,
+  activeMs: countSchema,
+  turns: countSchema,
+  edits: countSchema,
+};
 
 /** Adapter output is plugin data; Host checks it before counting anything. */
 const nativeUsageBatchSchema = z.strictObject({
@@ -38,6 +49,18 @@ const nativeUsageBatchSchema = z.strictObject({
       reportedCostUsd: z.number().nonnegative().finite().optional(),
     }),
   ),
+  sessions: z
+    .array(
+      z.strictObject({
+        ...sessionSummaryFields,
+        key: textSchema,
+        parentSessionId: textSchema.optional(),
+        title: titleSchema.optional(),
+        cwd: cwdSchema.optional(),
+        model: textSchema.optional(),
+      }),
+    )
+    .optional(),
   cursor: jsonValueSchema,
 });
 
@@ -61,9 +84,40 @@ const bucketSchema = z.strictObject({
   reportedCostUsd: z.number().nonnegative().finite().optional(),
 });
 
+const usageFields = {
+  input: countSchema,
+  cacheRead: countSchema,
+  cacheWrite: countSchema,
+  /** Part of `cacheWrite` written to a one-hour cache. */
+  cacheWrite1h: countSchema,
+  output: countSchema,
+  reasoning: countSchema,
+};
+
+/** The latest summary of one unit of native records, such as one file. */
+const sessionSummarySchema = z.strictObject({
+  ...sessionSummaryFields,
+  harnessId: textSchema,
+  key: textSchema,
+  parentSessionId: textSchema.nullable(),
+  title: titleSchema.nullable(),
+  cwd: cwdSchema.nullable(),
+  model: textSchema.nullable(),
+});
+
+/** Usage of one Native Session with one model, priced when queried like buckets are. */
+const sessionUsageSchema = z.strictObject({
+  harnessId: textSchema,
+  nativeSessionId: textSchema,
+  provider: textSchema.nullable(),
+  model: textSchema.nullable(),
+  ...usageFields,
+  reportedCostUsd: z.number().nonnegative().finite().optional(),
+});
+
 const localUsageStateSchema = z.strictObject({
-  // Version 1 buckets had no one-hour cache writes; such a file is rebuilt from native records.
-  formatVersion: z.literal(2),
+  // Version 1 had no one-hour cache writes and version 2 no Sessions; older files are rebuilt.
+  formatVersion: z.literal(3),
   sources: z.record(
     textSchema,
     z.strictObject({
@@ -73,13 +127,17 @@ const localUsageStateSchema = z.strictObject({
     }),
   ),
   buckets: z.array(bucketSchema),
+  sessions: z.array(sessionSummarySchema),
+  sessionUsage: z.array(sessionUsageSchema),
 });
 
 export type LocalUsageBucket = z.infer<typeof bucketSchema>;
+export type LocalSessionSummary = z.infer<typeof sessionSummarySchema>;
+export type LocalSessionUsage = z.infer<typeof sessionUsageSchema>;
 export type LocalUsageState = z.infer<typeof localUsageStateSchema>;
 
 export function emptyLocalUsageState(): LocalUsageState {
-  return { formatVersion: 2, sources: {}, buckets: [] };
+  return { formatVersion: 3, sources: {}, buckets: [], sessions: [], sessionUsage: [] };
 }
 
 export function defaultLocalUsageDirectory(environment: NodeJS.ProcessEnv): string {
@@ -156,6 +214,21 @@ function bucketKey(
   ]);
 }
 
+function sessionUsageKey(
+  usage: Pick<
+    LocalSessionUsage,
+    "harnessId" | "nativeSessionId" | "provider" | "model" | "reportedCostUsd"
+  >,
+): string {
+  return JSON.stringify([
+    usage.harnessId,
+    usage.nativeSessionId,
+    usage.provider,
+    usage.model,
+    usage.reportedCostUsd !== undefined,
+  ]);
+}
+
 /**
  * Adds one validated batch to `state`, counting each dedupe key once per Harness.
  * Throws before changing `state` when the batch is malformed.
@@ -165,7 +238,7 @@ export function applyNativeUsageBatch(
   harnessId: string,
   batch: HarnessNativeUsageBatch,
 ): void {
-  const { records, cursor } = nativeUsageBatchSchema.parse(batch);
+  const { records, sessions, cursor } = nativeUsageBatchSchema.parse(batch);
   const counted = new Set(state.sources[harnessId]?.counted);
   const buckets = new Map(
     state.buckets.map((bucket) => [
@@ -173,6 +246,7 @@ export function applyNativeUsageBatch(
       bucket,
     ]),
   );
+  const sessionUsage = new Map(state.sessionUsage.map((usage) => [sessionUsageKey(usage), usage]));
   for (const record of records) {
     const key = countedKey(record.dedupeKey);
     if (counted.has(key)) continue;
@@ -211,6 +285,58 @@ export function applyNativeUsageBatch(
     bucket.conversations += record.conversations;
     if (bucket.reportedCostUsd !== undefined) {
       bucket.reportedCostUsd += record.reportedCostUsd ?? 0;
+    }
+    const usageIdentity = {
+      harnessId,
+      nativeSessionId: record.nativeSessionId,
+      provider: identity.provider,
+      model: identity.model,
+      ...(record.reportedCostUsd === undefined ? {} : { reportedCostUsd: 0 }),
+    };
+    const usageId = sessionUsageKey(usageIdentity);
+    let usage = sessionUsage.get(usageId);
+    if (!usage) {
+      usage = {
+        ...usageIdentity,
+        input: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        cacheWrite1h: 0,
+        output: 0,
+        reasoning: 0,
+      };
+      sessionUsage.set(usageId, usage);
+      state.sessionUsage.push(usage);
+    }
+    usage.input += record.tokens.input;
+    usage.cacheRead += record.tokens.cacheRead;
+    usage.cacheWrite += record.tokens.cacheWrite;
+    usage.cacheWrite1h += record.tokens.cacheWrite1h ?? 0;
+    usage.output += record.tokens.output;
+    usage.reasoning += record.tokens.reasoning;
+    if (usage.reportedCostUsd !== undefined) usage.reportedCostUsd += record.reportedCostUsd ?? 0;
+  }
+  if (sessions?.length) {
+    // A summary replaces the previous one of the same records.
+    const replaced = new Set(sessions.map(({ key }) => key));
+    state.sessions = state.sessions.filter(
+      (summary) => summary.harnessId !== harnessId || !replaced.has(summary.key),
+    );
+    for (const summary of sessions) {
+      state.sessions.push({
+        harnessId,
+        key: summary.key,
+        nativeSessionId: summary.nativeSessionId,
+        parentSessionId: summary.parentSessionId ?? null,
+        title: summary.title ?? null,
+        cwd: summary.cwd ?? null,
+        model: summary.model ?? null,
+        firstActivityAt: summary.firstActivityAt,
+        lastActivityAt: summary.lastActivityAt,
+        activeMs: summary.activeMs,
+        turns: summary.turns,
+        edits: summary.edits,
+      });
     }
   }
   state.sources[harnessId] = { cursor, counted: [...counted] };

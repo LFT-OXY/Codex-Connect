@@ -3,6 +3,7 @@ import {
   credentialImportChinese,
   type CredentialImportMessages,
 } from "./credential-import-messages.js";
+import { sessionsChinese, sessionsEnglish, type SessionsMessages } from "./sessions-messages.js";
 import { usageChinese, usageEnglish, type UsageMessages } from "./usage-messages.js";
 import type { DefaultRendererSettingsPageId } from "./pages.js";
 
@@ -26,6 +27,7 @@ export interface RendererSettingsLanguageControl {
 export interface RendererSettingsMessages {
   readonly credentialImports: CredentialImportMessages;
   readonly usage: UsageMessages;
+  readonly sessions: SessionsMessages;
   readonly locale: RendererSettingsLocale;
   readonly title: string;
   readonly close: string;
@@ -245,6 +247,7 @@ export interface RendererSettingsMessages {
 const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
   credentialImports: credentialImportEnglish,
   usage: usageEnglish,
+  sessions: sessionsEnglish,
   locale: "en",
   title: "Settings",
   close: "Close settings",
@@ -496,6 +499,7 @@ const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
     appearance: "General",
     accounts: "Accounts",
     usage: "Usage",
+    sessions: "Sessions",
     "session-import": "Session Import",
     updates: "Updates",
   }),
@@ -504,6 +508,7 @@ const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
 const CHINESE_MESSAGES: RendererSettingsMessages = Object.freeze({
   credentialImports: credentialImportChinese,
   usage: usageChinese,
+  sessions: sessionsChinese,
   locale: "zh-CN",
   title: "设置",
   close: "关闭设置",
@@ -742,6 +747,7 @@ const CHINESE_MESSAGES: RendererSettingsMessages = Object.freeze({
     appearance: "通用",
     accounts: "账号",
     usage: "用量",
+    sessions: "会话",
     "session-import": "会话导入",
     updates: "更新",
   }),

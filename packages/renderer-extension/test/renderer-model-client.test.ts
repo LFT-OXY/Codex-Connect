@@ -1,6 +1,7 @@
 import {
   HARNESS_LAUNCH_SETTINGS_GET_METHOD,
   HARNESS_LAUNCH_SETTINGS_SET_METHOD,
+  LOCAL_SESSIONS_QUERY_METHOD,
   LOCAL_USAGE_QUERY_METHOD,
   harnessIdSchema,
   harnessModelRefSchema,
@@ -142,6 +143,42 @@ describe("Renderer fixed Model request client", () => {
     const reading = { status: "reading", progress: { processed: 1, total: 4 } };
     sendRequest.mockResolvedValueOnce(reading);
     expect(await client.queryLocalUsage(params)).toEqual(reading);
+  });
+
+  it("queries Local Sessions with validated params and a validated result", async () => {
+    const result = {
+      status: "ready",
+      sessions: [
+        {
+          harnessId: "claude-code",
+          nativeSessionId: "native-1",
+          title: null,
+          cwd: "/work/project",
+          project: "project",
+          model: "claude-synthetic-1",
+          startedAt: 1,
+          lastActivityAt: 2,
+          activeMs: 1,
+          usage: { totalTokens: 3, estimatedCostUsd: 0 },
+          turns: 1,
+          edits: 0,
+          subagents: 0,
+          threadId: null,
+          resumable: true,
+          running: null,
+        },
+      ],
+      foldedSubagents: 0,
+      harnesses: [{ harnessId: "claude-code", name: "Claude Code" }],
+      failures: [],
+    };
+    const sendRequest = vi.fn().mockResolvedValue(result);
+    const client = createRendererModelClient([{ sendRequest }]);
+    if (!client?.queryLocalSessions) throw new Error("Expected a Local Sessions client");
+    expect(await client.queryLocalSessions({ refresh: true })).toEqual(result);
+    expect(sendRequest).toHaveBeenLastCalledWith(LOCAL_SESSIONS_QUERY_METHOD, { refresh: true });
+    sendRequest.mockResolvedValueOnce({ ...result, transcript: [] });
+    await expect(client.queryLocalSessions({ refresh: false })).rejects.toThrow();
   });
 
   it("reads draft quota for the selected Account without activating it", async () => {
@@ -392,6 +429,7 @@ describe("Renderer fixed Model request client", () => {
       "listSessionImportSources",
       "listThreadOwnership",
       "openHarnessWebUi",
+      "queryLocalSessions",
       "queryLocalUsage",
       "readUpdateStatus",
       "refreshCodexAccounts",

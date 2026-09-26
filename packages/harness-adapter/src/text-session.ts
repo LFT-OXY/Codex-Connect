@@ -586,9 +586,39 @@ export interface HarnessNativeUsageRecord {
   reportedCostUsd?: number;
 }
 
+/**
+ * What the native records of one Session say about it so far. It never carries message text;
+ * `title` is the Harness's own name for the Session or the text the Adapter already offers as one.
+ */
+export interface HarnessNativeSessionSummary {
+  /**
+   * Identifies the summarized records, for example one file. A later summary with the same key
+   * replaces this one, so each summary covers everything its records say, not only new records.
+   */
+  key: string;
+  nativeSessionId: string;
+  /** Set on subagent and child Sessions; their usage and count fold into this Session. */
+  parentSessionId?: string;
+  title?: string;
+  cwd?: string;
+  /** The model used last. */
+  model?: string;
+  /** Epoch milliseconds of the first and last timestamped record. */
+  firstActivityAt: number;
+  lastActivityAt: number;
+  /** Time between consecutive records, leaving out gaps longer than 30 minutes. */
+  activeMs: number;
+  /** User turns, in this Harness's own semantics. */
+  turns: number;
+  /** Turns with at least one file-editing tool call. */
+  edits: number;
+}
+
 export interface HarnessNativeUsageBatch {
   /** Facts added since the input cursor. Repeats of earlier facts are allowed. */
   records: readonly HarnessNativeUsageRecord[];
+  /** Summaries whose records changed since the input cursor; omitted when not supported. */
+  sessions?: readonly HarnessNativeSessionSummary[];
   cursor: JsonValue;
 }
 

@@ -1,0 +1,289 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type {
+  HostThreadId,
+  LocalSession,
+  LocalSessionsQueryResult,
+} from "@codexhost/shared-contracts";
+
+vi.mock("../../src/settings/icons.js", () => ({
+  createRendererSettingsIcon: () => "icon",
+}));
+vi.mock("../../src/renderer-agent-icon.js", () => ({
+  createRendererAgentIcon: () => "agent-icon",
+}));
+
+import type {
+  RendererSettingsAsyncHandlers,
+  RendererSettingsPageMountContext,
+} from "../../src/settings/core.js";
+import { rendererSettingsMessages } from "../../src/settings/localization.js";
+import type { RendererImportedThreadOpener } from "../../src/settings/session-import-page.js";
+import {
+  createSessionsSettingsPage,
+  type RendererSessionsClient,
+} from "../../src/settings/sessions-page.js";
+
+class FakeElement {
+  children: (FakeElement | string)[] = [];
+  readonly attributes = new Map<string, string>();
+  readonly dataset: Record<string, string> = {};
+  readonly style: Record<string, string> = {};
+  readonly listeners = new Map<string, (event: { preventDefault(): void }) => void>();
+  className = "";
+  textContent = "";
+  title = "";
+  type = "";
+  value = "";
+  hidden = false;
+  disabled = false;
+  tabIndex = 0;
+  focused = false;
+  constructor(
+    readonly tagName: string,
+    readonly ownerDocument: Document,
+  ) {}
+  addEventListener(name: string, listener: (event: { preventDefault(): void }) => void): void {
+    this.listeners.set(name, listener);
+  }
+  fire(name: string): void {
+    this.listeners.get(name)?.({ preventDefault() {} });
+  }
+  append(...children: (FakeElement | string)[]): void {
+    this.children.push(...children);
+  }
+  replaceChildren(...children: (FakeElement | string)[]): void {
+    this.children = children;
+  }
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+  focus(): void {
+    this.focused = true;
+  }
+}
+
+function createDocument(clipboard?: { writeText: ReturnType<typeof vi.fn> }): Document {
+  const document = {
+    createElement: (tagName: string) => new FakeElement(tagName, document),
+    defaultView: { navigator: { clipboard }, setTimeout: () => 0 },
+  } as unknown as Document;
+  return document;
+}
+
+function all(root: FakeElement): FakeElement[] {
+  return [root, ...root.children.flatMap((child) => (typeof child === "string" ? [] : all(child)))];
+}
+function text(root: FakeElement): string {
+  return all(root)
+    .flatMap((element) => [
+      element.textContent,
+      ...element.children.filter((child) => typeof child === "string"),
+    ])
+    .filter(Boolean)
+    .join(" ");
+}
+
+const messages = rendererSettingsMessages("zh-CN");
+const THREAD = "thread-1" as HostThreadId;
+
+function session(overrides: Partial<LocalSession> = {}): LocalSession {
+  return {
+    harnessId: "claude-code" as LocalSession["harnessId"],
+    nativeSessionId: "11111111-1111-4111-8111-111111111111",
+    title: "Synthetic title",
+    cwd: "/work/project",
+    project: "owner/project",
+    model: "claude-synthetic-1",
+    startedAt: Date.parse("2026-03-02T10:00:00.000Z"),
+    lastActivityAt: Date.parse("2026-03-02T11:14:00.000Z"),
+    activeMs: 74 * 60_000,
+    usage: { totalTokens: 1_430, estimatedCostUsd: 0.02 },
+    turns: 2,
+    edits: 1,
+    subagents: 1,
+    threadId: null,
+    resumable: true,
+    running: null,
+    ...overrides,
+  };
+}
+
+function view(sessions: LocalSession[]): LocalSessionsQueryResult {
+  return {
+    status: "ready",
+    sessions,
+    foldedSubagents: sessions.reduce((sum, { subagents }) => sum + subagents, 0),
+    harnesses: [{ harnessId: "claude-code" as LocalSession["harnessId"], name: "Claude Code" }],
+    failures: [],
+  };
+}
+
+function mount(
+  client: Partial<Record<keyof RendererSessionsClient, ReturnType<typeof vi.fn>>> | null,
+  options: {
+    openThread?: ReturnType<typeof vi.fn>;
+    clipboard?: { writeText: ReturnType<typeof vi.fn> };
+  } = {},
+) {
+  const openThread = options.openThread ?? vi.fn().mockResolvedValue(undefined);
+  const page = createSessionsSettingsPage(
+    messages,
+    () => client as RendererSessionsClient | null,
+    openThread as unknown as RendererImportedThreadOpener,
+  );
+  const content = new FakeElement("div", createDocument(options.clipboard));
+  const context = {
+    content,
+    signal: new AbortController().signal,
+    async runLatest(
+      operation: (signal: AbortSignal) => Promise<unknown>,
+      handlers: RendererSettingsAsyncHandlers<unknown>,
+    ) {
+      try {
+        handlers.success(await operation(new AbortController().signal));
+      } catch (error) {
+        handlers.failure(error);
+      }
+    },
+  } as unknown as RendererSettingsPageMountContext;
+  page.mount(context);
+  const find = (predicate: (element: FakeElement) => boolean) => {
+    const element = all(content).find(predicate);
+    if (!element) throw new Error("Element not found");
+    return element;
+  };
+  const rows = () => all(content).filter((element) => element.dataset.sessionId !== undefined);
+  return { content, find, rows, openThread };
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+
+describe("Sessions settings page", () => {
+  it("reads new records on open and shows each Session's details and usage", async () => {
+    const queryLocalSessions = vi
+      .fn()
+      .mockResolvedValue(
+        view([
+          session(),
+          session({ nativeSessionId: "22222222-2222-4222-8222-222222222222", title: null }),
+          session({ nativeSessionId: "3", title: null, project: null }),
+        ]),
+      );
+    const { rows } = mount({ queryLocalSessions });
+    await vi.waitFor(() => expect(rows()).toHaveLength(3));
+    expect(queryLocalSessions).toHaveBeenCalledWith({ refresh: true });
+    const [first, untitled, unnamed] = rows();
+    const row = first as FakeElement;
+    expect(text(row)).toContain("Synthetic title");
+    expect(
+      text(all(row).find((element) => element.dataset.sessionDetails !== undefined) as FakeElement),
+    ).toMatch(/^owner\/project · claude-synthetic-1 · .+ · 1 小时 14 分 · 1 个子代理$/u);
+    const stats = all(row).find((element) => element.dataset.sessionStats !== undefined);
+    expect(stats?.children.map((cell) => (cell as FakeElement).textContent)).toEqual([
+      "1.43K",
+      "$0.02",
+      "2",
+      "1",
+    ]);
+    // Without a title the project names the Session.
+    expect(text(untitled as FakeElement)).toContain("owner/project");
+    expect(text(unnamed as FakeElement)).toContain(messages.sessions.untitled);
+  });
+
+  it("maps an unmapped Session before opening it and opens a mapped one directly", async () => {
+    const importHarnessSession = vi.fn().mockResolvedValue({ threadId: THREAD });
+    const mapped = session({ nativeSessionId: "mapped", threadId: "thread-2" as HostThreadId });
+    const { find, openThread } = mount({
+      queryLocalSessions: vi.fn().mockResolvedValue(view([session(), mapped])),
+      importHarnessSession,
+    });
+    const rowButton = (id: string) =>
+      all(find((element) => element.dataset.sessionId === id)).find(
+        (element) => element.dataset.sessionAction === "resume",
+      ) as FakeElement;
+    await vi.waitFor(() => expect(rowButton("mapped")).toBeDefined());
+
+    rowButton("11111111-1111-4111-8111-111111111111").fire("click");
+    await vi.waitFor(() => expect(openThread).toHaveBeenCalledWith(THREAD, expect.anything()));
+    expect(importHarnessSession).toHaveBeenCalledWith({
+      harnessId: "claude-code",
+      nativeSessionId: "11111111-1111-4111-8111-111111111111",
+    });
+
+    rowButton("mapped").fire("click");
+    await vi.waitFor(() => expect(openThread).toHaveBeenCalledWith("thread-2", expect.anything()));
+    expect(importHarnessSession).toHaveBeenCalledOnce();
+  });
+
+  it("explains a failed Resume and offers the project path and another try", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const importHarnessSession = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error("gone"), { code: -32079 }))
+      .mockResolvedValue({ threadId: THREAD });
+    const openThread = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("no route"))
+      .mockResolvedValue(undefined);
+    const { find, content } = mount(
+      { queryLocalSessions: vi.fn().mockResolvedValue(view([session()])), importHarnessSession },
+      { openThread, clipboard: { writeText } },
+    );
+    const action = (name: string) => find((element) => element.dataset.sessionAction === name);
+    await vi.waitFor(() => expect(action("resume")).toBeDefined());
+
+    action("resume").fire("click");
+    await vi.waitFor(() => expect(text(content)).toContain(messages.sessions.resumeGone));
+    action("copy-project-path").fire("click");
+    expect(writeText).toHaveBeenCalledWith("/work/project");
+
+    // Mapping now succeeds, but the Thread does not open.
+    action("retry-open").fire("click");
+    await vi.waitFor(() => expect(text(content)).toContain(messages.sessions.openFailed));
+    expect(openThread).toHaveBeenCalledTimes(1);
+
+    // Retrying opens the Thread already mapped instead of mapping again.
+    action("retry-open").fire("click");
+    await vi.waitFor(() => expect(openThread).toHaveBeenCalledTimes(2));
+    expect(importHarnessSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("disables Resume for a Harness that cannot open existing Sessions", async () => {
+    const { find } = mount({
+      queryLocalSessions: vi.fn().mockResolvedValue(view([session({ resumable: false })])),
+    });
+    await vi.waitFor(() =>
+      expect(find((element) => element.dataset.sessionAction === "resume").disabled).toBe(true),
+    );
+    expect(find((element) => element.dataset.sessionAction === "resume").title).toBe(
+      messages.sessions.resumeUnavailable,
+    );
+  });
+
+  it("shows read progress and asks again until the Sessions are ready", async () => {
+    vi.useFakeTimers();
+    const queryLocalSessions = vi
+      .fn()
+      .mockResolvedValueOnce({ status: "reading", progress: { processed: 3, total: 10 } })
+      .mockResolvedValue(view([session()]));
+    const { content, rows } = mount({ queryLocalSessions });
+    await vi.waitFor(() => expect(text(content)).toContain("3 / 10"));
+    await vi.advanceTimersByTimeAsync(500);
+    expect(queryLocalSessions).toHaveBeenLastCalledWith({ refresh: false });
+    await vi.waitFor(() => expect(rows()).toHaveLength(1));
+  });
+
+  it("lists other sources when one fails", async () => {
+    const { content, rows } = mount({
+      queryLocalSessions: vi.fn().mockResolvedValue({
+        ...view([session()]),
+        failures: [{ harnessId: "pi", name: "Pi" }],
+      }),
+    });
+    await vi.waitFor(() => expect(rows()).toHaveLength(1));
+    expect(text(content)).toContain("无法读取 Pi 的会话记录");
+  });
+});

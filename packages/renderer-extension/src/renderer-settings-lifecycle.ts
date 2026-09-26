@@ -10,6 +10,7 @@ import {
   type RendererConnectionDiagnostics,
   type RendererCodexAccountClient,
   type RendererUpdateClient,
+  type RendererSessionsClient,
   type RendererUsageClient,
 } from "./settings/pages.js";
 import type {
@@ -33,6 +34,8 @@ export interface RendererSettingsLifecycleOptions {
   getLoadedSessionsClient?(): LoadedSessionsClient | null;
   /** Always the local Host: usage is read from native records on this computer. */
   getUsageClient?(): RendererUsageClient | null;
+  /** Always the local Host: Sessions are read from native records on this computer. */
+  getSessionsClient?(): RendererSessionsClient | null;
   openImportedThread?: RendererImportedThreadOpener;
   onLocaleChange?(locale: RendererSettingsLocale): void;
 }
@@ -81,6 +84,7 @@ export function installRendererSettingsLifecycle(
       },
       options.getLoadedSessionsClient ?? (() => null),
       options.getUsageClient ?? (() => null),
+      options.getSessionsClient ?? (() => null),
     );
     const nextShell = installRendererSettingsShell(definitions, messages, ownerWindow.document);
     const nextTrigger = installRendererSettingsHeaderTrigger({

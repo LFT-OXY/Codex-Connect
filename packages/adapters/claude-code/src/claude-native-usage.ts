@@ -2,16 +2,25 @@ import { createReadStream } from "node:fs";
 import { opendir, stat } from "node:fs/promises";
 import path from "node:path";
 
-import type {
-  HarnessNativeUsageBatch,
-  HarnessNativeUsageProgress,
-  HarnessNativeUsageRecord,
-  HarnessNativeUsageTokens,
+import {
+  emptyNativeSessionActivity,
+  isFileEditTool,
+  nativeSessionEdits,
+  parseNativeSessionActivity,
+  recordNativeSessionActivity,
+  recordNativeSessionEdit,
+  startNativeSessionTurn,
+  type HarnessNativeSessionSummary,
+  type HarnessNativeUsageBatch,
+  type HarnessNativeUsageProgress,
+  type HarnessNativeUsageRecord,
+  type HarnessNativeUsageTokens,
+  type NativeSessionActivity,
 } from "@codexhost/harness-adapter";
 import type { JsonValue } from "@codexhost/shared-contracts";
 import { z } from "zod";
 
-import { claudeProjectsDirectory } from "./claude-session-import.js";
+import { claudeProjectsDirectory, cleanText } from "./claude-session-import.js";
 
 const NEWLINE = 0x0a;
 /**
@@ -20,16 +29,41 @@ const NEWLINE = 0x0a;
  */
 const STREAMING_WINDOW_MS = 60 * 60_000;
 
+const offsetSchema = z.number().int().nonnegative().safe();
+const knownTextSchema = z.string().min(1).nullable();
+
+/** What a file has said about its Session up to `summarized`; never message text. */
+const fileSummarySchema = z.strictObject({
+  sessionId: knownTextSchema,
+  customTitle: knownTextSchema,
+  aiTitle: knownTextSchema,
+  cwd: knownTextSchema,
+  model: knownTextSchema,
+  activity: z.custom<NativeSessionActivity>((value) => parseNativeSessionActivity(value) !== null),
+});
+
 const claudeUsageCursorSchema = z.strictObject({
-  formatVersion: z.literal(1),
+  // Version 1 had no Session summaries; such a cursor reads everything again.
+  formatVersion: z.literal(2),
   /** Keyed by path relative to the projects directory. */
   files: z.record(
     z.string(),
-    z.strictObject({ ino: z.string(), offset: z.number().int().nonnegative().safe() }),
+    z.strictObject({
+      ino: z.string(),
+      /** Where the next usage read starts; an unfinished response is read again. */
+      offset: offsetSchema,
+      /** Lines before this offset are already in `summary`. */
+      summarized: offsetSchema,
+      summary: fileSummarySchema,
+    }),
   ),
 });
 
 type ClaudeUsageCursor = z.infer<typeof claudeUsageCursorSchema>;
+type FileSummary = z.infer<typeof fileSummarySchema>;
+
+/** Claude marks these user messages itself; they are not turns the user typed. */
+const NOT_A_TURN = ["[Request interrupted by user]", "<task-notification>"];
 
 interface ClaudeUsageFile {
   relative: string;
@@ -150,6 +184,114 @@ function zeroTokens(tokens: HarnessNativeUsageTokens): boolean {
   );
 }
 
+/** A user message that starts a turn: not metadata, a tool result, or an interruption notice. */
+function startsTurn(entry: Record<string, unknown>): boolean {
+  if (entry.isMeta === true || !isRecord(entry.message)) return false;
+  const { content } = entry.message;
+  let prompt: string;
+  if (typeof content === "string") {
+    prompt = content.trim();
+  } else if (Array.isArray(content)) {
+    if (
+      content.length > 0 &&
+      content.every((block) => isRecord(block) && block.type === "tool_result")
+    ) {
+      return false;
+    }
+    prompt = content
+      .flatMap((block) =>
+        isRecord(block) && typeof block.text === "string" && block.type === "text"
+          ? [block.text]
+          : [],
+      )
+      .join("\n")
+      .trim();
+  } else {
+    return false;
+  }
+  return prompt.length > 0 && !NOT_A_TURN.some((notice) => prompt.startsWith(notice));
+}
+
+/** Adds one transcript line to its file's Session summary. */
+function summarize(summary: FileSummary, entry: Record<string, unknown>): void {
+  const sessionId = text(entry.sessionId);
+  if (sessionId) summary.sessionId ??= sessionId;
+  const cwd = text(entry.cwd);
+  if (cwd) summary.cwd = cwd;
+  const time = occurredAt(entry.timestamp);
+  if (time !== null) recordNativeSessionActivity(summary.activity, time);
+  if (entry.type === "custom-title") {
+    const title = cleanText(entry.customTitle);
+    if (title) summary.customTitle = title;
+  } else if (entry.type === "ai-title") {
+    const title = cleanText(entry.aiTitle);
+    if (title) summary.aiTitle = title;
+  } else if (entry.type === "user") {
+    if (startsTurn(entry)) startNativeSessionTurn(summary.activity);
+  } else if (entry.type === "assistant" && isRecord(entry.message)) {
+    const model = text(entry.message.model);
+    // Claude writes internal messages as "<synthetic>"; they name no model that was used.
+    if (model && model !== "<synthetic>") summary.model = model;
+    const { content } = entry.message;
+    if (
+      Array.isArray(content) &&
+      content.some(
+        (block) =>
+          isRecord(block) &&
+          block.type === "tool_use" &&
+          typeof block.name === "string" &&
+          isFileEditTool(block.name),
+      )
+    ) {
+      recordNativeSessionEdit(summary.activity);
+    }
+  }
+}
+
+function emptyFileSummary(): FileSummary {
+  return {
+    sessionId: null,
+    customTitle: null,
+    aiTitle: null,
+    cwd: null,
+    model: null,
+    activity: emptyNativeSessionActivity(),
+  };
+}
+
+/**
+ * Main transcripts are Sessions of their own. A subagent transcript carries its parent's Session ID,
+ * so it is summarized as a child named after its file.
+ */
+function sessionSummary(
+  relative: string,
+  main: boolean,
+  summary: FileSummary,
+): HarnessNativeSessionSummary | null {
+  const { sessionId, activity } = summary;
+  if (!sessionId || activity.firstActivityAt === null || activity.lastActivityAt === null) {
+    return null;
+  }
+  const title = summary.customTitle ?? summary.aiTitle;
+  return {
+    key: relative,
+    ...(main
+      ? { nativeSessionId: sessionId }
+      : {
+          nativeSessionId: `${sessionId}/${path.basename(relative, ".jsonl")}`,
+          parentSessionId: sessionId,
+        }),
+    ...(title ? { title } : {}),
+    ...(summary.cwd ? { cwd: summary.cwd } : {}),
+    ...(summary.model ? { model: summary.model } : {}),
+    firstActivityAt: activity.firstActivityAt,
+    lastActivityAt: activity.lastActivityAt,
+    activeMs: activity.activeMs,
+    turns: activity.turns,
+    edits: nativeSessionEdits(activity),
+  };
+}
+
 /** A user-typed prompt in a main transcript; tool results are generated, not typed. */
 function typedPrompt(entry: Record<string, unknown>): boolean {
   if (entry.type !== "user" || entry.isSidechain === true || !isRecord(entry.message)) return false;
@@ -180,16 +322,25 @@ function baseRecord(
 
 async function readFileUsage(
   file: string,
-  input: { main: boolean; start: number; end: number; mayStillStream: boolean },
+  input: {
+    main: boolean;
+    start: number;
+    end: number;
+    mayStillStream: boolean;
+    /** Lines before this offset are already summarized. */
+    summarized: number;
+    summary: FileSummary;
+  },
   records: HarnessNativeUsageRecord[],
-): Promise<number> {
+): Promise<{ offset: number; consumed: number }> {
   const { main, start, end } = input;
   const responses = new Map<string, ResponseUsage>();
   let consumed = start;
   for await (const { line, start: lineStart, end: lineEnd } of completeLines(file, start, end)) {
     consumed = lineEnd;
-    // Skip parsing the large tool and attachment lines that cannot carry usage or a prompt.
-    if (!line.includes('"usage"') && !line.includes('"type":"user"')) continue;
+    const summarizing = lineStart >= input.summarized;
+    // Lines already summarized are parsed again only when they can carry usage or a prompt.
+    if (!summarizing && !line.includes('"usage"') && !line.includes('"type":"user"')) continue;
     let entry: unknown;
     try {
       entry = JSON.parse(line);
@@ -197,6 +348,7 @@ async function readFileUsage(
       continue;
     }
     if (!isRecord(entry)) continue;
+    if (summarizing) summarize(input.summary, entry);
     const message = isRecord(entry.message) ? entry.message : null;
     if (entry.type === "user") {
       const uuid = text(entry.uuid);
@@ -233,7 +385,7 @@ async function readFileUsage(
     }
     if (!zeroTokens(response.record.tokens)) records.push(response.record);
   }
-  return resumeAt;
+  return { offset: resumeAt, consumed };
 }
 
 /** Reads usage appended to Claude Code's transcripts since `cursor`, including subagent files. */
@@ -245,11 +397,12 @@ export async function readClaudeNativeUsage(
 ): Promise<HarnessNativeUsageBatch> {
   const projects = claudeProjectsDirectory(environment);
   const previous: ClaudeUsageCursor = claudeUsageCursorSchema.safeParse(cursor).data ?? {
-    formatVersion: 1,
+    formatVersion: 2,
     files: {},
   };
-  const next: ClaudeUsageCursor = { formatVersion: 1, files: {} };
+  const next: ClaudeUsageCursor = { formatVersion: 2, files: {} };
   const records: HarnessNativeUsageRecord[] = [];
+  const sessions: HarnessNativeSessionSummary[] = [];
   const files = await usageFiles(projects);
   onProgress?.({ processed: 0, total: files.length });
   for (const [index, { relative, main }] of files.entries()) {
@@ -261,23 +414,32 @@ export async function readClaudeNativeUsage(
       const size = Number(metadata.size);
       const known = previous.files[relative];
       // A replaced or truncated file is read again; Host drops facts it already counted.
-      const start = known && known.ino === ino && known.offset <= size ? known.offset : 0;
-      const offset = await readFileUsage(
+      const continued = known && known.ino === ino && known.summarized <= size ? known : null;
+      const summary = continued ? structuredClone(continued.summary) : emptyFileSummary();
+      const summarized = continued?.summarized ?? 0;
+      const { offset, consumed } = await readFileUsage(
         file,
         {
           main,
-          start,
+          start: continued?.offset ?? 0,
           end: size,
           mayStillStream: Date.now() - Number(metadata.mtimeMs) < STREAMING_WINDOW_MS,
+          summarized,
+          summary,
         },
         records,
       );
-      next.files[relative] = { ino, offset };
+      const summarizedNow = Math.max(summarized, consumed);
+      next.files[relative] = { ino, offset, summarized: summarizedNow, summary };
+      if (summarizedNow > summarized || !continued) {
+        const session = sessionSummary(relative, main, summary);
+        if (session) sessions.push(session);
+      }
     } catch (error) {
       // Native clients may delete a transcript while it is being listed.
       if (!missing(error)) throw error;
     }
     onProgress?.({ processed: index + 1, total: files.length });
   }
-  return { records, cursor: next };
+  return { records, sessions, cursor: next };
 }

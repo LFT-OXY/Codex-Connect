@@ -38,7 +38,7 @@ function sameFile(left: Stats, right: Stats): boolean {
   );
 }
 
-function cleanText(value: unknown): string | null {
+export function cleanText(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.replaceAll("\0", "").replaceAll(/\s+/gu, " ").trim();
   if (!normalized) return null;

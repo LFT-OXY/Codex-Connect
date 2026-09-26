@@ -37,6 +37,19 @@ export {
   type LocalUsageReading,
   type LocalUsageView,
 } from "./local-usage.js";
+export {
+  LOCAL_SESSIONS_MAX_LENGTH,
+  LOCAL_SESSIONS_MODEL_MAX_LENGTH,
+  LOCAL_SESSIONS_QUERY_METHOD,
+  localSessionSchema,
+  localSessionsQueryParamsSchema,
+  localSessionsQueryResultSchema,
+  localSessionsViewSchema,
+  type LocalSession,
+  type LocalSessionsQueryParams,
+  type LocalSessionsQueryResult,
+  type LocalSessionsView,
+} from "./local-sessions.js";
 
 export {
   harnessAccountSnapshotSchema,

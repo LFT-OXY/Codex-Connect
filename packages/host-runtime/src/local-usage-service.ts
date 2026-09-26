@@ -3,11 +3,15 @@ import type {
   HarnessNativeUsageCapability,
   HarnessNativeUsageProgress,
 } from "@codexhost/harness-adapter";
+import type { StoredThreadRecordV1 } from "@codexhost/mapping-store";
 import {
   jsonValueSchema,
+  localSessionsQueryParamsSchema,
+  localSessionsQueryResultSchema,
   localUsageQueryParamsSchema,
   localUsageQueryResultSchema,
   type HarnessPluginDescriptor,
+  type HostThreadId,
   type JsonObject,
   type JsonRpcRequest,
 } from "@codexhost/shared-contracts";
@@ -23,14 +27,40 @@ import { loadModelPrices } from "./local-usage-prices.js";
 import { createProjectResolver } from "./local-usage-projects.js";
 import { createModelPricer, type ModelPricer } from "./local-usage-pricing.js";
 import { buildLocalUsageView } from "./local-usage-view.js";
+import { buildLocalSessionsView } from "./local-sessions-view.js";
 
 const OFFICIAL_CODEX_ID = "codex";
 /** How long a query waits for a read before answering with its progress instead. */
 const PROGRESS_AFTER_MS = 500;
 
+/** A Native Session already mapped to a Thread. */
+export interface LocalSessionMapping {
+  harnessId: string;
+  nativeSessionId: string;
+  threadId: HostThreadId;
+}
+
+/** Main Threads mapped to a Native Session; Subagent mappings do not own their Sessions. */
+export function localSessionMappings(
+  records: readonly StoredThreadRecordV1[],
+): LocalSessionMapping[] {
+  return records.flatMap((record) =>
+    !record.subagent && record.state === "ready" && record.nativeSessionRef
+      ? [
+          {
+            harnessId: record.nativeSessionRef.harnessId,
+            nativeSessionId: record.nativeSessionRef.nativeSessionId,
+            threadId: record.hostThreadId,
+          },
+        ]
+      : [],
+  );
+}
+
 /**
- * Local Usage from the native records of every loaded Harness that can read them. Reads are
- * incremental from persisted cursors, and concurrent requests share the read in progress.
+ * Local Usage and the Sessions it came from, read from the native records of every loaded Harness
+ * that can read them. Reads are incremental from persisted cursors, and concurrent requests share
+ * the read in progress.
  */
 export class LocalUsageService {
   #state: LocalUsageState | null = null;
@@ -51,6 +81,8 @@ export class LocalUsageService {
       /** Official Codex has no Adapter; the Codex runtime reads its rollouts. */
       officialCodexUsage?: HarnessNativeUsageCapability;
       descriptors: () => readonly HarnessPluginDescriptor[];
+      /** Sessions already mapped to Threads, for the Sessions query. */
+      mappings?: () => Promise<readonly LocalSessionMapping[]>;
       directory: string;
       /** LiteLLM's public price table as JSON. */
       fetchLiteLlm: () => Promise<unknown>;
@@ -64,55 +96,102 @@ export class LocalUsageService {
     if (!params.success) {
       return { error: { code: -32602, message: "Invalid local usage query params" } };
     }
-    try {
-      if (!params.data.refresh && !this.#reading && this.#unreportedFailure !== null) {
-        throw this.#unreportedFailure;
-      }
-      const prices = this.#price();
-      // A period switch during a refresh waits for it rather than answering from older totals;
-      // a read that takes longer answers with its progress, and the page asks again.
-      const state = await this.#awaitBriefly(
-        params.data.refresh ? this.#read() : (this.#reading ?? this.#state ?? this.#initial()),
-      );
-      if (!state) {
-        return {
-          result: jsonValueSchema.parse(
-            localUsageQueryResultSchema.parse({
-              status: "reading",
-              progress: this.#readProgress(),
-            }),
-          ),
-        };
-      }
+    return this.#query(params.data.refresh, async (state, price) => {
       const cwds = [...new Set(state.buckets.flatMap(({ cwd }) => (cwd ? [cwd] : [])))];
-      const [price, projectNames] = await Promise.all([
-        prices,
-        Promise.all(cwds.map(async (cwd) => [cwd, await this.#project(cwd)] as const)),
-      ]);
-      const projects = new Map(projectNames);
-      const descriptors = this.input.descriptors();
-      const harnessName = (harnessId: string) =>
-        descriptors.find(({ id }) => id === harnessId)?.name ??
-        (harnessId === OFFICIAL_CODEX_ID ? "Codex" : harnessId);
-      const result = localUsageQueryResultSchema.parse(
+      const projects = await this.#projects(cwds);
+      return localUsageQueryResultSchema.parse(
         buildLocalUsageView({
           buckets: state.buckets,
           period: params.data.period,
           timeZone: params.data.timeZone,
           now: this.#now(),
-          harnessName,
+          harnessName: (harnessId) => this.#harnessName(harnessId),
           price,
           project: (cwd) => projects.get(cwd),
           failedHarnessIds: this.#failed,
         }),
       );
-      return { result: jsonValueSchema.parse(result) };
+    });
+  }
+
+  /** Main Sessions with their usage, from the same reads and state as Local Usage. */
+  async handleSessions(request: JsonRpcRequest): Promise<JsonObject> {
+    const params = localSessionsQueryParamsSchema.safeParse(request.params);
+    if (!params.success) {
+      return { error: { code: -32602, message: "Invalid local sessions query params" } };
+    }
+    return this.#query(params.data.refresh, async (state, price) => {
+      const cwds = [...new Set(state.sessions.flatMap(({ cwd }) => (cwd ? [cwd] : [])))];
+      const [projects, mappings] = await Promise.all([
+        this.#projects(cwds),
+        this.input.mappings?.() ?? [],
+      ]);
+      const threads = new Map(
+        mappings.map(({ harnessId, nativeSessionId, threadId }) => [
+          JSON.stringify([harnessId, nativeSessionId]),
+          threadId,
+        ]),
+      );
+      return localSessionsQueryResultSchema.parse(
+        buildLocalSessionsView({
+          summaries: state.sessions,
+          usage: state.sessionUsage,
+          price,
+          harnessName: (harnessId) => this.#harnessName(harnessId),
+          project: (cwd) => projects.get(cwd),
+          threadId: (harnessId, nativeSessionId) =>
+            threads.get(JSON.stringify([harnessId, nativeSessionId])),
+          resumable: (harnessId) =>
+            Boolean(this.input.adapters.get(harnessId)?.sessionImport?.resolveCandidate),
+          failedHarnessIds: this.#failed,
+        }),
+      );
+    });
+  }
+
+  /**
+   * Answers from the read `refresh` asks for, or with its progress when it takes longer than a
+   * moment. `build` turns the state into the result.
+   */
+  async #query(
+    refresh: boolean,
+    build: (state: LocalUsageState, price: ModelPricer) => Promise<unknown>,
+  ): Promise<JsonObject> {
+    try {
+      if (!refresh && !this.#reading && this.#unreportedFailure !== null) {
+        throw this.#unreportedFailure;
+      }
+      const prices = this.#price();
+      // A query during a refresh waits for it rather than answering from older totals;
+      // a read that takes longer answers with its progress, and the page asks again.
+      const state = await this.#awaitBriefly(
+        refresh ? this.#read() : (this.#reading ?? this.#state ?? this.#initial()),
+      );
+      if (!state) {
+        return {
+          result: jsonValueSchema.parse({ status: "reading", progress: this.#readProgress() }),
+        };
+      }
+      return { result: jsonValueSchema.parse(await build(state, await prices)) };
     } catch (error) {
       // Any query that reports an error has reported a pending read failure too.
       this.#unreportedFailure = null;
       this.input.diagnose(error);
       return { error: { code: -32082, message: "Local usage could not be read" } };
     }
+  }
+
+  async #projects(cwds: readonly string[]): Promise<Map<string, string>> {
+    return new Map(
+      await Promise.all(cwds.map(async (cwd) => [cwd, await this.#project(cwd)] as const)),
+    );
+  }
+
+  #harnessName(harnessId: string): string {
+    return (
+      this.input.descriptors().find(({ id }) => id === harnessId)?.name ??
+      (harnessId === OFFICIAL_CODEX_ID ? "Codex" : harnessId)
+    );
   }
 
   /** The state, or null when the read it depends on is still running after a short wait. */
