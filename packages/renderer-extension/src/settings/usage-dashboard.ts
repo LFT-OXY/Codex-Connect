@@ -1,4 +1,4 @@
-import type { LocalUsageQueryResult } from "@codexhost/shared-contracts";
+import type { LocalUsageView } from "@codexhost/shared-contracts";
 
 import type { RendererSettingsMessages } from "./localization.js";
 
@@ -64,7 +64,20 @@ const CARD_CLASS = [
   "border border-settings-border bg-settings-panel",
 ].join(" ");
 
-type UsageHarness = LocalUsageQueryResult["harnesses"][number];
+const TAB_CLASS = [
+  "h-7 rounded-md border-0 bg-transparent px-3 text-[13px] leading-5 font-medium",
+  "text-settings-muted transition-colors hover:text-settings-text",
+  "focus-visible:outline-2 focus-visible:outline-settings-focus",
+  "aria-selected:bg-settings-surface aria-selected:text-settings-text",
+].join(" ");
+
+export type UsageDetailTab = "daily" | "projects";
+export interface UsageDetailTabState {
+  selected: UsageDetailTab;
+  select(tab: UsageDetailTab): void;
+}
+
+type UsageHarness = LocalUsageView["harnesses"][number];
 
 /** Each Provider's share of its Harness, collapsed until opened. */
 function providerBreakdown(
@@ -143,7 +156,7 @@ function harnessCard(
 /** Rolling totals and history are period-independent; conversations follow the range. */
 function statBlocks(
   document: Document,
-  result: LocalUsageQueryResult,
+  result: LocalUsageView,
   firstActiveDate: string,
   messages: RendererSettingsMessages["usage"],
 ): HTMLElement {
@@ -194,13 +207,9 @@ function statBlocks(
 
 function dailyTable(
   document: Document,
-  daily: LocalUsageQueryResult["daily"],
+  daily: LocalUsageView["daily"],
   messages: RendererSettingsMessages["usage"],
 ): HTMLElement {
-  const section = element(document, "section", "flex flex-col gap-2");
-  section.append(
-    element(document, "h3", "m-0 px-1 text-[13px] leading-5 font-semibold", messages.dailyTitle),
-  );
   const scroll = element(
     document,
     "div",
@@ -248,15 +257,172 @@ function dailyTable(
   }
   table.append(head, body);
   scroll.append(table);
-  section.append(scroll);
+  return scroll;
+}
+
+/** Projects by usage, each with a bar relative to the most used one. */
+function projectList(
+  document: Document,
+  result: LocalUsageView,
+  messages: RendererSettingsMessages["usage"],
+): HTMLElement {
+  if (result.projects.length === 0) {
+    const empty = element(
+      document,
+      "p",
+      "m-0 px-1 text-sm text-settings-muted",
+      messages.projectsEmpty,
+    );
+    empty.setAttribute("role", "status");
+    return empty;
+  }
+  const names = new Map(result.harnesses.map(({ harnessId, name }) => [harnessId, name]));
+  const max = result.projects[0]?.totalTokens ?? 0;
+  const list = element(
+    document,
+    "ul",
+    "m-0 flex list-none flex-col rounded-[10px] border border-settings-border bg-settings-panel p-0",
+  );
+  for (const project of result.projects) {
+    const row = element(
+      document,
+      "li",
+      "flex items-center gap-4 border-b border-settings-divider px-4 py-2.5 last:border-b-0",
+    );
+    row.dataset.usageProject = project.project;
+    const label = element(document, "div", "flex min-w-0 flex-1 flex-col");
+    const slash = project.project.lastIndexOf("/");
+    const name = element(document, "span", "truncate text-[13px] leading-5");
+    name.title = project.project;
+    if (slash > 0) {
+      name.append(
+        element(document, "span", "text-settings-muted", project.project.slice(0, slash + 1)),
+      );
+    }
+    name.append(element(document, "span", "font-medium", project.project.slice(slash + 1)));
+    label.append(
+      name,
+      element(
+        document,
+        "span",
+        "truncate text-xs text-settings-muted",
+        project.harnessIds.map((harnessId) => names.get(harnessId) ?? harnessId).join(" · "),
+      ),
+    );
+    const amount = element(document, "div", "flex w-28 shrink-0 flex-col items-end gap-1");
+    const tokens = element(
+      document,
+      "span",
+      "text-[13px] font-medium tabular-nums",
+      formatUsageTokens(project.totalTokens),
+    );
+    tokens.title = project.totalTokens.toLocaleString();
+    const bar = usageBar(document, sharePercent(project.totalTokens, max), "h-1 w-full");
+    bar.setAttribute("aria-hidden", "true");
+    amount.append(tokens, bar);
+    row.append(label, amount);
+    list.append(row);
+  }
+  return list;
+}
+
+/** A rounded bar filled to `percent`; `sizeClass` sets its height and width. */
+export function usageBar(document: Document, percent: number, sizeClass: string): HTMLElement {
+  const track = element(
+    document,
+    "span",
+    `block overflow-hidden rounded-full bg-settings-surface-hover ${sizeClass}`,
+  );
+  const fill = element(document, "span", "block h-full rounded-full bg-settings-series-1");
+  fill.style.width = `${percent}%`;
+  track.append(fill);
+  return track;
+}
+
+/** Daily breakdown and project usage share one place; the page remembers the open tab. */
+function details(
+  document: Document,
+  result: LocalUsageView,
+  messages: RendererSettingsMessages["usage"],
+  tab: UsageDetailTabState | undefined,
+): HTMLElement {
+  const section = element(document, "section", "flex flex-col gap-2");
+  const tabs = element(document, "div", "flex gap-1 px-1");
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", messages.detailsLabel);
+  const panels = {
+    daily: dailyTable(document, result.daily, messages),
+    projects: projectList(document, result, messages),
+  } satisfies Record<UsageDetailTab, HTMLElement>;
+  const buttons = new Map<UsageDetailTab, HTMLButtonElement>();
+  const show = (selected: UsageDetailTab): void => {
+    for (const [id, button] of buttons) {
+      button.setAttribute("aria-selected", String(id === selected));
+      button.tabIndex = id === selected ? 0 : -1;
+      panels[id].hidden = id !== selected;
+    }
+  };
+  const select = (id: UsageDetailTab): void => {
+    show(id);
+    tab?.select(id);
+  };
+  const ids = ["daily", "projects"] as const satisfies UsageDetailTab[];
+  ids.forEach((id, index) => {
+    const label = id === "daily" ? messages.dailyTitle : messages.projectsTitle;
+    const panelId = `codexhost-settings-usage-${id}`;
+    const button = element(document, "button", TAB_CLASS, label);
+    button.type = "button";
+    button.dataset.usageTab = id;
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-controls", panelId);
+    button.addEventListener("click", () => select(id));
+    // Arrow keys move between tabs, as in the other settings tab lists.
+    button.addEventListener("keydown", (event: KeyboardEvent) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      const next = ids[(index + (event.key === "ArrowRight" ? 1 : -1) + ids.length) % ids.length];
+      if (!next) return;
+      select(next);
+      buttons.get(next)?.focus();
+    });
+    buttons.set(id, button);
+    tabs.append(button);
+    panels[id].id = panelId;
+    panels[id].setAttribute("role", "tabpanel");
+    panels[id].setAttribute("aria-label", label);
+    panels[id].dataset.usageTabPanel = id;
+  });
+  show(tab?.selected ?? "daily");
+  section.append(tabs, panels.daily, panels.projects);
   return section;
+}
+
+/** One notice per Harness whose last read failed; its numbers are from an earlier read. */
+function failureNotices(
+  document: Document,
+  failures: LocalUsageView["failures"],
+  messages: RendererSettingsMessages["usage"],
+): HTMLElement[] {
+  return failures.map(({ harnessId, name }) => {
+    const notice = element(
+      document,
+      "p",
+      "m-0 rounded-md border border-settings-border px-3 py-2 text-sm text-settings-danger",
+      messages.sourceFailed.replace("{name}", name),
+    );
+    notice.dataset.usageFailure = harnessId;
+    notice.setAttribute("role", "alert");
+    return notice;
+  });
 }
 
 /** The page body for one query result; aggregate numbers only. */
 export function renderLocalUsage(
   document: Document,
-  result: LocalUsageQueryResult,
+  result: LocalUsageView,
   settingsMessages: RendererSettingsMessages,
+  /** The open detail tab, kept by the page across results. */
+  tab?: UsageDetailTabState,
 ): HTMLElement {
   const messages = settingsMessages.usage;
   const { firstActiveDate } = result.stats;
@@ -292,7 +458,7 @@ export function renderLocalUsage(
       `${result.range.from} – ${result.range.to}`,
     ),
   );
-  root.append(summary);
+  root.append(...failureNotices(document, result.failures, messages), summary);
 
   if (result.totals.total === 0 && result.totals.conversations === 0) {
     const empty = element(
@@ -343,6 +509,6 @@ export function renderLocalUsage(
       }),
     );
   });
-  root.append(bar, cards, ...stats, dailyTable(document, result.daily, messages));
+  root.append(bar, cards, ...stats, details(document, result, messages, tab));
   return root;
 }

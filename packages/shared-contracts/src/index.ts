@@ -18,6 +18,9 @@ export {
   LOCAL_USAGE_CUSTOM_RANGE_MAX_DAYS,
   LOCAL_USAGE_DAILY_MAX_LENGTH,
   LOCAL_USAGE_HARNESS_MAX_LENGTH,
+  LOCAL_USAGE_HARNESS_NAME_MAX_LENGTH,
+  LOCAL_USAGE_PROJECT_MAX_LENGTH,
+  LOCAL_USAGE_PROJECT_NAME_MAX_LENGTH,
   LOCAL_USAGE_PROVIDER_MAX_LENGTH,
   LOCAL_USAGE_PROVIDER_NAME_MAX_LENGTH,
   LOCAL_USAGE_QUERY_METHOD,
@@ -26,9 +29,13 @@ export {
   localUsagePeriodSchema,
   localUsageQueryParamsSchema,
   localUsageQueryResultSchema,
+  localUsageReadingSchema,
+  localUsageViewSchema,
   type LocalUsagePeriod,
   type LocalUsageQueryParams,
   type LocalUsageQueryResult,
+  type LocalUsageReading,
+  type LocalUsageView,
 } from "./local-usage.js";
 
 export {

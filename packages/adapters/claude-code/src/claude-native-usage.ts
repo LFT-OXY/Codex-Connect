@@ -4,6 +4,7 @@ import path from "node:path";
 
 import type {
   HarnessNativeUsageBatch,
+  HarnessNativeUsageProgress,
   HarnessNativeUsageRecord,
   HarnessNativeUsageTokens,
 } from "@codexhost/harness-adapter";
@@ -234,6 +235,7 @@ export async function readClaudeNativeUsage(
   environment: NodeJS.ProcessEnv,
   cursor: JsonValue | null,
   signal: AbortSignal,
+  onProgress?: (progress: HarnessNativeUsageProgress) => void,
 ): Promise<HarnessNativeUsageBatch> {
   const projects = claudeProjectsDirectory(environment);
   const previous: ClaudeUsageCursor = claudeUsageCursorSchema.safeParse(cursor).data ?? {
@@ -242,7 +244,9 @@ export async function readClaudeNativeUsage(
   };
   const next: ClaudeUsageCursor = { formatVersion: 1, files: {} };
   const records: HarnessNativeUsageRecord[] = [];
-  for (const { relative, main } of await usageFiles(projects)) {
+  const files = await usageFiles(projects);
+  onProgress?.({ processed: 0, total: files.length });
+  for (const [index, { relative, main }] of files.entries()) {
     signal.throwIfAborted();
     const file = path.join(projects, relative);
     try {
@@ -267,6 +271,7 @@ export async function readClaudeNativeUsage(
       // Native clients may delete a transcript while it is being listed.
       if (!missing(error)) throw error;
     }
+    onProgress?.({ processed: index + 1, total: files.length });
   }
   return { records, cursor: next };
 }

@@ -16,6 +16,7 @@ import {
   type HarnessInspection,
   type HarnessModelRef,
   type HarnessNativeUsageBatch,
+  type HarnessNativeUsageProgress,
   type HarnessNativeUsageCapability,
   type HarnessOutput,
   type HarnessResult,
@@ -2074,9 +2075,12 @@ export class PiAdapter implements HarnessAdapter {
     },
   } satisfies HarnessSessionImportCapability);
   readonly nativeUsage = Object.freeze({
-    read: (cursor: JsonValue | null): Promise<HarnessResult<HarnessNativeUsageBatch>> =>
+    read: (
+      cursor: JsonValue | null,
+      onProgress?: (progress: HarnessNativeUsageProgress) => void,
+    ): Promise<HarnessResult<HarnessNativeUsageBatch>> =>
       this.#readImport(
-        (signal) => readPiNativeUsage(this.#environment, cursor, signal),
+        (signal) => readPiNativeUsage(this.#environment, cursor, signal, onProgress),
         "Pi usage records could not be read; check storage access and retry",
       ),
   } satisfies HarnessNativeUsageCapability);

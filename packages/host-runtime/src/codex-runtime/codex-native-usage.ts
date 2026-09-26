@@ -4,6 +4,7 @@ import path from "node:path";
 
 import type {
   HarnessNativeUsageBatch,
+  HarnessNativeUsageProgress,
   HarnessNativeUsageCapability,
   HarnessNativeUsageRecord,
 } from "@codexhost/harness-adapter";
@@ -256,6 +257,7 @@ async function readRolloutUsage(
 export async function readCodexNativeUsage(
   codexHome: string,
   cursor: JsonValue | null,
+  onProgress?: (progress: HarnessNativeUsageProgress) => void,
 ): Promise<HarnessNativeUsageBatch> {
   const previous: CodexUsageCursor = codexUsageCursorSchema.safeParse(cursor).data ?? {
     formatVersion: 1,
@@ -263,7 +265,9 @@ export async function readCodexNativeUsage(
   };
   const next: CodexUsageCursor = { formatVersion: 1, files: {} };
   const records: HarnessNativeUsageRecord[] = [];
-  for (const relative of await rolloutFiles(codexHome)) {
+  const files = await rolloutFiles(codexHome);
+  onProgress?.({ processed: 0, total: files.length });
+  for (const [index, relative] of files.entries()) {
     const file = path.join(codexHome, relative);
     try {
       const metadata = await stat(file, { bigint: true });
@@ -284,6 +288,7 @@ export async function readCodexNativeUsage(
       // Codex may archive or delete a rollout while it is being listed.
       if (!missing(error)) throw error;
     }
+    onProgress?.({ processed: index + 1, total: files.length });
   }
   return { records, cursor: next };
 }
@@ -294,9 +299,15 @@ export async function readCodexNativeUsage(
  */
 export function codexNativeUsage(codexHome: string): HarnessNativeUsageCapability {
   return Object.freeze({
-    read: async (cursor: JsonValue | null) => {
+    read: async (
+      cursor: JsonValue | null,
+      onProgress?: (progress: HarnessNativeUsageProgress) => void,
+    ) => {
       try {
-        return { ok: true as const, value: await readCodexNativeUsage(codexHome, cursor) };
+        return {
+          ok: true as const,
+          value: await readCodexNativeUsage(codexHome, cursor, onProgress),
+        };
       } catch (error) {
         return {
           ok: false as const,

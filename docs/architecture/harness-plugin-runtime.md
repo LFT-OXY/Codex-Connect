@@ -169,7 +169,7 @@ Renderer 的 `listHarnessPlugins()` 使用绑定的 RequestManager 发送此固�
 
 ### 原生用量读取
 
-可选 `HarnessAdapter.nativeUsage.read(cursor)` 从原生会话记录中读取上次游标之后新增的用量事实：发生时间、Native Session ID、可选 Provider / Model / 工作目录、Token 分项（输入不含缓存）、对话数增量与稳定去重键，不含消息正文。游标对 Host 不透明，由 Host 持久化，Adapter 不保存读取状态；无法识别的游标按从头读取处理，重复返回已读事实是允许的，Host 按去重键只计一次。Host 校验每批记录，某个 Harness 失败时保留它上次的游标与统计。记录格式、文件位置与去重细节只存在于各 Adapter；目前 Claude Code、Pi 与 oh-my-pi 实现，Aqua Broker 不转发此能力。官方 Codex 没有 Adapter，由 host-runtime 的 Codex 运行时（`codex-runtime/codex-native-usage.ts`）以同一形状读取 `$CODEX_HOME` 下的 rollout，在结果中以 `harnessId: "codex"` 出现。产品说明见[用量统计](../product/local-usage.md)。
+可选 `HarnessAdapter.nativeUsage.read(cursor, onProgress?)` 从原生会话记录中读取上次游标之后新增的用量事实（`onProgress` 报告已处理 / 总文件数，供首次读取显示进度）：发生时间、Native Session ID、可选 Provider / Model / 工作目录、Token 分项（输入不含缓存）、对话数增量与稳定去重键，不含消息正文。游标对 Host 不透明，由 Host 持久化，Adapter 不保存读取状态；无法识别的游标按从头读取处理，重复返回已读事实是允许的，Host 按去重键只计一次。Host 校验每批记录，某个 Harness 失败时保留它上次的游标与统计，并在查询结果中标出该 Harness。记录格式、文件位置与去重细节只存在于各 Adapter；目前 Claude Code、Pi 与 oh-my-pi 实现，Aqua Broker 不转发此能力。官方 Codex 没有 Adapter，由 host-runtime 的 Codex 运行时（`codex-runtime/codex-native-usage.ts`）以同一形状读取 `$CODEX_HOME` 下的 rollout，在结果中以 `harnessId: "codex"` 出现。产品说明见[用量统计](../product/local-usage.md)。
 
 ## 运行中切换 Model / Thinking
 

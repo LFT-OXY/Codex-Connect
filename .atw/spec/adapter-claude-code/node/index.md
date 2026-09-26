@@ -46,6 +46,7 @@
 
 跨层契约见 `.atw/spec/host-runtime/node/local-usage.md`。Claude 特有规则（`test/claude-native-usage.test.ts` 固化）：
 
+- 进度：列出文件后 `onProgress?.({ processed: 0, total: files.length })`，每个文件处理完（包括读取中被删除而跳过的）后报 `index + 1`；Adapter 的 `nativeUsage.read(cursor, onProgress)` 原样传给读取函数（`read…NativeUsage(environment, cursor, signal, onProgress)`）。
 - 文件：`claudeProjectsDirectory(env)` 下 `<project>/*.jsonl`（主会话）与 `<project>/<session>/subagents/*.jsonl`（子代理）。游标 `{formatVersion:1, files:{[相对路径]:{ino(字符串，bigint stat), offset}}}`；ino 变化或 offset 超过文件大小从 0 重读。
 - 只读到最后一个 `\n`，未写完的尾行下次再读。只解析含 `"usage"` 或 `"type":"user"` 的行（大段附件行不 parse）。
 - 用量：`type:"assistant"` 且有 `message.usage`；去重键 `message:<message.id>:<requestId>`（无 requestId 时省略）。同一回复会写多行：主会话每个内容块一行、用量相同；子代理先写 `stop_reason:null` 的部分用量，**工具结果可能先于最终用量行写入**。取同键的最后一行。

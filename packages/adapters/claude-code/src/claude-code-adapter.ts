@@ -20,6 +20,7 @@ import {
   type HarnessInspection,
   type HarnessModelRef,
   type HarnessNativeUsageBatch,
+  type HarnessNativeUsageProgress,
   type HarnessNativeUsageCapability,
   type HarnessPermissionModeId,
   type HarnessOutput,
@@ -2496,9 +2497,12 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
     },
   } satisfies HarnessSessionImportCapability);
   readonly nativeUsage = Object.freeze({
-    read: (cursor: JsonValue | null): Promise<HarnessResult<HarnessNativeUsageBatch>> =>
+    read: (
+      cursor: JsonValue | null,
+      onProgress?: (progress: HarnessNativeUsageProgress) => void,
+    ): Promise<HarnessResult<HarnessNativeUsageBatch>> =>
       this.#readImport(
-        (signal) => readClaudeNativeUsage(this.#environment, cursor, signal),
+        (signal) => readClaudeNativeUsage(this.#environment, cursor, signal, onProgress),
         "Claude Code usage records could not be read; check storage access and retry",
       ),
   } satisfies HarnessNativeUsageCapability);

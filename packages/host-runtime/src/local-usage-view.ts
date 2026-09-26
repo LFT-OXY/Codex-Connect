@@ -1,13 +1,14 @@
 import {
   harnessIdSchema,
+  LOCAL_USAGE_PROJECT_MAX_LENGTH,
   type LocalUsagePeriod,
-  type LocalUsageQueryResult,
+  type LocalUsageView,
 } from "@codexhost/shared-contracts";
 
 import { usageCostUsd, type ModelPricer } from "./local-usage-pricing.js";
 import type { LocalUsageBucket } from "./local-usage-store.js";
 
-type DailyRow = LocalUsageQueryResult["daily"][number];
+type DailyRow = LocalUsageView["daily"][number];
 
 function calendarDate(year: number, monthIndex: number, day: number): string {
   return new Date(Date.UTC(year, monthIndex, day)).toISOString().slice(0, 10);
@@ -67,10 +68,10 @@ function shiftDate(date: string, days: number): string {
 function usageStats(
   dayTotals: ReadonlyMap<string, number>,
   today: string,
-): LocalUsageQueryResult["stats"] {
+): LocalUsageView["stats"] {
   const last7From = shiftDate(today, -6);
   const last30From = shiftDate(today, -29);
-  const stats: LocalUsageQueryResult["stats"] = {
+  const stats: LocalUsageView["stats"] = {
     last7Days: 0,
     last30Days: 0,
     dailyAverage: 0,
@@ -106,7 +107,11 @@ export function buildLocalUsageView(input: {
   now: number;
   harnessName(harnessId: string): string;
   price: ModelPricer;
-}): LocalUsageQueryResult {
+  /** Project name of a working directory in `buckets`. */
+  project(cwd: string): string | undefined;
+  /** Harnesses whose last read failed. */
+  failedHarnessIds: readonly string[];
+}): LocalUsageView {
   const localDate = localDateFormatter(input.timeZone);
   const today = localDate(input.now);
   const range = localUsageRange(input.period, today);
@@ -129,6 +134,7 @@ export function buildLocalUsageView(input: {
       providers: Map<string, { totalTokens: number; models: Set<string> }>;
     }
   >();
+  const projects = new Map<string, { totalTokens: number; harnesses: Map<string, number> }>();
   const daily = new Map<string, DailyRow>();
   const dayTotals = new Map<string, number>();
   for (const bucket of input.buckets) {
@@ -169,6 +175,19 @@ export function buildLocalUsageView(input: {
       harness.models.add(bucket.model);
       models.add(JSON.stringify([bucket.harnessId, bucket.model]));
     }
+    const name = bucket.cwd ? input.project(bucket.cwd) : undefined;
+    if (name !== undefined) {
+      let project = projects.get(name);
+      if (!project) {
+        project = { totalTokens: 0, harnesses: new Map() };
+        projects.set(name, project);
+      }
+      project.totalTokens += total;
+      project.harnesses.set(
+        bucket.harnessId,
+        (project.harnesses.get(bucket.harnessId) ?? 0) + total,
+      );
+    }
     if (bucket.provider === null) continue;
     let provider = harness.providers.get(bucket.provider);
     if (!provider) {
@@ -179,6 +198,7 @@ export function buildLocalUsageView(input: {
     if (bucket.model !== null) provider.models.add(bucket.model);
   }
   return {
+    status: "ready",
     range,
     totals,
     estimatedCostUsd,
@@ -199,6 +219,20 @@ export function buildLocalUsageView(input: {
       }))
       .sort((left, right) => right.totalTokens - left.totalTokens),
     daily: [...daily.values()].sort((left, right) => right.date.localeCompare(left.date)),
+    projects: [...projects]
+      .map(([project, usage]) => ({
+        project,
+        totalTokens: usage.totalTokens,
+        harnessIds: [...usage.harnesses]
+          .sort((left, right) => right[1] - left[1])
+          .map(([harnessId]) => harnessIdSchema.parse(harnessId)),
+      }))
+      .sort((left, right) => right.totalTokens - left.totalTokens)
+      .slice(0, LOCAL_USAGE_PROJECT_MAX_LENGTH),
+    failures: input.failedHarnessIds.map((harnessId) => ({
+      harnessId: harnessIdSchema.parse(harnessId),
+      name: input.harnessName(harnessId),
+    })),
     stats: usageStats(dayTotals, today),
   };
 }

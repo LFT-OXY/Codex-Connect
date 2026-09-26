@@ -37,6 +37,7 @@
 
 跨层契约见 `.atw/spec/host-runtime/node/local-usage.md`。Pi 特有规则（`test/pi-native-usage.test.ts` 固化；本机 786 个文件、19,028 条去重记录与独立脚本逐项一致）：
 
+- 进度：列出文件后 `onProgress?.({ processed: 0, total: files.length })`，每个文件处理完（包括读取中被删除而跳过的）后报 `index + 1`；Adapter 的 `nativeUsage.read(cursor, onProgress)` 原样传给读取函数（`read…NativeUsage(environment, cursor, signal, onProgress)`）。
 - 目录：复用 `piSessionImportDirectory`（`PI_CODING_AGENT_SESSION_DIR`，否则 `$PI_CODING_AGENT_DIR/sessions`，默认 `~/.pi/agent/sessions`），但**递归**列出所有 `*.jsonl`，不跟随符号链接。子代理扩展把子会话放在父会话目录内（`<project>/<session>/tasks/*.jsonl`、`<project>/<hash>/run-N/*.jsonl`，头部带 `parentSession`），本机约占 Pi 用量两成。会话导入的 `sessionFiles` 只扫一层是为了不把子会话当可导入会话，不要为用量改它。
 - 游标 `{ formatVersion: 1, files: { [相对 sessions 目录的路径]: { ino, offset, session: {id, cwd?} | null } } }`。`session` 是第一行会话头（`type:"session"` 且有 `id`），用于解析 offset 之后的行；第一行不是会话头 → `session: null`，整个文件不计。Adapter 没有 zod 依赖，`parseCursor` 手写校验，**任一项不合法整个游标作废**（等同 `null`，从头读），不要逐项丢弃。inode 变化或文件变短从头读。只读到最后一个 `\n`。
 - 用量：`type:"message"`、`message.role === "assistant"` 且有 `message.usage` 的行（先用 `'"usage"'` 字符串预过滤）。`@earendil-works/pi-ai` 的 `Usage.reasoning` 是 `output` 的子集 → `reasoning = min(reasoning, output)`，`output = output − reasoning`（契约允许的「从 output 中扣除」；Token 总数与费用不变，推理列有值）。`input`、`cacheRead`、`cacheWrite` 原样（Pi 的 `input` 本就不含缓存）。

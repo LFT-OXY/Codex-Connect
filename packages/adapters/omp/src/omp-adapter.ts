@@ -16,6 +16,7 @@ import {
   type HarnessInspection,
   type HarnessModelRef,
   type HarnessNativeUsageBatch,
+  type HarnessNativeUsageProgress,
   type HarnessNativeUsageCapability,
   type HarnessOutput,
   type HarnessResult,
@@ -2202,11 +2203,19 @@ export class OmpAdapter implements HarnessAdapter {
     },
   };
   readonly nativeUsage = Object.freeze({
-    read: (cursor: JsonValue | null): Promise<HarnessResult<HarnessNativeUsageBatch>> => {
+    read: (
+      cursor: JsonValue | null,
+      onProgress?: (progress: HarnessNativeUsageProgress) => void,
+    ): Promise<HarnessResult<HarnessNativeUsageBatch>> => {
       if (this.#closePromise) {
         return Promise.resolve({ ok: false, error: invalidState("Omp Adapter is closed") });
       }
-      const request = readOmpNativeUsage(this.#environment, cursor, this.#usageAbort.signal)
+      const request = readOmpNativeUsage(
+        this.#environment,
+        cursor,
+        this.#usageAbort.signal,
+        onProgress,
+      )
         .then((value): HarnessResult<HarnessNativeUsageBatch> => ({ ok: true, value }))
         .catch((): HarnessResult<HarnessNativeUsageBatch> => ({
           ok: false,

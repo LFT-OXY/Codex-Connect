@@ -24,6 +24,7 @@ const { outputFiles } = await build({
           async queryLocalUsage(params) {
             calls.push(params);
             return {
+              status: "ready",
               range: { from: "2026-03-02", to: "2026-03-08" },
               totals: { total: 6035507564, input: 1200000, cacheRead: 5800000000, cacheWrite: 220000000, output: 14307564, reasoning: 0, conversations: 4331 },
               estimatedCostUsd: 4213.58,
@@ -36,6 +37,11 @@ const { outputFiles } = await build({
                 { date: "2026-03-04", total: 1035507564, input: 200000, output: 4307564, cacheRead: 1000000000, reasoning: 0, conversations: 331 },
                 { date: "2026-03-03", total: 5000000000, input: 1000000, output: 10000000, cacheRead: 4800000000, reasoning: 0, conversations: 4000 },
               ],
+              projects: [
+                { project: "acme/widget", totalTokens: 5000000000, harnessIds: ["claude-code", "pi"] },
+                { project: "a-very-long-organization-name/a-very-long-repository-name-that-needs-truncation", totalTokens: 1035507564, harnessIds: ["pi"] },
+              ],
+              failures: [{ harnessId: "pi", name: "Pi" }],
               stats: { last7Days: 6035507564, last30Days: 9035507564, dailyAverage: 752958964, activeDays: 128, firstActiveDate: "2025-06-01" },
             };
           },
@@ -89,6 +95,17 @@ test("expands the settings dialog for the usage page and shows the dashboard", a
   await expect(page.locator("[data-usage-cost]")).toHaveText("$4,213.58");
   await expect(page.locator("[data-usage-harness-card]")).toHaveCount(3);
   await expect(page.locator("[data-usage-day]")).toHaveCount(2);
+  await expect(page.locator('[data-usage-failure="pi"]')).toBeVisible();
+  await expect(page.locator("[data-usage-project]")).toHaveCount(2);
+  await expect(page.locator('[data-usage-tab-panel="projects"]')).toBeHidden();
+  await page.locator('[data-usage-tab="projects"]').click();
+  await expect(page.locator('[data-usage-tab-panel="daily"]')).toBeHidden();
+  await expect(page.locator('[data-usage-project="acme/widget"]')).toBeVisible();
+  if (process.env.CODEXHOST_USAGE_SCREENSHOT_DIR) {
+    await page.screenshot({
+      path: path.join(process.env.CODEXHOST_USAGE_SCREENSHOT_DIR, "usage-projects.png"),
+    });
+  }
   const segment = await page.locator('[data-usage-segment="claude-code"]').boundingBox();
   expect(segment?.height ?? 0).toBeGreaterThan(0);
   expect(await page.evaluate(() => Reflect.get(globalThis, "usageFixture").calls[0])).toEqual({
@@ -121,6 +138,7 @@ test("stays readable in the dark theme and at a narrow window width", async ({ p
     /openai-codex-with-a-long-provider-name\s*100\.00%/u,
     /anthropic\s*<0\.01%/u,
   ]);
+  await page.locator('[data-usage-tab="projects"]').click();
   await page.setViewportSize({ width: 640, height: 900 });
   const overflow = await page.evaluate(() => {
     const shadow = document.querySelector("[data-codexhost-settings-shell]")?.shadowRoot;

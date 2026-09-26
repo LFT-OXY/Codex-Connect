@@ -2,7 +2,10 @@ import { appendFile, mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/pro
 import os from "node:os";
 import path from "node:path";
 
-import type { HarnessNativeUsageBatch } from "@codexhost/harness-adapter";
+import type {
+  HarnessNativeUsageBatch,
+  HarnessNativeUsageProgress,
+} from "@codexhost/harness-adapter";
 import type { JsonValue } from "@codexhost/shared-contracts";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -28,8 +31,11 @@ async function fixture() {
   await mkdir(project, { recursive: true });
   const adapter = new PiAdapter({ environment: { PI_CODING_AGENT_DIR: agent } });
   adapters.push(adapter);
-  const read = async (cursor: JsonValue | null = null): Promise<HarnessNativeUsageBatch> => {
-    const result = await adapter.nativeUsage.read(cursor);
+  const read = async (
+    cursor: JsonValue | null = null,
+    onProgress?: (progress: HarnessNativeUsageProgress) => void,
+  ): Promise<HarnessNativeUsageBatch> => {
+    const result = await adapter.nativeUsage.read(cursor, onProgress);
     if (!result.ok) throw new Error(result.error.message);
     return result.value;
   };
@@ -205,7 +211,7 @@ describe("Pi native usage", () => {
     );
   });
 
-  it("includes subagent sessions kept inside a parent session's folder", async () => {
+  it("includes subagent sessions kept inside a parent session's folder, reporting file progress", async () => {
     const f = await fixture();
     const child = path.join(f.project, SESSION, "tasks");
     await mkdir(child, { recursive: true });
@@ -217,8 +223,15 @@ describe("Pi native usage", () => {
       ),
     );
 
-    const { records } = await f.read();
+    await writeFile(f.file, lines(header(), user("u-1", null)));
+    const progress: HarnessNativeUsageProgress[] = [];
+    const { records } = await f.read(null, (reported) => progress.push(reported));
     expect(records).toEqual([expect.objectContaining({ nativeSessionId: FORK, conversations: 1 })]);
+    expect(progress).toEqual([
+      { processed: 0, total: 2 },
+      { processed: 1, total: 2 },
+      { processed: 2, total: 2 },
+    ]);
   });
 
   it("reads only complete lines and resumes after them", async () => {

@@ -5,6 +5,7 @@ import path from "node:path";
 
 import type {
   HarnessNativeUsageBatch,
+  HarnessNativeUsageProgress,
   HarnessNativeUsageRecord,
   HarnessNativeUsageTokens,
 } from "@codexhost/harness-adapter";
@@ -246,12 +247,15 @@ export async function readOmpNativeUsage(
   environment: NodeJS.ProcessEnv,
   cursor: JsonValue | null,
   signal: AbortSignal,
+  onProgress?: (progress: HarnessNativeUsageProgress) => void,
 ): Promise<HarnessNativeUsageBatch> {
   const directory = await ompSessionsDirectory(environment);
   const previous = parseCursor(cursor);
   const next: OmpUsageCursor = { formatVersion: 1, files: {} };
   const records: HarnessNativeUsageRecord[] = [];
-  for (const file of await sessionFiles(directory, signal)) {
+  const files = await sessionFiles(directory, signal);
+  onProgress?.({ processed: 0, total: files.length });
+  for (const [index, file] of files.entries()) {
     signal.throwIfAborted();
     const relative = path.relative(directory, file);
     try {
@@ -271,6 +275,7 @@ export async function readOmpNativeUsage(
       // OMP may delete a session file while it is being listed.
       if (!missing(error)) throw error;
     }
+    onProgress?.({ processed: index + 1, total: files.length });
   }
   return { records, cursor: next };
 }

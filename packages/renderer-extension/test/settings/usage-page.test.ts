@@ -73,6 +73,7 @@ function text(root: FakeElement): string {
 
 const messages = rendererSettingsMessages("zh-CN");
 const result: LocalUsageQueryResult = {
+  status: "ready",
   range: { from: "2026-03-02", to: "2026-03-08" },
   totals: {
     total: 3,
@@ -87,6 +88,8 @@ const result: LocalUsageQueryResult = {
   models: 1,
   harnesses: [],
   daily: [],
+  projects: [],
+  failures: [],
   stats: {
     last7Days: 3,
     last30Days: 3,
@@ -96,12 +99,15 @@ const result: LocalUsageQueryResult = {
   },
 };
 
-function mount(client: { queryLocalUsage: ReturnType<typeof vi.fn> } | null) {
+function mount(
+  client: { queryLocalUsage: ReturnType<typeof vi.fn> } | null,
+  signal = new AbortController().signal,
+) {
   const page = createUsageSettingsPage(messages, () => client as RendererUsageClient | null);
   const content = new FakeElement("div", createDocument());
   const context = {
     content,
-    signal: new AbortController().signal,
+    signal,
     async runLatest(
       operation: (signal: AbortSignal) => Promise<unknown>,
       handlers: RendererSettingsAsyncHandlers<unknown>,
@@ -124,6 +130,7 @@ function mount(client: { queryLocalUsage: ReturnType<typeof vi.fn> } | null) {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("Usage settings page", () => {
@@ -194,5 +201,52 @@ describe("Usage settings page", () => {
     const failed = mount({ queryLocalUsage: vi.fn().mockRejectedValue(new Error("boom")) });
     await vi.waitFor(() => expect(text(failed.content)).toContain(messages.usage.failed));
     expect(text(mount(null).content)).toContain(messages.usage.unavailable);
+  });
+
+  it("shows read progress and asks again without rereading until the read is done", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const reading = (processed: number, total: number): LocalUsageQueryResult => ({
+      status: "reading",
+      progress: { processed, total },
+    });
+    const queryLocalUsage = vi
+      .fn()
+      .mockResolvedValueOnce(reading(0, 0))
+      .mockResolvedValueOnce(reading(1_200, 3_000))
+      .mockResolvedValueOnce(result);
+    const { content, find } = mount({ queryLocalUsage });
+    await vi.waitFor(() => expect(text(content)).toContain(messages.usage.loading));
+    expect(all(content).some((element) => element.attributes.get("role") === "progressbar")).toBe(
+      false,
+    );
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(queryLocalUsage).toHaveBeenCalledTimes(2);
+    expect(queryLocalUsage).toHaveBeenLastCalledWith(expect.objectContaining({ refresh: false }));
+    expect(text(content)).toContain("已读取 1,200 / 3,000 个文件");
+    const meter = find((element) => element.attributes.get("role") === "progressbar");
+    expect(meter.attributes.get("aria-valuenow")).toBe("1200");
+    expect(meter.attributes.get("aria-valuemax")).toBe("3000");
+    expect(find((element) => element.dataset.usageAction === "refresh").disabled).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(queryLocalUsage).toHaveBeenCalledTimes(3);
+    expect(text(content)).toContain("2026-03-02 – 2026-03-08");
+    expect(find((element) => element.dataset.usageAction === "refresh").disabled).toBe(false);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(queryLocalUsage).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops asking for read progress once settings close", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const queryLocalUsage = vi
+      .fn()
+      .mockResolvedValue({ status: "reading", progress: { processed: 1, total: 2 } });
+    const settings = new AbortController();
+    mount({ queryLocalUsage }, settings.signal);
+    await vi.waitFor(() => expect(queryLocalUsage).toHaveBeenCalledOnce());
+    settings.abort();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(queryLocalUsage).toHaveBeenCalledOnce();
   });
 });

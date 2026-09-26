@@ -4,6 +4,7 @@ import {
   LOCAL_USAGE_QUERY_METHOD,
   localUsageQueryParamsSchema,
   localUsageQueryResultSchema,
+  localUsageViewSchema,
 } from "@codexhost/shared-contracts";
 
 const tokens = { total: 10, input: 1, cacheRead: 2, cacheWrite: 3, output: 4, reasoning: 0 };
@@ -58,6 +59,7 @@ describe("Local Usage query contracts", () => {
 
   it("carries aggregate numbers only and keeps token totals consistent with their parts", () => {
     const result = {
+      status: "ready",
       range: { from: "2026-03-01", to: "2026-03-07" },
       totals: { ...tokens, conversations: 2 },
       estimatedCostUsd: 0.125,
@@ -82,6 +84,8 @@ describe("Local Usage query contracts", () => {
           conversations: 2,
         },
       ],
+      projects: [{ project: "acme/widget", totalTokens: 10, harnessIds: ["claude-code"] }],
+      failures: [],
       stats: {
         last7Days: 10,
         last30Days: 10,
@@ -114,7 +118,7 @@ describe("Local Usage query contracts", () => {
     ).toBe(false);
     // Official Codex is a usage source without a plugin identity.
     const codex = { harnessId: "codex", name: "Codex", totalTokens: 10, models: 1, providers: [] };
-    expect(localUsageQueryResultSchema.parse({ ...result, harnesses: [codex] }).harnesses).toEqual([
+    expect(localUsageViewSchema.parse({ ...result, harnesses: [codex] }).harnesses).toEqual([
       codex,
     ]);
     for (const harnessId of ["", "Codex", "not a plugin id"]) {
@@ -134,9 +138,7 @@ describe("Local Usage query contracts", () => {
         { provider: "anthropic", totalTokens: 1, models: 1 },
       ],
     };
-    expect(localUsageQueryResultSchema.parse({ ...result, harnesses: [pi] }).harnesses).toEqual([
-      pi,
-    ]);
+    expect(localUsageViewSchema.parse({ ...result, harnesses: [pi] }).harnesses).toEqual([pi]);
     for (const providers of [
       [{ provider: "openai-codex", totalTokens: 11, models: 1 }],
       [{ provider: "", totalTokens: 1, models: 1 }],
@@ -170,6 +172,70 @@ describe("Local Usage query contracts", () => {
         ...result,
         totals: { ...result.totals, input: -1, total: 8 },
       }).success,
+    ).toBe(false);
+  });
+
+  it("lists projects and failed Harnesses by identity and name only", () => {
+    const view = localUsageViewSchema.parse({
+      status: "ready",
+      range: { from: "2026-03-01", to: "2026-03-07" },
+      totals: { ...tokens, conversations: 0 },
+      estimatedCostUsd: 0,
+      models: 0,
+      harnesses: [],
+      daily: [],
+      projects: [],
+      failures: [],
+      stats: { last7Days: 0, last30Days: 0, dailyAverage: 0, activeDays: 0, firstActiveDate: null },
+    });
+    const project = { project: "acme/widget", totalTokens: 5, harnessIds: ["codex", "pi"] };
+    expect(localUsageViewSchema.parse({ ...view, projects: [project] }).projects).toEqual([
+      project,
+    ]);
+    for (const projects of [
+      [{ ...project, project: "" }],
+      [{ ...project, harnessIds: [] }],
+      [{ ...project, harnessIds: ["Not An Id"] }],
+      [{ ...project, cwd: "/work/widget" }],
+      Array.from({ length: 1_001 }, () => project),
+    ]) {
+      expect(localUsageViewSchema.safeParse({ ...view, projects }).success).toBe(false);
+    }
+    const failure = { harnessId: "pi", name: "Pi" };
+    expect(localUsageViewSchema.parse({ ...view, failures: [failure] }).failures).toEqual([
+      failure,
+    ]);
+    for (const failures of [
+      [{ harnessId: "pi", name: " " }],
+      [{ ...failure, message: "EACCES /Users/me/.pi" }],
+      undefined,
+    ]) {
+      expect(localUsageViewSchema.safeParse({ ...view, failures }).success).toBe(false);
+    }
+  });
+
+  it("answers an unfinished read with file progress only", () => {
+    const reading = { status: "reading", progress: { processed: 3, total: 10 } };
+    expect(localUsageQueryResultSchema.parse(reading)).toEqual(reading);
+    expect(
+      localUsageQueryResultSchema.parse({
+        status: "reading",
+        progress: { processed: 0, total: 0 },
+      }),
+    ).toMatchObject({ status: "reading" });
+    for (const progress of [
+      { processed: 11, total: 10 },
+      { processed: -1, total: 10 },
+      { processed: 1.5, total: 10 },
+      { processed: 1, total: 10, file: "session.jsonl" },
+    ]) {
+      expect(localUsageQueryResultSchema.safeParse({ status: "reading", progress }).success).toBe(
+        false,
+      );
+    }
+    expect(
+      localUsageQueryResultSchema.safeParse({ ...reading, totals: { ...tokens, conversations: 0 } })
+        .success,
     ).toBe(false);
   });
 });

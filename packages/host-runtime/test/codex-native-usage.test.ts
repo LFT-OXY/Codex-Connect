@@ -2,7 +2,10 @@ import { appendFile, mkdtemp, mkdir, realpath, rename, rm, writeFile } from "nod
 import os from "node:os";
 import path from "node:path";
 
-import type { HarnessNativeUsageBatch } from "@codexhost/harness-adapter";
+import type {
+  HarnessNativeUsageBatch,
+  HarnessNativeUsageProgress,
+} from "@codexhost/harness-adapter";
 import type { JsonValue } from "@codexhost/shared-contracts";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -24,8 +27,11 @@ async function fixture() {
   const day = path.join(codexHome, "sessions", "2026", "03", "02");
   await mkdir(day, { recursive: true });
   const usage = codexNativeUsage(codexHome);
-  const read = async (cursor: JsonValue | null = null): Promise<HarnessNativeUsageBatch> => {
-    const result = await usage.read(cursor);
+  const read = async (
+    cursor: JsonValue | null = null,
+    onProgress?: (progress: HarnessNativeUsageProgress) => void,
+  ): Promise<HarnessNativeUsageBatch> => {
+    const result = await usage.read(cursor, onProgress);
     if (!result.ok) throw new Error(result.error.message);
     return result.value;
   };
@@ -127,8 +133,10 @@ describe("Codex native usage", () => {
       ),
     );
 
-    const batch = await f.read();
+    const progress: HarnessNativeUsageProgress[] = [];
+    const batch = await f.read(null, (reported) => progress.push(reported));
 
+    expect(progress.at(-1)).toEqual({ processed: 2, total: 2 });
     expect(batch.records).toEqual([
       {
         dedupeKey: expect.any(String),

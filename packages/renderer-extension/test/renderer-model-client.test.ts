@@ -102,6 +102,7 @@ describe("Renderer fixed Model request client", () => {
   });
   it("queries Local Usage with validated params and rejects results carrying extra fields", async () => {
     const result = {
+      status: "ready",
       range: { from: "2026-03-02", to: "2026-03-08" },
       totals: {
         total: 3,
@@ -118,6 +119,8 @@ describe("Renderer fixed Model request client", () => {
         { harnessId: "claude-code", name: "Claude Code", totalTokens: 3, models: 1, providers: [] },
       ],
       daily: [],
+      projects: [{ project: "acme/widget", totalTokens: 3, harnessIds: ["claude-code"] }],
+      failures: [],
       stats: {
         last7Days: 3,
         last30Days: 3,
@@ -136,6 +139,9 @@ describe("Renderer fixed Model request client", () => {
     expect(sendRequest).toHaveBeenCalledOnce();
     sendRequest.mockResolvedValueOnce({ ...result, records: [] });
     await expect(client.queryLocalUsage(params)).rejects.toThrow();
+    const reading = { status: "reading", progress: { processed: 1, total: 4 } };
+    sendRequest.mockResolvedValueOnce(reading);
+    expect(await client.queryLocalUsage(params)).toEqual(reading);
   });
 
   it("reads draft quota for the selected Account without activating it", async () => {

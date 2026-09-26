@@ -2,7 +2,10 @@ import { appendFile, mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/pro
 import os from "node:os";
 import path from "node:path";
 
-import type { HarnessNativeUsageBatch } from "@codexhost/harness-adapter";
+import type {
+  HarnessNativeUsageBatch,
+  HarnessNativeUsageProgress,
+} from "@codexhost/harness-adapter";
 import type { JsonValue } from "@codexhost/shared-contracts";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -31,8 +34,11 @@ async function temporaryRoot(): Promise<string> {
 function reader(environment: NodeJS.ProcessEnv) {
   const adapter = new OmpAdapter({ environment });
   adapters.push(adapter);
-  return async (cursor: JsonValue | null = null): Promise<HarnessNativeUsageBatch> => {
-    const result = await adapter.nativeUsage.read(cursor);
+  return async (
+    cursor: JsonValue | null = null,
+    onProgress?: (progress: HarnessNativeUsageProgress) => void,
+  ): Promise<HarnessNativeUsageBatch> => {
+    const result = await adapter.nativeUsage.read(cursor, onProgress);
     if (!result.ok) throw new Error(result.error.message);
     return result.value;
   };
@@ -226,7 +232,15 @@ describe("Omp native usage", () => {
       ),
     );
 
-    const { records } = await f.read();
+    const progress: HarnessNativeUsageProgress[] = [];
+    const { records } = await f.read(null, (reported) => progress.push(reported));
+    expect(progress.map(({ processed, total }) => `${processed}/${total}`)).toEqual([
+      "0/4",
+      "1/4",
+      "2/4",
+      "3/4",
+      "4/4",
+    ]);
     expect(records).toHaveLength(4);
     expect(new Set(records.map((record) => record.dedupeKey)).size).toBe(3);
     expect(records.map((record) => record.tokens.input).sort()).toEqual([1, 1, 4, 7]);

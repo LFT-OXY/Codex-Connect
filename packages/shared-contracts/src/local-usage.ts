@@ -7,8 +7,11 @@ export const LOCAL_USAGE_QUERY_METHOD = "codexhost/usage/query";
 export const LOCAL_USAGE_CUSTOM_RANGE_MAX_DAYS = 3_660;
 export const LOCAL_USAGE_DAILY_MAX_LENGTH = LOCAL_USAGE_CUSTOM_RANGE_MAX_DAYS + 1;
 export const LOCAL_USAGE_HARNESS_MAX_LENGTH = 128;
+export const LOCAL_USAGE_HARNESS_NAME_MAX_LENGTH = 128;
 export const LOCAL_USAGE_PROVIDER_MAX_LENGTH = 128;
 export const LOCAL_USAGE_PROVIDER_NAME_MAX_LENGTH = 1_024;
+export const LOCAL_USAGE_PROJECT_MAX_LENGTH = 1_000;
+export const LOCAL_USAGE_PROJECT_NAME_MAX_LENGTH = 1_024;
 export const LOCAL_USAGE_TIME_ZONE_MAX_LENGTH = 64;
 
 const DAY_MS = 86_400_000;
@@ -82,8 +85,12 @@ const tokenTotalsShape = {
   reasoning: countSchema,
 };
 
+/** Official Codex or an installed Harness plugin. */
+const usageHarnessIdSchema = z.union([z.literal("codex"), harnessPluginIdSchema]);
+
 /** Aggregate numbers only. Message text and native identities never cross this boundary. */
-export const localUsageQueryResultSchema = z.strictObject({
+export const localUsageViewSchema = z.strictObject({
+  status: z.literal("ready"),
   range: z.strictObject({ from: localUsageDateSchema, to: localUsageDateSchema }),
   totals: z
     .strictObject({ ...tokenTotalsShape, conversations: countSchema })
@@ -104,9 +111,8 @@ export const localUsageQueryResultSchema = z.strictObject({
     .array(
       z
         .strictObject({
-          /** Official Codex or an installed Harness plugin. */
-          harnessId: z.union([z.literal("codex"), harnessPluginIdSchema]),
-          name: z.string().trim().min(1).max(128),
+          harnessId: usageHarnessIdSchema,
+          name: z.string().trim().min(1).max(LOCAL_USAGE_HARNESS_NAME_MAX_LENGTH),
           totalTokens: countSchema,
           models: countSchema,
           /** Providers the Harness recorded, by usage; empty when it records none. */
@@ -143,6 +149,29 @@ export const localUsageQueryResultSchema = z.strictObject({
     )
     .max(LOCAL_USAGE_DAILY_MAX_LENGTH),
   /**
+   * Usage with a known working directory, by project, most used first: `owner/repo` from the Git
+   * remote, otherwise the folder name. Only the most used projects are listed.
+   */
+  projects: z
+    .array(
+      z.strictObject({
+        project: z.string().min(1).max(LOCAL_USAGE_PROJECT_NAME_MAX_LENGTH),
+        totalTokens: countSchema,
+        /** Harnesses used in the project, most used first. */
+        harnessIds: z.array(usageHarnessIdSchema).min(1).max(LOCAL_USAGE_HARNESS_MAX_LENGTH),
+      }),
+    )
+    .max(LOCAL_USAGE_PROJECT_MAX_LENGTH),
+  /** Harnesses whose last read failed; their totals are from their last successful read. */
+  failures: z
+    .array(
+      z.strictObject({
+        harnessId: usageHarnessIdSchema,
+        name: z.string().trim().min(1).max(LOCAL_USAGE_HARNESS_NAME_MAX_LENGTH),
+      }),
+    )
+    .max(LOCAL_USAGE_HARNESS_MAX_LENGTH),
+  /**
    * Independent of the selected period. Windows end today; an active day has tokens.
    * `dailyAverage` is the last 30 days' total over their active days, rounded.
    */
@@ -173,6 +202,25 @@ export const localUsageQueryResultSchema = z.strictObject({
     }),
 });
 
+/** A read still running when the query stopped waiting for it; query again for the view. */
+export const localUsageReadingSchema = z.strictObject({
+  status: z.literal("reading"),
+  /** Native record files read so far by the sources that report progress. */
+  progress: z
+    .strictObject({ processed: countSchema, total: countSchema })
+    .refine((progress) => progress.processed <= progress.total, {
+      path: ["processed"],
+      message: "Processed files are part of the total",
+    }),
+});
+
+export const localUsageQueryResultSchema = z.discriminatedUnion("status", [
+  localUsageReadingSchema,
+  localUsageViewSchema,
+]);
+
 export type LocalUsagePeriod = z.infer<typeof localUsagePeriodSchema>;
 export type LocalUsageQueryParams = z.infer<typeof localUsageQueryParamsSchema>;
+export type LocalUsageView = z.infer<typeof localUsageViewSchema>;
+export type LocalUsageReading = z.infer<typeof localUsageReadingSchema>;
 export type LocalUsageQueryResult = z.infer<typeof localUsageQueryResultSchema>;

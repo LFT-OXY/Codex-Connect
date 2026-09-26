@@ -1,11 +1,14 @@
-import { appendFile, mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import { appendFile, chmod, mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 import { ClaudeCodeAdapter } from "@codexhost/adapter-claude-code";
 import { OmpAdapter } from "@codexhost/adapter-omp";
 import { PiAdapter } from "@codexhost/adapter-pi";
-import type { HarnessAdapter } from "@codexhost/harness-adapter";
+import type {
+  HarnessAdapter,
+  HarnessNativeUsageProgress as Progress,
+} from "@codexhost/harness-adapter";
 import {
   harnessPluginDescriptorSchema,
   jsonRpcRequestSchema,
@@ -20,6 +23,7 @@ import { LocalUsageService } from "../src/local-usage-service.js";
 
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => {
+  vi.useRealTimers();
   for (const close of cleanup.splice(0).reverse()) await close();
 });
 
@@ -135,7 +139,9 @@ async function fixture() {
   );
   const claude = new ClaudeCodeAdapter({ environment: { CLAUDE_CONFIG_DIR: config } });
   cleanup.push(() => claude.close());
-  const read = vi.fn((cursor: JsonValue | null) => claude.nativeUsage.read(cursor));
+  const read = vi.fn((cursor: JsonValue | null, onProgress?: (progress: Progress) => void) =>
+    claude.nativeUsage.read(cursor, onProgress),
+  );
   const adapter = {
     harnessId: claude.harnessId,
     nativeUsage: { read },
@@ -179,7 +185,9 @@ async function result(
   refresh = false,
 ) {
   const body = await query(service, { period, timeZone, refresh });
-  return localUsageQueryResultSchema.parse(body.result);
+  const parsed = localUsageQueryResultSchema.parse(body.result);
+  if (parsed.status !== "ready") throw new Error("Local usage is still being read");
+  return parsed;
 }
 
 describe("Local Usage query", () => {
@@ -803,6 +811,133 @@ describe("Local Usage query", () => {
     });
   });
 
+  it("groups usage by Git remote owner/repo, otherwise by folder name", async () => {
+    const f = await fixture();
+    const repos = path.join(f.root, "repos");
+    const widget = path.join(repos, "widget");
+    await mkdir(path.join(widget, "src"), { recursive: true });
+    await mkdir(path.join(widget, ".git", "worktrees", "wt"), { recursive: true });
+    await writeFile(
+      path.join(widget, ".git", "config"),
+      [
+        "[core]",
+        "\tbare = false",
+        '[remote "upstream"]',
+        "\turl = https://github.com/someone-else/widget.git",
+        '[remote "origin"]',
+        "\turl = git@github.com:acme/widget.git",
+        "\tfetch = +refs/heads/*:refs/remotes/origin/*",
+        "",
+      ].join("\n"),
+    );
+    // A linked worktree shares the main repository's remotes.
+    await writeFile(path.join(widget, ".git", "worktrees", "wt", "commondir"), "../..\n");
+    const worktree = path.join(repos, "widget-wt");
+    await mkdir(worktree, { recursive: true });
+    await writeFile(path.join(worktree, ".git"), "gitdir: ../widget/.git/worktrees/wt\n");
+    const local = path.join(repos, "local-only");
+    await mkdir(path.join(local, ".git"), { recursive: true });
+    await writeFile(path.join(local, ".git", "config"), "[core]\n\tbare = false\n");
+    await mkdir(path.join(local, "nested"), { recursive: true });
+    // A worktree of a repository without remotes is named after the main repository.
+    await mkdir(path.join(local, ".git", "worktrees", "feature"), { recursive: true });
+    await writeFile(path.join(local, ".git", "worktrees", "feature", "commondir"), "../..\n");
+    const localWorktree = path.join(repos, "local-only-feature");
+    await mkdir(localWorktree, { recursive: true });
+    await writeFile(
+      path.join(localWorktree, ".git"),
+      `gitdir: ${path.join(local, ".git", "worktrees", "feature")}\n`,
+    );
+    const scratch = path.join(f.root, "scratch");
+    await mkdir(scratch, { recursive: true });
+    // Without an `origin`, the first remote names the project as its last two path segments.
+    const tool = path.join(repos, "tool");
+    await mkdir(path.join(tool, ".git"), { recursive: true });
+    await writeFile(
+      path.join(tool, ".git", "config"),
+      '[remote "mirror"]\n\turl = https://gitlab.example.com/group/sub/tool.git/\n',
+    );
+
+    const at = (cwd: string, id: string, output: number) => ({
+      ...response(id, "2026-03-03T08:00:00.000Z", {
+        input: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        output,
+      }),
+      cwd,
+    });
+    await appendFile(
+      f.mainFile,
+      lines(
+        at(path.join(widget, "src"), "p-1", 1_000),
+        at(worktree, "p-2", 500),
+        at(path.join(local, "nested"), "p-3", 300),
+        at(scratch, "p-4", 200),
+        at(tool, "p-5", 100),
+        at(localWorktree, "p-6", 40),
+      ),
+    );
+    const pi = {
+      harnessId: "pi",
+      nativeUsage: {
+        read: vi.fn(async () => ({
+          ok: true,
+          value: {
+            records: [
+              {
+                dedupeKey: "pi-1",
+                occurredAt: Date.parse("2026-03-03T09:00:00.000Z"),
+                nativeSessionId: "s",
+                model: "gpt-synthetic-3",
+                cwd: scratch,
+                tokens: { input: 5_000, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 },
+                conversations: 1,
+              },
+              {
+                // An empty working directory is no working directory.
+                dedupeKey: "pi-3",
+                occurredAt: Date.parse("2026-03-03T09:00:00.000Z"),
+                nativeSessionId: "s",
+                model: "gpt-synthetic-3",
+                cwd: "",
+                tokens: { input: 8, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 },
+                conversations: 1,
+              },
+              {
+                // Usage without a working directory belongs to no project.
+                dedupeKey: "pi-2",
+                occurredAt: Date.parse("2026-03-03T09:00:00.000Z"),
+                nativeSessionId: "s",
+                model: "gpt-synthetic-3",
+                tokens: { input: 70, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 },
+                conversations: 1,
+              },
+            ],
+            cursor: null,
+          },
+        })),
+      },
+    } as unknown as HarnessAdapter;
+    const service = f.service({
+      others: [["pi", pi]],
+      names: () => ({ "claude-code": "Claude Code", pi: "Pi" }),
+    });
+
+    const week = await result(service, { kind: "week" }, "UTC", true);
+
+    expect(week.projects).toEqual([
+      { project: "scratch", totalTokens: 5_200, harnessIds: ["pi", "claude-code"] },
+      { project: "acme/widget", totalTokens: 1_500, harnessIds: ["claude-code"] },
+      { project: "local-only", totalTokens: 340, harnessIds: ["claude-code"] },
+      { project: "project", totalTokens: 229, harnessIds: ["claude-code"] },
+      { project: "sub/tool", totalTokens: 100, harnessIds: ["claude-code"] },
+    ]);
+    expect(week.totals.total).toBe(229 + 2_140 + 5_078);
+    // Projects follow the selected range.
+    expect((await result(service, { kind: "day" }, "UTC")).projects).toEqual([]);
+  });
+
   it("adds only new records on refresh and never double counts copies or restarts", async () => {
     const f = await fixture();
     const first = await result(f.service(), { kind: "total" }, "UTC", true);
@@ -878,14 +1013,181 @@ describe("Local Usage query", () => {
       },
     } as unknown as HarnessAdapter;
     const week = await result(
-      f.service({ others: [["pi", leaking]] }),
+      f.service({ others: [["pi", leaking]], names: () => ({ "claude-code": "Claude Code" }) }),
       { kind: "week" },
       "UTC",
       true,
     );
     expect(week.totals.total).toBe(229);
     expect(week.harnesses.map((harness) => harness.harnessId)).toEqual(["claude-code"]);
+    expect(week.failures).toEqual([{ harnessId: "pi", name: "pi" }]);
   });
+
+  it("reports a Harness whose read fails and keeps its last totals until it reads again", async () => {
+    const f = await fixture();
+    let available = true;
+    const pi = {
+      harnessId: "pi",
+      nativeUsage: {
+        read: vi.fn(async (cursor: JsonValue | null) => {
+          if (!available) {
+            return {
+              ok: false,
+              error: { code: "unavailable", message: "Pi records are unreadable", retryable: true },
+            };
+          }
+          return {
+            ok: true,
+            value: {
+              records:
+                cursor === null
+                  ? [
+                      {
+                        dedupeKey: "pi-1",
+                        occurredAt: Date.parse("2026-03-03T08:00:00.000Z"),
+                        nativeSessionId: "s",
+                        model: "gpt-synthetic-3",
+                        tokens: { input: 50, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 },
+                        conversations: 1,
+                      },
+                    ]
+                  : [],
+              cursor: "read",
+            },
+          };
+        }),
+      },
+    } as unknown as HarnessAdapter;
+    const service = f.service({
+      others: [["pi", pi]],
+      names: () => ({ "claude-code": "Claude Code", pi: "Pi" }),
+    });
+    const first = await result(service, { kind: "week" }, "UTC", true);
+    expect(first.failures).toEqual([]);
+
+    available = false;
+    await appendFile(
+      f.mainFile,
+      lines(
+        response("msg-d", "2026-03-03T08:00:01.000Z", {
+          input: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          output: 1,
+        }),
+      ),
+    );
+    const failing = await result(service, { kind: "week" }, "UTC", true);
+    expect(failing.failures).toEqual([{ harnessId: "pi", name: "Pi" }]);
+    // Pi keeps its earlier totals while Claude Code still advances.
+    expect(failing.harnesses.map(({ harnessId, totalTokens }) => [harnessId, totalTokens])).toEqual(
+      [
+        ["claude-code", 231],
+        ["pi", 50],
+      ],
+    );
+    // A period switch answers from the same read and still shows the failure.
+    expect((await result(service, { kind: "day" }, "UTC")).failures).toHaveLength(1);
+
+    available = true;
+    const recovered = await result(service, { kind: "week" }, "UTC", true);
+    expect(recovered.failures).toEqual([]);
+    expect(recovered.totals.total).toBe(231 + 50);
+  });
+
+  it("answers with read progress while a read is running and the totals once it is done", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const f = await fixture();
+    let finish!: () => void;
+    const finished = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const slow = {
+      harnessId: "pi",
+      nativeUsage: {
+        read: vi.fn(
+          async (_cursor: JsonValue | null, onProgress?: (progress: Progress) => void) => {
+            onProgress?.({ processed: 2, total: 5 });
+            // Nonsense progress from a plugin is ignored.
+            onProgress?.({ processed: 9, total: 5 });
+            await finished;
+            return { ok: true, value: { records: [], cursor: null } };
+          },
+        ),
+      },
+    } as unknown as HarnessAdapter;
+    const service = f.service({ others: [["pi", slow]] });
+    const poll = (refresh: boolean) =>
+      query(service, { period: { kind: "week" }, timeZone: "UTC", refresh });
+
+    const opening = poll(true);
+    await vi.waitFor(() => expect(slow.nativeUsage?.read).toHaveBeenCalledOnce());
+    await f.read.mock.results[0]?.value;
+    // A query waits half a second for the read before answering with its progress.
+    await vi.advanceTimersByTimeAsync(499);
+    await vi.advanceTimersByTimeAsync(1);
+    // The real Claude Code Adapter has read its one file; the slow source is at 2 of 5.
+    expect((await opening).result).toEqual({
+      status: "reading",
+      progress: { processed: 3, total: 6 },
+    });
+    // Polling without refresh joins the same read.
+    const polling = poll(false);
+    await vi.advanceTimersByTimeAsync(500);
+    expect((await polling).result).toEqual({
+      status: "reading",
+      progress: { processed: 3, total: 6 },
+    });
+
+    finish();
+    const done = localUsageQueryResultSchema.parse((await poll(false)).result);
+    expect(done).toMatchObject({ status: "ready", totals: { total: 229 } });
+    expect(f.read).toHaveBeenCalledOnce();
+  });
+
+  // A read-only directory is not read-only for root, and Windows ignores the mode.
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "reports a read that failed after its query stopped waiting instead of reading again",
+    async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      const f = await fixture();
+      let finish!: () => void;
+      const finished = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const slow = {
+        harnessId: "pi",
+        nativeUsage: {
+          read: vi
+            .fn()
+            .mockImplementationOnce(async () => {
+              await finished;
+              return { ok: true, value: { records: [], cursor: null } };
+            })
+            // A second read would never finish, so polling would only ever see progress.
+            .mockImplementation(() => new Promise(() => undefined)),
+        },
+      } as unknown as HarnessAdapter;
+      const service = f.service({ others: [["pi", slow]] });
+      const poll = async (refresh: boolean) => {
+        const answer = query(service, { period: { kind: "week" }, timeZone: "UTC", refresh });
+        await vi.advanceTimersByTimeAsync(500);
+        return answer;
+      };
+      expect((await poll(true)).result).toMatchObject({ status: "reading" });
+
+      // Saving the totals fails once the read finishes.
+      const usage = path.join(f.root, "data", "usage");
+      await mkdir(usage, { recursive: true });
+      await chmod(usage, 0o500);
+      cleanup.push(() => chmod(usage, 0o700));
+      finish();
+      await vi.waitFor(async () =>
+        expect(await poll(false)).toMatchObject({ error: { code: -32082 } }),
+      );
+      expect(slow.nativeUsage?.read).toHaveBeenCalledOnce();
+    },
+  );
 
   it("replies with an error when the view cannot be built", async () => {
     const f = await fixture();

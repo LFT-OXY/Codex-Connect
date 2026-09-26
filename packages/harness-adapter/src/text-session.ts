@@ -590,13 +590,25 @@ export interface HarnessNativeUsageBatch {
   cursor: JsonValue;
 }
 
+/** Native record files handled so far by one read, out of all it will handle. */
+export interface HarnessNativeUsageProgress {
+  processed: number;
+  total: number;
+}
+
 /**
  * Optional read-only access to usage in native Session records, including sessions run outside
  * codexhost. The cursor is opaque to Host, which persists it; the Adapter keeps no read state.
  */
 export interface HarnessNativeUsageCapability {
-  /** `null` reads all history. An unrecognized cursor also restarts from the beginning. */
-  read(cursor: JsonValue | null): Promise<HarnessResult<HarnessNativeUsageBatch>>;
+  /**
+   * `null` reads all history. An unrecognized cursor also restarts from the beginning.
+   * `onProgress` may be called while reading, for example after each file.
+   */
+  read(
+    cursor: JsonValue | null,
+    onProgress?: (progress: HarnessNativeUsageProgress) => void,
+  ): Promise<HarnessResult<HarnessNativeUsageBatch>>;
 }
 
 export interface HarnessAdapter {

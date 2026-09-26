@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { localUsageQueryResultSchema } from "@codexhost/shared-contracts";
+import { localUsageViewSchema } from "@codexhost/shared-contracts";
 
 import {
   formatUsageCost,
@@ -18,8 +18,28 @@ class FakeElement {
   textContent = "";
   title = "";
   scope = "";
+  type = "";
+  id = "";
+  tabIndex = 0;
   hidden = false;
+  focused = false;
+  readonly listeners = new Map<
+    string,
+    (event: { key?: string | undefined; preventDefault(): void }) => void
+  >();
   constructor(readonly tagName: string) {}
+  addEventListener(
+    name: string,
+    listener: (event: { key?: string | undefined; preventDefault(): void }) => void,
+  ): void {
+    this.listeners.set(name, listener);
+  }
+  fire(name: string, key?: string): void {
+    this.listeners.get(name)?.({ key, preventDefault() {} });
+  }
+  focus(): void {
+    this.focused = true;
+  }
   append(...children: (FakeElement | string)[]): void {
     for (const child of children) {
       if (typeof child === "string") {
@@ -48,15 +68,17 @@ function text(root: FakeElement): string {
     .filter(Boolean)
     .join(" ");
 }
-function render(result: unknown): FakeElement {
+function render(result: unknown, tab?: Parameters<typeof renderLocalUsage>[3]): FakeElement {
   return renderLocalUsage(
     document,
-    localUsageQueryResultSchema.parse(result),
+    localUsageViewSchema.parse(result),
     messages,
+    tab,
   ) as unknown as FakeElement;
 }
 
 const result = {
+  status: "ready",
   range: { from: "2026-03-02", to: "2026-03-08" },
   totals: {
     total: 1_234_567,
@@ -108,6 +130,11 @@ const result = {
       conversations: 7,
     },
   ],
+  projects: [
+    { project: "acme/widget", totalTokens: 1_000_000, harnessIds: ["claude-code", "pi"] },
+    { project: "scratch", totalTokens: 250_000, harnessIds: ["pi"] },
+  ],
+  failures: [],
   stats: {
     last7Days: 1_234_567,
     last30Days: 45_678_901,
@@ -311,5 +338,72 @@ describe("Local Usage dashboard", () => {
     expect(text(root)).toContain("该周期内没有用量。");
     expect(all(root).some((element) => element.dataset.usageHarnessCard !== undefined)).toBe(false);
     expect(all(root).some((element) => element.tagName === "table")).toBe(false);
+  });
+
+  it("switches the details between the daily breakdown and projects, keeping the page's choice", () => {
+    const selected: string[] = [];
+    const root = render(result, { selected: "daily", select: (tab) => selected.push(tab) });
+    const tabs = all(root).filter((element) => element.dataset.usageTab !== undefined);
+    expect(tabs.map((tab) => [tab.dataset.usageTab, tab.textContent])).toEqual([
+      ["daily", "每日明细"],
+      ["projects", "项目用量"],
+    ]);
+    expect(tabs.map((tab) => tab.attributes.get("aria-selected"))).toEqual(["true", "false"]);
+    const panel = (id: string) =>
+      all(root).find((element) => element.dataset.usageTabPanel === id) as FakeElement;
+    expect(panel("daily").hidden).toBe(false);
+    expect(panel("projects").hidden).toBe(true);
+
+    expect(tabs.map((tab) => tab.tabIndex)).toEqual([0, -1]);
+    expect(tabs.map((tab) => tab.attributes.get("aria-controls"))).toEqual([
+      panel("daily").id,
+      panel("projects").id,
+    ]);
+    tabs[1]?.fire("click");
+    expect(selected).toEqual(["projects"]);
+    expect(panel("daily").hidden).toBe(true);
+    expect(panel("projects").hidden).toBe(false);
+    expect(tabs[1]?.attributes.get("aria-selected")).toBe("true");
+    expect(tabs.map((tab) => tab.tabIndex)).toEqual([-1, 0]);
+    // Arrow keys move to the other tab and focus it.
+    tabs[1]?.fire("keydown", "ArrowRight");
+    expect(selected).toEqual(["projects", "daily"]);
+    expect(panel("daily").hidden).toBe(false);
+    expect(tabs[0]?.focused).toBe(true);
+    tabs[0]?.fire("keydown", "Enter");
+    expect(selected).toHaveLength(2);
+
+    const rows = all(panel("projects")).filter(
+      (element) => element.dataset.usageProject !== undefined,
+    );
+    expect(rows.map(text)).toEqual(["acme/ widget Claude Code · Pi 1M", "scratch Pi 250K"]);
+    const fills = rows.map(
+      (row) => all(row).find((element) => element.style.width !== undefined)?.style.width,
+    );
+    expect(fills).toEqual(["100%", "25%"]);
+
+    // A later result opens on the tab the page remembered.
+    const reopened = render(result, { selected: "projects", select() {} });
+    expect(all(reopened).find((element) => element.dataset.usageTabPanel === "daily")?.hidden).toBe(
+      true,
+    );
+  });
+
+  it("says when a range has usage but none with a project", () => {
+    const root = render({ ...result, projects: [] }, { selected: "projects", select() {} });
+    const panel = all(root).find((element) => element.dataset.usageTabPanel === "projects");
+    expect(text(panel as FakeElement)).toBe("该周期内没有项目用量。");
+  });
+
+  it("names each Harness whose records could not be read above the numbers", () => {
+    const root = render({ ...result, failures: [{ harnessId: "pi", name: "Pi" }] });
+    const notices = all(root).filter((element) => element.dataset.usageFailure !== undefined);
+    expect(notices.map((notice) => [notice.dataset.usageFailure, notice.textContent])).toEqual([
+      ["pi", "无法读取 Pi 的用量记录，其数字来自上次成功读取。"],
+    ]);
+    expect(notices[0]?.attributes.get("role")).toBe("alert");
+    expect(root.children[0]).toBe(notices[0]);
+    // The failed Harness keeps its earlier numbers on screen.
+    expect(all(root).some((element) => element.dataset.usageHarnessCard === "pi")).toBe(true);
   });
 });

@@ -3,13 +3,15 @@ import {
   type LocalUsagePeriod,
   type LocalUsageQueryParams,
   type LocalUsageQueryResult,
+  type LocalUsageReading,
+  type LocalUsageView,
 } from "@codexhost/shared-contracts";
 
 import { RendererMethodUnavailableError } from "../renderer-request-sender.js";
 import type { RendererSettingsPageDefinition, RendererSettingsPageMountContext } from "./core.js";
 import { createRendererSettingsIcon } from "./icons.js";
 import type { RendererSettingsMessages } from "./localization.js";
-import { renderLocalUsage } from "./usage-dashboard.js";
+import { renderLocalUsage, usageBar, type UsageDetailTab } from "./usage-dashboard.js";
 
 export interface RendererUsageClient {
   queryLocalUsage(input: LocalUsageQueryParams): Promise<LocalUsageQueryResult>;
@@ -17,6 +19,8 @@ export interface RendererUsageClient {
 
 type PeriodKind = LocalUsagePeriod["kind"];
 const PERIOD_KINDS = ["day", "week", "month", "total", "custom"] as const satisfies PeriodKind[];
+/** Delay before asking again while Host is still reading native records. */
+const READING_POLL_MS = 500;
 
 function periodLabel(kind: PeriodKind, messages: RendererSettingsMessages["usage"]): string {
   switch (kind) {
@@ -147,8 +151,13 @@ export function createUsageSettingsPage(
 
       let period: LocalUsagePeriod = { kind: "week" };
       let selectedKind: PeriodKind = "week";
-      let lastRange: LocalUsageQueryResult["range"] | null = null;
+      let lastRange: LocalUsageView["range"] | null = null;
       let loading = false;
+      let detailTab: UsageDetailTab = "daily";
+      let showingProgress = false;
+      let poll: ReturnType<typeof setTimeout> | undefined;
+      // Closing settings disposes the page and stops asking for read progress.
+      context.signal.addEventListener("abort", () => clearTimeout(poll), { once: true });
 
       const renderControls = (): void => {
         for (const [kind, button] of periodButtons) {
@@ -186,7 +195,30 @@ export function createUsageSettingsPage(
         void load(false);
       }
 
+      const renderProgress = (progress: LocalUsageReading["progress"]): void => {
+        renderStatus(
+          progress.total > 0
+            ? messages.loadingProgress
+                .replace("{processed}", progress.processed.toLocaleString())
+                .replace("{total}", progress.total.toLocaleString())
+            : messages.loading,
+        );
+        if (progress.total === 0) return;
+        const meter = usageBar(
+          document,
+          (progress.processed / progress.total) * 100,
+          "mt-3 h-1.5 w-full max-w-md",
+        );
+        meter.setAttribute("role", "progressbar");
+        meter.setAttribute("aria-label", messages.loading);
+        meter.setAttribute("aria-valuemin", "0");
+        meter.setAttribute("aria-valuemax", String(progress.total));
+        meter.setAttribute("aria-valuenow", String(progress.processed));
+        body.append(meter);
+      };
+
       const load = (refreshRecords: boolean): Promise<void> => {
+        clearTimeout(poll);
         const client = getClient();
         if (!client) {
           renderStatus(messages.unavailable);
@@ -195,7 +227,7 @@ export function createUsageSettingsPage(
         }
         loading = true;
         renderControls();
-        if (!lastRange) renderStatus(messages.loading);
+        if (!lastRange && !showingProgress) renderStatus(messages.loading);
         const params: LocalUsageQueryParams = {
           period,
           timeZone: localTimeZone(),
@@ -203,13 +235,31 @@ export function createUsageSettingsPage(
         };
         return context.runLatest(() => client.queryLocalUsage(params), {
           success(result) {
+            if (result.status === "reading") {
+              // The read continues in Host; ask again without starting another one.
+              showingProgress = true;
+              renderProgress(result.progress);
+              if (!context.signal.aborted) {
+                poll = setTimeout(() => void load(false), READING_POLL_MS);
+              }
+              return;
+            }
             loading = false;
+            showingProgress = false;
             lastRange = result.range;
-            body.replaceChildren(renderLocalUsage(document, result, settingsMessages));
+            body.replaceChildren(
+              renderLocalUsage(document, result, settingsMessages, {
+                selected: detailTab,
+                select(tab) {
+                  detailTab = tab;
+                },
+              }),
+            );
             renderControls();
           },
           failure(error) {
             loading = false;
+            showingProgress = false;
             renderStatus(
               error instanceof RendererMethodUnavailableError
                 ? messages.unavailable
