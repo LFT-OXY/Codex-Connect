@@ -6,7 +6,7 @@ export const sessionsEnglish = {
   loading: "Reading session records…",
   loadingProgress: "Reading session records… {processed} of {total} files",
   sourceFailed:
-    "Could not read {name} session records. Its sessions are from the last successful read.",
+    "Could not read {name} sessions. Its sessions in the list may be missing or out of date.",
   failed: "Could not read sessions. Try refreshing.",
   unavailable: "The local Host does not support the session list. Update Codex Connect.",
   empty: "No sessions yet.",
@@ -62,7 +62,7 @@ export const sessionsChinese: SessionsMessages = {
   refreshing: "读取中…",
   loading: "正在读取会话记录…",
   loadingProgress: "正在读取会话记录… {processed} / {total} 个文件",
-  sourceFailed: "无法读取 {name} 的会话记录，显示的是上次成功读取的会话。",
+  sourceFailed: "无法读取 {name} 的会话，列表中它的会话可能缺失或不是最新。",
   failed: "无法读取会话，请刷新重试。",
   unavailable: "本地 Host 不支持会话列表，请更新 Codex Connect。",
   empty: "暂无会话。",

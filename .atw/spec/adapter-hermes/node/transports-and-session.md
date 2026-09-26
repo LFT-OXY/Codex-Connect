@@ -12,6 +12,7 @@
 
 - gateway 探测（`HermesGatewayTransport.probe`）：按 `CODEXHOST_HERMES_GATEWAY_PYTHON`、从 hermes shim 中解析出的 venv python（`venvPythonFromShim`）、`inventoryPythonCandidates()` 的顺序逐个尝试，能真正 `start()` 成功的第一个胜出。探测结果按 cwd/环境缓存在 `#gatewayProbes` 中，`inspect({ refresh: true })` 会清空缓存。
 - 会话导入走 ACP `session/list`（`hermes-import.ts`），得到的 Ref **没有 locator**，所以导入的会话一律按 ACP 打开。
+- 会话导入的错误经 `importFailure` 映射：找不到 Hermes CLI（`HermesExecutableError`，在建立任何传输之前抛出）必须映射为 `notInstalled`，与打开会话时 `classifyStartupError` 的结果一致；不要落到 `nativeFailure`。Host 会话页把 `notInstalled` 视为没有可导入的会话，其他错误会显示成读取失败。
 
 ## gateway 传输（`gateway-transport.ts`）
 

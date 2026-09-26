@@ -39,7 +39,7 @@ import {
   isHermesModeId,
 } from "./hermes-models.js";
 import { HermesSession } from "./hermes-session.js";
-import { resolveHermesExecutable } from "./command.js";
+import { HermesExecutableError, resolveHermesExecutable } from "./command.js";
 import { HermesGatewayTransport } from "./gateway-transport.js";
 import { HermesGatewayHistoryError } from "./gateway-history.js";
 import { hermesGatewayThinkingOptions } from "./gateway-session-transport.js";
@@ -630,6 +630,8 @@ function inspectionFromTransportError(error: unknown): HarnessInspection {
 }
 
 function importFailure(error: unknown): HarnessResult<never> {
+  // Discovery reaches the executable check before any transport exists.
+  if (error instanceof HermesExecutableError) return failure("notInstalled", error.message);
   if (error instanceof HermesTransportError) {
     return failure(
       error.kind === "notInstalled" ? "notInstalled" : "unavailable",

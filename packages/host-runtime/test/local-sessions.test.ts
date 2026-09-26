@@ -491,9 +491,21 @@ describe("Local Sessions query", () => {
         resolveCandidate: async () => ({ ok: false }),
       },
     });
+    // A Harness that is not installed has no Sessions to import; that is not a failure.
+    const missing = new FakeHarnessAdapter(harnessIdSchema.parse("opencode"));
+    Object.assign(missing, {
+      sessionImport: {
+        listCandidates: async () => ({
+          ok: false,
+          error: { code: "notInstalled", message: "x", retryable: false },
+        }),
+        resolveCandidate: async () => ({ ok: false }),
+      },
+    });
     const service = f.service([
       ["hermes", hermes],
       ["deepseek-harness", dsh],
+      ["opencode", missing],
     ]);
     const { view } = await sessions(service);
     expect(view.sessions.filter(({ harnessId }) => harnessId === "hermes")).toEqual([

@@ -397,7 +397,7 @@ describe("Sessions settings page", () => {
       }),
     });
     await vi.waitFor(() => expect(rows()).toHaveLength(1));
-    expect(text(content)).toContain("无法读取 Pi 的会话记录");
+    expect(text(content)).toContain("无法读取 Pi 的会话");
   });
   it("filters by Harness, time range, project and search, with a folded-subagents summary", async () => {
     const now = Date.now();

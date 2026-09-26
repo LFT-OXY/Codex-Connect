@@ -83,6 +83,34 @@ describe("Omp Session import", () => {
     expect(f.createTransport).not.toHaveBeenCalled();
   });
 
+  it("lists a session started by invoking a skill", async () => {
+    const f = await fixture();
+    await writeFile(
+      path.join(f.project, `${SESSION}.jsonl`),
+      lines(
+        {
+          type: "session",
+          version: 3,
+          id: SESSION,
+          timestamp: "2026-01-01T00:00:00.000Z",
+          cwd: f.cwd,
+        },
+        {
+          type: "custom_message",
+          customType: "skill-prompt",
+          content: PRIVATE,
+          display: true,
+          attribution: "user",
+          id: "c-1",
+          parentId: null,
+          timestamp: "2026-01-01T00:00:01.000Z",
+        },
+      ),
+    );
+    const listed = await f.adapter.sessionImport.listCandidates();
+    expect(listed).toMatchObject({ ok: true, value: [{ nativeSessionId: SESSION, title: null }] });
+  });
+
   it("revalidates the selected session and returns its session file for resume", async () => {
     const f = await fixture();
     const file = path.join(f.project, `${SESSION}.jsonl`);

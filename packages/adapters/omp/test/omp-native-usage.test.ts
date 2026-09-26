@@ -453,4 +453,38 @@ describe("Omp native usage", () => {
       expect.objectContaining({ nativeSessionId: SESSION, title: "Named", turns: 2 }),
     ]);
   });
+  it("counts a skill the user invoked as a turn without taking its prompt as the title", async () => {
+    const f = await fixture();
+    await writeFile(
+      f.file,
+      lines(
+        header(),
+        // Context OMP injects is attributed to the user but not shown: not a turn.
+        {
+          type: "custom_message",
+          customType: "atw-workflow-state",
+          content: SECRET,
+          display: false,
+          attribution: "user",
+          id: "c-1",
+          parentId: null,
+          timestamp: "2026-03-02T10:00:00.000Z",
+        },
+        {
+          type: "custom_message",
+          customType: "skill-prompt",
+          content: SECRET,
+          display: true,
+          attribution: "user",
+          id: "c-2",
+          parentId: "c-1",
+          timestamp: "2026-03-02T10:00:01.000Z",
+        },
+        assistant("a-1", "c-2", { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 }),
+      ),
+    );
+    const [session] = (await f.read()).sessions ?? [];
+    expect(session).toMatchObject({ nativeSessionId: SESSION, turns: 1 });
+    expect(session).not.toHaveProperty("title");
+  });
 });

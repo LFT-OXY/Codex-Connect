@@ -71,7 +71,8 @@ filterSessions(sessions, { harnessId, range: "all"|"7"|"30"|"90", project, query
 | 参数不是 `{refresh: boolean}` | `-32602 Invalid local sessions query params` |
 | 摘要字段不合 schema（缺字段、负数、多余字段、title > 4096） | 整批按不合规处理：该 Harness 进入 `failures`，状态与游标不变 |
 | 单个 Harness 读取失败 | 该 Harness 进 `failures`，其摘要与用量保持上次成功读取的值 |
-| 候选 `listCandidates` 失败、> 5 s（`CANDIDATE_LIST_TIMEOUT_MS`）、不合 schema 或含重复 ID | 该 Harness 进 `failures`，其余照常；不阻塞列表 |
+| 候选 `listCandidates` 返回 `notInstalled` | 视为没有候选，不进 `failures`（本机未装 Hermes/DSH 时不应常驻红色提示） |
+| 候选 `listCandidates` 其他失败、> 5 s（`CANDIDATE_LIST_TIMEOUT_MS`）、不合 schema 或含重复 ID | 该 Harness 进 `failures`，其余照常；不阻塞列表 |
 | 读取 0.5 s 内未完成 | `{status:"reading", progress}`（经 `localUsageReadingSchema` 校验） |
 | 映射库读取失败 / 视图 schema 失败 | `-32082 Local usage could not be read`，`diagnose` |
 | 会话 ID 不在安全字符集 / 命令不合 PATTERN / 没有 `resumeCommand` | 该行 `resumeCommand: null`（不提供复制指令） |

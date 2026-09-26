@@ -32,6 +32,10 @@ export async function listLocalSessionCandidates(
         Promise.race([capability.listCandidates().catch(() => null), timeout])
           .finally(() => clearTimeout(timer))
           .then((result) => {
+            // A Harness that is not installed simply has no Sessions to import.
+            if (result && !result.ok && result.error.code === "notInstalled") {
+              return { harnessId, candidates: [] };
+            }
             // Candidates are plugin data; a malformed list fails like Session import rejects it.
             const parsed = result?.ok
               ? harnessSessionImportCandidateSchema.array().safeParse(result.value)

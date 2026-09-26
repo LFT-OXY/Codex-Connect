@@ -82,7 +82,7 @@ Host 不承诺在 resolver 与 resume 之间锁住外部客户端；当前没有
 实现位于 `packages/adapters/omp/src/omp-session-import.ts`，行为与 Pi 对齐，差异如下：
 
 - 会话目录与用量读取相同：`PI_CODING_AGENT_SESSION_DIR`，否则 `$PI_CODING_AGENT_DIR/sessions`，默认 `~/.omp/agent/sessions`（`PI_CONFIG_DIR` 可替换 `.omp`；使用默认目录且 `$XDG_DATA_HOME/omp` 存在时改用 `$XDG_DATA_HOME/omp/sessions`）。扫描会话目录本身与其下一层（按项目分组）中的 `*.jsonl`；与某个会话文件同名的文件夹保存该会话的子代理，不作为候选。
-- 会话文件开头可以有 OMP 原地改写的定宽标题槽（`type: "title"`），其后第一条必须是 v3 会话头；Entry 树与活动分支规则同 Pi。
+- 会话文件开头可以有 OMP 原地改写的定宽标题槽（`type: "title"`），其后第一条必须是 v3 会话头；Entry 树与活动分支规则同 Pi。用户调用技能时 OMP 把提示写成 `custom_message`（`attribution: "user"`、`display: true`），不写 `role: "user"` 消息；这类消息也算活动分支上的用户消息，否则以技能开始的会话无法导入。
 - 标题依次取标题槽、会话头的 `title`、首条用户消息的文本；更新时间取消息活动时间，缺失时回退文件修改时间。
 - 原生引用包含 `locator: { sessionFile }`，oh-my-pi Adapter 已有的 `resume` 用该文件恢复并核对 Session ID。
 - oh-my-pi 没有可靠的跨进程运行标记，候选为 `running: null`；导入前应先在 `omp` 中关闭该会话。

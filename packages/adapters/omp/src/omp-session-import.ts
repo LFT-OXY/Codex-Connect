@@ -70,6 +70,14 @@ function title(value: unknown): string | null {
     : null;
 }
 
+/**
+ * A prompt the user sent as a custom message, such as invoking a skill: OMP attributes it to the
+ * user and shows it, unlike the context it injects.
+ */
+export function ompUserCustomMessage(entry: Record<string, unknown>): boolean {
+  return entry.type === "custom_message" && entry.attribution === "user" && entry.display === true;
+}
+
 /** A user message's text as a Session title, for Sessions OMP has not named. */
 export function ompUserMessageTitle(message: Record<string, unknown>): string | null {
   const content = message.content;
@@ -177,6 +185,7 @@ async function readCandidate(
       }
       hasUser =
         (entry.type === "message" && message?.role === "user") ||
+        ompUserCustomMessage(entry) ||
         (typeof entry.parentId === "string" && entries.get(entry.parentId) === true);
       entries.set(entry.id, hasUser);
       if (entry.type === "message" && (message?.role === "user" || message?.role === "assistant")) {

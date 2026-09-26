@@ -18,7 +18,11 @@ import {
 } from "@codexhost/harness-adapter";
 import type { JsonValue } from "@codexhost/shared-contracts";
 
-import { ompSessionsDirectory, ompUserMessageTitle } from "./omp-session-import.js";
+import {
+  ompSessionsDirectory,
+  ompUserCustomMessage,
+  ompUserMessageTitle,
+} from "./omp-session-import.js";
 
 const NEWLINE = 0x0a;
 /** Entries write their own timestamp before any nested field, so the first one is the entry's. */
@@ -45,8 +49,9 @@ type OmpFileSummary = {
 };
 
 type OmpUsageCursor = {
-  // Version 1 had no Session summaries; such a cursor reads everything again.
-  formatVersion: 2;
+  // Version 1 had no Session summaries and version 2 missed turns started by user custom
+  // messages; either reads everything again.
+  formatVersion: 3;
   /** Keyed by path relative to the sessions directory. */
   files: Record<
     string,
@@ -109,8 +114,8 @@ function fileSummary(value: unknown): OmpFileSummary | undefined {
 
 /** A cursor that is not entirely valid reads everything again, like a missing one. */
 function parseCursor(value: JsonValue | null): OmpUsageCursor {
-  const empty: OmpUsageCursor = { formatVersion: 2, files: {} };
-  if (!isRecord(value) || value.formatVersion !== 2 || !isRecord(value.files)) return empty;
+  const empty: OmpUsageCursor = { formatVersion: 3, files: {} };
+  if (!isRecord(value) || value.formatVersion !== 3 || !isRecord(value.files)) return empty;
   const files: OmpUsageCursor["files"] = {};
   for (const [relative, file] of Object.entries(value.files)) {
     if (!isRecord(file)) return empty;
@@ -131,7 +136,7 @@ function parseCursor(value: JsonValue | null): OmpUsageCursor {
     }
     files[relative] = { ino, mtimeMs, offset, session, summary };
   }
-  return { formatVersion: 2, files };
+  return { formatVersion: 3, files };
 }
 
 /**
@@ -232,6 +237,11 @@ async function readTitleSlot(file: string): Promise<string | null> {
 
 /** Adds one entry after the header to its file's Session summary. */
 function summarize(summary: OmpFileSummary, entry: Record<string, unknown>): void {
+  // A skill invoked by the user is a turn, though its text is not the Session's title.
+  if (ompUserCustomMessage(entry)) {
+    startNativeSessionTurn(summary.activity);
+    return;
+  }
   const message = isRecord(entry.message) ? entry.message : null;
   if (entry.type !== "message" || !message) return;
   if (message.role === "user") {
@@ -347,7 +357,12 @@ async function readFileUsage(
       if (Number.isFinite(time)) recordNativeSessionActivity(summary.activity, time);
     }
     // Skip parsing tool results and other large lines that cannot carry usage or a turn.
-    if (session !== "pending" && !line.includes('"usage"') && !line.includes('"role":"user"')) {
+    if (
+      session !== "pending" &&
+      !line.includes('"usage"') &&
+      !line.includes('"role":"user"') &&
+      !line.includes('"attribution":"user"')
+    ) {
       continue;
     }
     let entry: unknown;
@@ -385,7 +400,7 @@ export async function readOmpNativeUsage(
 ): Promise<HarnessNativeUsageBatch> {
   const directory = await ompSessionsDirectory(environment);
   const previous = parseCursor(cursor);
-  const next: OmpUsageCursor = { formatVersion: 2, files: {} };
+  const next: OmpUsageCursor = { formatVersion: 3, files: {} };
   const records: HarnessNativeUsageRecord[] = [];
   const changed: string[] = [];
   const files = await sessionFiles(directory, signal);
