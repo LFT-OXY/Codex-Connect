@@ -2,7 +2,7 @@
 
 ## 当前范围
 
-设置 → 会话导入可登记 **Claude Code、Pi、Hermes** 和 **DSH** 的原生 Session（已验证 `0.1.2-rc.1` / `0.1.5-rc.1` / `0.1.5-rc.2` / `0.1.5-rc.3` / `0.1.7-rc.1`；命令和限制见 [DSH 验证记录](../harnesses/deepseek/dsh-015rc1-validation.md)）。导入只建立 Host Thread 与原生 Session 的映射，不复制 Transcript、不转换 Harness、不发送用户 Turn；打开后仍通过对应 Adapter 的 `open({ kind: "resume" })` 恢复历史并继续会话。
+设置 → 会话导入可登记 **Claude Code、Pi、oh-my-pi、Hermes** 和 **DSH** 的原生 Session（已验证 `0.1.2-rc.1` / `0.1.5-rc.1` / `0.1.5-rc.2` / `0.1.5-rc.3` / `0.1.7-rc.1`；命令和限制见 [DSH 验证记录](../harnesses/deepseek/dsh-015rc1-validation.md)）。导入只建立 Host Thread 与原生 Session 的映射，不复制 Transcript、不转换 Harness、不发送用户 Turn；打开后仍通过对应 Adapter 的 `open({ kind: "resume" })` 恢复历史并继续会话。
 
 - 设置页始终使用本地 Host，即使 Composer 当前连接远程工作区。
 - 可选 Harness 来自该 Host 已加载、同时提供发现和解析能力的 Adapter，不使用 Renderer 内置 Harness 名单。
@@ -76,6 +76,17 @@ Host 不承诺在 resolver 与 resume 之间锁住外部客户端；当前没有
 - 导入时重新验证选中的文件；其余新建/变化的文件只读 header 做 ID 歧义检查，不重读全部历史。权限或身份歧义仍明确失败；重复原生 Session ID 不会被静默选中其中一个。
 
 这些检查服务于正确性、流式读取和可取消性，不是对恶意本机文件替换的安全沙箱。
+
+## oh-my-pi 原生规则
+
+实现位于 `packages/adapters/omp/src/omp-session-import.ts`，行为与 Pi 对齐，差异如下：
+
+- 会话目录与用量读取相同：`PI_CODING_AGENT_SESSION_DIR`，否则 `$PI_CODING_AGENT_DIR/sessions`，默认 `~/.omp/agent/sessions`（`PI_CONFIG_DIR` 可替换 `.omp`；使用默认目录且 `$XDG_DATA_HOME/omp` 存在时改用 `$XDG_DATA_HOME/omp/sessions`）。扫描会话目录本身与其下一层（按项目分组）中的 `*.jsonl`；与某个会话文件同名的文件夹保存该会话的子代理，不作为候选。
+- 会话文件开头可以有 OMP 原地改写的定宽标题槽（`type: "title"`），其后第一条必须是 v3 会话头；Entry 树与活动分支规则同 Pi。
+- 标题依次取标题槽、会话头的 `title`、首条用户消息的文本；更新时间取消息活动时间，缺失时回退文件修改时间。
+- 原生引用包含 `locator: { sessionFile }`，oh-my-pi Adapter 已有的 `resume` 用该文件恢复并核对 Session ID。
+- oh-my-pi 没有可靠的跨进程运行标记，候选为 `running: null`；导入前应先在 `omp` 中关闭该会话。
+- 读取前后检查文件指纹，按 Adapter 实例缓存元数据，重复 Session ID 明确失败；Adapter 关闭时中止并等待正在进行的发现。
 
 ## Claude Code 原生规则
 

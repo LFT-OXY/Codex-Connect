@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { ClaudeCodeAdapter } from "@codexhost/adapter-claude-code";
+import { OmpAdapter } from "@codexhost/adapter-omp";
 import { PiAdapter } from "@codexhost/adapter-pi";
 import type { HarnessAdapter } from "@codexhost/harness-adapter";
 import { MappingStore } from "@codexhost/mapping-store";
@@ -376,6 +377,80 @@ describe("Local Sessions query", () => {
     const { threadId } = imported.body.result as { threadId: string };
     const resumed = (await sessions(service, false)).view.sessions.find(
       ({ harnessId }) => harnessId === "pi",
+    );
+    expect(resumed?.threadId).toBe(threadId);
+  });
+
+  it("lists oh-my-pi Sessions with subagents folded in and resumes one through its import", async () => {
+    const f = await fixture();
+    const project = path.join(f.root, "omp", "sessions", "-project");
+    const OMP = "01a079a2-95f5-7054-a6c6-935a64cfc2a8";
+    const name = `2026-03-04T10-00-00-000Z_${OMP}`;
+    await mkdir(path.join(project, name), { recursive: true });
+    const session = (id: string, output: number) =>
+      lines(
+        { type: "title", v: 1, title: "", updatedAt: "2026-03-04T10:00:00.000Z", pad: "  " },
+        { type: "session", version: 3, id, timestamp: "2026-03-04T10:00:00.000Z", cwd: f.cwd },
+        {
+          type: "message",
+          id: `${id}-u`,
+          parentId: null,
+          timestamp: "2026-03-04T10:00:01.000Z",
+          message: { role: "user", content: "Omp title", timestamp: 1 },
+        },
+        {
+          type: "message",
+          id: `${id}-a`,
+          parentId: `${id}-u`,
+          timestamp: "2026-03-04T10:00:02.000Z",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: SECRET }],
+            provider: "p",
+            model: "claude-synthetic-1",
+            usage: { input: 1, output, cacheRead: 0, cacheWrite: 0 },
+            timestamp: 2,
+          },
+        },
+      );
+    await writeFile(path.join(project, `${name}.jsonl`), session(OMP, 2));
+    await writeFile(path.join(project, name, "Scout.jsonl"), session("scout-id", 4));
+    const omp = new OmpAdapter({ environment: { PI_CODING_AGENT_DIR: path.join(f.root, "omp") } });
+    cleanup.push(() => omp.close());
+    const service = f.service([["omp", omp]]);
+    const rows = (await sessions(service)).view.sessions.filter(
+      ({ harnessId }) => harnessId === "omp",
+    );
+    expect(rows).toEqual([
+      expect.objectContaining({
+        nativeSessionId: OMP,
+        title: "Omp title",
+        subagents: 1,
+        usage: { totalTokens: 3 + 5, estimatedCostUsd: expect.any(Number) },
+        threadId: null,
+        resumable: true,
+      }),
+    ]);
+    const imports = new SessionImportRequests({
+      adapters: new Map<string, HarnessAdapter>([["omp", omp]]),
+      descriptors: () => [],
+      repository: f.repository,
+      diagnose: () => undefined,
+    });
+    const imported = await imports.handle(
+      jsonRpcRequestSchema.parse({
+        id: 4,
+        method: "codexhost/harness/session-import/import",
+        params: { harnessId: "omp", nativeSessionId: OMP },
+      }),
+    );
+    const { threadId } = imported.body.result as { threadId: string };
+    expect((await f.repository.list())[0]?.nativeSessionRef).toMatchObject({
+      harnessId: "omp",
+      locator: { sessionFile: path.join(project, `${name}.jsonl`) },
+    });
+    const resumed = (await sessions(service, false)).view.sessions.find(
+      ({ harnessId }) => harnessId === "omp",
     );
     expect(resumed?.threadId).toBe(threadId);
   });

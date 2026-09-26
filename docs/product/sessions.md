@@ -1,6 +1,6 @@
 # 会话
 
-「设置 → 会话」列出本机各 Harness 的历史主会话及其用量，并可在 Codex Connect 中恢复。会话与用量来自同一次原生记录读取（见[用量统计](local-usage.md)），数据来源与解析归属见 [ADR-0001](../adr/0001-local-usage-from-native-session-records.md)、[ADR-0002](../adr/0002-native-usage-parsing-lives-in-adapters.md)。当前接入 Claude Code、官方 Codex 与 Pi。
+「设置 → 会话」列出本机各 Harness 的历史主会话及其用量，并可在 Codex Connect 中恢复。会话与用量来自同一次原生记录读取（见[用量统计](local-usage.md)），数据来源与解析归属见 [ADR-0001](../adr/0001-local-usage-from-native-session-records.md)、[ADR-0002](../adr/0002-native-usage-parsing-lives-in-adapters.md)。当前接入 Claude Code、官方 Codex、Pi 与 oh-my-pi。
 
 ## 页面
 
@@ -29,6 +29,7 @@
 - Claude Code：标题取最新的 `custom-title`（用户命名），否则取最新的 `ai-title`（Claude 生成），不回退到首条消息；轮数计主会话中不是 `isMeta`、不全是工具结果、有文本且不是中断提示（`[Request interrupted by user…`）或任务通知（`<task-notification>`）的用户消息；模型取最后一条回复的模型（忽略 `<synthetic>`）；`<session>/subagents/*.jsonl` 是该会话的子代理。
 - Codex：标题取 `$CODEX_HOME/session_index.jsonl` 中该 Thread 最新的 `thread_name`（重命名后下次读取即更新）；轮数按 `turn_context` 计（同一 `turn_id` 重复出现只算一次），rollout 中没有 `turn_context` 时按用户消息（`user_message`）计；编辑数计调用过 `apply_patch` 等编辑类工具的回合，包括在 `exec` 代码模式脚本中调用的；模型与工作目录取最近一次 `turn_context`。Fork 出的会话（`forked_from_id`）与子代理线程（`parent_thread_id` 或 `source.subagent.thread_spawn.parent_thread_id`）按父子关系折叠进主线程，可多层；父线程不在本机时单独成行。Fork 开头复制的父会话历史也算作 Fork 自身的轮数，但 Fork 折叠后不单独显示。会话归档（移到 `archived_sessions/`）后仍是同一行。
 - Pi：标题与会话导入相同，取最新的 `session_info` 名称，未命名时取首条用户消息的文本（折叠空白、截取前 120 个字符）；轮数为用户消息数；编辑数为调用过 `edit`、`write` 等编辑类工具的轮数；模型取最后一条 assistant 消息的模型，工作目录取会话头的 `cwd`。会话头中的 `parentSession` 是子代理的父会话 ID，或 Fork 来源的会话文件路径（取文件名中 `_` 之后的 ID），两者都折叠进父会话。恢复复用 Pi 的会话导入（恢复时校验 Pi 会话文件）。
+- oh-my-pi：标题依次取 OMP 原地改写的标题槽、会话头的 `title`、首条用户消息的文本（折叠空白、截取前 120 个字符）；标题槽改写后文件修改时间变化，下次读取即更新。轮数、编辑数、模型口径同 Pi。子代理会话保存在以父会话文件命名的文件夹中（可多层），按所在文件夹折叠进父会话；Fork 的会话头 `parentSession` 指向来源会话文件，同样折叠。恢复复用 oh-my-pi 的会话导入。
 
 ## 读取与缓存
 

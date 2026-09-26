@@ -1,4 +1,13 @@
-import { appendFile, mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdtemp,
+  mkdir,
+  open,
+  realpath,
+  rm,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -171,7 +180,8 @@ describe("Omp native usage", () => {
         reportedCostUsd: 0.25,
       },
     ]);
-    expect(JSON.stringify(batch)).not.toContain(SECRET);
+    // Usage never carries message text; a Session's title is its own or its first message.
+    expect(JSON.stringify(batch.records)).not.toContain(SECRET);
   });
 
   it("accepts a header on the first line and counts every assistant message as a conversation", async () => {
@@ -377,5 +387,66 @@ describe("Omp native usage", () => {
     expect(
       await ids({ ...xdgEnvironment, PI_CODING_AGENT_DIR: path.join(root, ".omp", "agent") }),
     ).toEqual(["xdg"]);
+  });
+  it("summarizes sessions with their title slot, turns, edits, subagents and forks", async () => {
+    const f = await fixture();
+    const slot = (title: string) =>
+      JSON.stringify({ ...TITLE, title, pad: " ".repeat(40 - title.length) });
+    const editing = assistant("a-1", "u-1", { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 });
+    editing.message.content = [
+      { type: "toolCall", id: "t-1", name: "write", arguments: {} } as never,
+    ];
+    await writeFile(
+      f.file,
+      `${slot("")}\n` +
+        lines({ ...header(), title: "Header title" }, user("u-1", null), editing, {
+          ...user("u-2", "a-1"),
+          timestamp: "2026-03-02T10:05:00.000Z",
+        }),
+    );
+    // Subagents live in a folder named after the parent's file, possibly nested.
+    const agents = path.join(f.project, SESSION_FILE);
+    await mkdir(path.join(agents, "Scout"), { recursive: true });
+    await writeFile(path.join(agents, "Scout.jsonl"), lines(header(CHILD), user("c-1", null)));
+    await writeFile(
+      path.join(agents, "Scout", "Scout.Nested.jsonl"),
+      lines(header("nested-id"), user("n-1", null)),
+    );
+    await writeFile(
+      path.join(f.project, `2026-03-02T11-00-00-000Z_${FORK}.jsonl`),
+      lines({ ...header(FORK), parentSession: f.file }, user("f-1", null)),
+    );
+    const first = await f.read();
+    expect(first.sessions).toEqual(
+      expect.arrayContaining([
+        {
+          key: path.relative(path.join(f.agent, "sessions"), f.file),
+          nativeSessionId: SESSION,
+          title: "Header title",
+          cwd: "/work/project",
+          model: "gpt-synthetic-1",
+          firstActivityAt: Date.parse("2026-03-02T09:59:00.000Z"),
+          lastActivityAt: Date.parse("2026-03-02T10:05:00.000Z"),
+          activeMs: 6 * 60_000,
+          turns: 2,
+          edits: 1,
+        },
+        expect.objectContaining({ nativeSessionId: CHILD, parentSessionId: SESSION, turns: 1 }),
+        expect.objectContaining({ nativeSessionId: "nested-id", parentSessionId: CHILD }),
+        expect.objectContaining({ nativeSessionId: FORK, parentSessionId: SESSION }),
+      ]),
+    );
+    expect(first.sessions).toHaveLength(4);
+    expect((await f.read(first.cursor)).sessions).toEqual([]);
+
+    // OMP names the session by rewriting the slot in place, without appending anything.
+    const handle = await open(f.file, "r+");
+    await handle.write(slot("Named"), 0);
+    await handle.close();
+    const later = new Date(Date.now() + 5_000);
+    await utimes(f.file, later, later);
+    expect((await f.read(first.cursor)).sessions).toEqual([
+      expect.objectContaining({ nativeSessionId: SESSION, title: "Named", turns: 2 }),
+    ]);
   });
 });
