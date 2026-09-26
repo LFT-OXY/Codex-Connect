@@ -14,7 +14,6 @@ import { RendererMethodUnavailableError } from "../renderer-request-sender.js";
 import type { RendererSettingsPageDefinition, RendererSettingsPageMountContext } from "./core.js";
 import { createRendererSettingsIcon } from "./icons.js";
 import type { RendererSettingsMessages } from "./localization.js";
-import type { RendererImportedThreadOpener } from "./session-import-page.js";
 import {
   SESSION_ACTION_CLASS,
   renderSessionRow,
@@ -26,6 +25,12 @@ import { isWindowsRenderer } from "./renderer-platform.js";
 import { sessionResumeCommand } from "./session-resume-command.js";
 import { createSessionFilters, filterSessions } from "./sessions-filters.js";
 import { usageBar } from "./usage-dashboard.js";
+
+/** Opens a Thread in Codex Desktop; the settings dialog closes once it has opened. */
+export type RendererImportedThreadOpener = (
+  threadId: HostThreadId,
+  signal: AbortSignal,
+) => Promise<void>;
 
 export interface RendererSessionsClient {
   queryLocalSessions(input: LocalSessionsQueryParams): Promise<LocalSessionsQueryResult>;

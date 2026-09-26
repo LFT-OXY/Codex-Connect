@@ -5,6 +5,7 @@ import type {
 } from "@codexhost/harness-adapter";
 import type { StoredThreadRecordV1 } from "@codexhost/mapping-store";
 import {
+  harnessSessionImportCandidateSchema,
   hostThreadIdSchema,
   jsonValueSchema,
   localSessionsQueryParamsSchema,
@@ -28,7 +29,7 @@ import { loadModelPrices } from "./local-usage-prices.js";
 import { createProjectResolver } from "./local-usage-projects.js";
 import { createModelPricer, type ModelPricer } from "./local-usage-pricing.js";
 import { buildLocalUsageView } from "./local-usage-view.js";
-import { buildLocalSessionsView } from "./local-sessions-view.js";
+import { buildLocalSessionsView, type LocalSessionCandidate } from "./local-sessions-view.js";
 
 const OFFICIAL_CODEX_ID = "codex";
 /** How long a query waits for a read before answering with its progress instead. */
@@ -74,6 +75,8 @@ export class LocalUsageService {
   #failed: readonly string[] = [];
   /** A failed read no query was still waiting for, reported to the next query that polls. */
   #unreportedFailure: unknown = null;
+  /** Session import candidates, listed again when Sessions are refreshed. */
+  #candidates: Promise<{ candidates: LocalSessionCandidate[]; failed: string[] }> | null = null;
   readonly #project = createProjectResolver();
 
   constructor(
@@ -121,8 +124,16 @@ export class LocalUsageService {
     if (!params.success) {
       return { error: { code: -32602, message: "Invalid local sessions query params" } };
     }
+    if (params.data.refresh || !this.#candidates) this.#candidates = this.#listCandidates();
+    const listing = this.#candidates;
     return this.#query(params.data.refresh, async (state, price) => {
-      const cwds = [...new Set(state.sessions.flatMap(({ cwd }) => (cwd ? [cwd] : [])))];
+      const { candidates, failed } = await listing;
+      const cwds = [
+        ...new Set([
+          ...state.sessions.flatMap(({ cwd }) => (cwd ? [cwd] : [])),
+          ...candidates.map(({ candidate }) => candidate.cwd),
+        ]),
+      ];
       const [projects, mappings] = await Promise.all([
         this.#projects(cwds),
         this.input.mappings?.() ?? [],
@@ -148,10 +159,48 @@ export class LocalUsageService {
           resumable: (harnessId) =>
             harnessId === OFFICIAL_CODEX_ID ||
             Boolean(this.input.adapters.get(harnessId)?.sessionImport?.resolveCandidate),
-          failedHarnessIds: this.#failed,
+          candidates,
+          failedHarnessIds: [...new Set([...this.#failed, ...failed])],
         }),
       );
     });
+  }
+
+  /**
+   * Import candidates of Harnesses that can map existing Sessions but have no native usage, such
+   * as Hermes and DSH. Harnesses with native usage list their Sessions from their records.
+   */
+  async #listCandidates(): Promise<{ candidates: LocalSessionCandidate[]; failed: string[] }> {
+    const listed = await Promise.all(
+      [...this.input.adapters].flatMap(([harnessId, adapter]) => {
+        const capability = adapter.sessionImport;
+        if (adapter.nativeUsage || !capability?.resolveCandidate) return [];
+        return [
+          capability
+            .listCandidates()
+            .catch(() => null)
+            .then((result) => {
+              // Candidates are plugin data; a malformed list fails like a failed read.
+              const parsed = result?.ok
+                ? harnessSessionImportCandidateSchema.array().safeParse(result.value)
+                : null;
+              return { harnessId, candidates: parsed?.success ? parsed.data : null };
+            }),
+        ];
+      }),
+    );
+    const failed = listed.flatMap(({ harnessId, candidates }) => (candidates ? [] : [harnessId]));
+    for (const harnessId of failed) {
+      this.input.diagnose(
+        new Error(`Session import candidates could not be listed for ${harnessId}`),
+      );
+    }
+    return {
+      candidates: listed.flatMap(({ harnessId, candidates }) =>
+        (candidates ?? []).map((candidate) => ({ harnessId, candidate })),
+      ),
+      failed,
+    };
   }
 
   /**

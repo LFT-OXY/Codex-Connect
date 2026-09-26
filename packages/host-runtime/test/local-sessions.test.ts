@@ -5,15 +5,17 @@ import path from "node:path";
 import { ClaudeCodeAdapter } from "@codexhost/adapter-claude-code";
 import { OmpAdapter } from "@codexhost/adapter-omp";
 import { PiAdapter } from "@codexhost/adapter-pi";
-import type { HarnessAdapter } from "@codexhost/harness-adapter";
+import type { HarnessAdapter, HarnessSessionImportSource } from "@codexhost/harness-adapter";
+import { FakeHarnessAdapter } from "@codexhost/harness-adapter/testing";
 import { MappingStore } from "@codexhost/mapping-store";
 import {
+  harnessIdSchema,
   harnessPluginDescriptorSchema,
   jsonRpcRequestSchema,
   localSessionsQueryResultSchema,
   type JsonObject,
 } from "@codexhost/shared-contracts";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { codexNativeUsage } from "../src/codex-runtime/codex-native-usage.js";
 import { ExternalThreadRepository } from "../src/external-thread-repository.js";
@@ -453,6 +455,75 @@ describe("Local Sessions query", () => {
       ({ harnessId }) => harnessId === "omp",
     );
     expect(resumed?.threadId).toBe(threadId);
+  });
+
+  it("adds Session import candidates of Harnesses without usage, once each and without usage", async () => {
+    const f = await fixture();
+    const hermes = new FakeHarnessAdapter(harnessIdSchema.parse("hermes"));
+    const source: HarnessSessionImportSource = {
+      candidate: {
+        nativeSessionId: "hermes-1",
+        title: "Hermes session",
+        cwd: f.cwd,
+        running: true,
+        updatedAt: Date.parse("2026-03-04T09:00:00.000Z"),
+      },
+      nativeRef: { harnessId: hermes.harnessId, nativeSessionId: "hermes-1", formatVersion: 1 },
+    };
+    const listCandidates = vi.fn(async () => ({
+      ok: true as const,
+      value: [source.candidate, source.candidate],
+    }));
+    Object.assign(hermes, {
+      sessionImport: {
+        listCandidates,
+        resolveCandidate: async () => ({ ok: true, value: source }),
+      },
+    });
+    const dsh = new FakeHarnessAdapter(harnessIdSchema.parse("deepseek-harness"));
+    Object.assign(dsh, {
+      sessionImport: {
+        listCandidates: async () => ({
+          ok: false,
+          error: { code: "unavailable", message: "x", retryable: true },
+        }),
+        resolveCandidate: async () => ({ ok: false }),
+      },
+    });
+    const service = f.service([
+      ["hermes", hermes],
+      ["deepseek-harness", dsh],
+    ]);
+    const { view } = await sessions(service);
+    expect(view.sessions.filter(({ harnessId }) => harnessId === "hermes")).toEqual([
+      {
+        harnessId: "hermes",
+        nativeSessionId: "hermes-1",
+        title: "Hermes session",
+        cwd: f.cwd,
+        project: "project",
+        model: null,
+        startedAt: null,
+        lastActivityAt: Date.parse("2026-03-04T09:00:00.000Z"),
+        activeMs: null,
+        usage: null,
+        turns: null,
+        edits: null,
+        subagents: 0,
+        threadId: null,
+        resumable: true,
+        running: true,
+      },
+    ]);
+    // Most recent first, whether or not a Session has usage.
+    expect(view.sessions[0]?.harnessId).toBe("hermes");
+    expect(view.failures).toEqual([{ harnessId: "deepseek-harness", name: "deepseek-harness" }]);
+    expect(view.harnesses.map(({ harnessId }) => harnessId)).toEqual(["claude-code", "hermes"]);
+    // Polls reuse the candidates; a refresh lists them again.
+    await sessions(service, false);
+    expect(listCandidates).toHaveBeenCalledTimes(1);
+    await sessions(service, true);
+    expect(listCandidates).toHaveBeenCalledTimes(2);
   });
 
   it("keeps listing other Harnesses' Sessions when one source fails", async () => {

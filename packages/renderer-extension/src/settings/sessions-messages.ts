@@ -1,6 +1,6 @@
 export const sessionsEnglish = {
   description:
-    "Sessions on this computer with their usage, including sessions run directly in a terminal. Resume opens a session as a thread in Codex Connect and continues it.",
+    "Sessions on this computer with their usage, including sessions run directly in a terminal. Resume opens a session as a thread in Codex Connect and continues it; close it in its own client first to avoid concurrent writes.",
   refresh: "Refresh",
   refreshing: "Reading…",
   loading: "Reading session records…",
@@ -62,7 +62,7 @@ export const sessionsEnglish = {
 export type SessionsMessages = typeof sessionsEnglish;
 export const sessionsChinese: SessionsMessages = {
   description:
-    "本机各 Harness 的历史会话及其用量，包括直接在终端中运行的会话。「恢复」会在 Codex Connect 中以 Thread 打开会话并继续。",
+    "本机各 Harness 的历史会话及其用量，包括直接在终端中运行的会话。「恢复」会在 Codex Connect 中以 Thread 打开会话并继续，恢复前请先在原生客户端关闭该会话，避免同时写入。",
   refresh: "刷新",
   refreshing: "读取中…",
   loading: "正在读取会话记录…",

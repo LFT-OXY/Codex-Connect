@@ -10,7 +10,7 @@ import {
 import type { RendererRequestOptions } from "../src/renderer-request-sender.js";
 import type { installRendererSidebarAgentIcons } from "../src/renderer-sidebar-agent-icons.js";
 import type { RendererConnectionDiagnostics } from "../src/settings/connections-page.js";
-import type { RendererSessionImportClient } from "../src/settings/session-import-page.js";
+import type { RendererSessionsClient } from "../src/settings/sessions-page.js";
 import type * as VersionedRendererAdapter from "../src/versioned-renderer-adapter.js";
 
 const testState = vi.hoisted(() => ({
@@ -20,7 +20,7 @@ const testState = vi.hoisted(() => ({
   renderedModelViews: [] as RendererModelControlView[],
   selectModel: null as null | ((modelId: string) => void),
   getConnectionDiagnostics: null as null | (() => RendererConnectionDiagnostics | null),
-  getSessionImportClient: null as null | (() => RendererSessionImportClient | null),
+  getSessionsClient: null as null | (() => RendererSessionsClient | null),
   sidebarOptions: null as null | Parameters<typeof installRendererSidebarAgentIcons>[0],
   documentListeners: new Map<string, EventListener>(),
   modelTarget: ["conversation", "thread-a"] as readonly unknown[],
@@ -106,11 +106,11 @@ vi.mock("../src/renderer-settings-lifecycle.js", () => ({
     _window: unknown,
     options: {
       getConnectionDiagnostics(): RendererConnectionDiagnostics | null;
-      getSessionImportClient(): RendererSessionImportClient | null;
+      getSessionsClient(): RendererSessionsClient | null;
     },
   ) => {
     testState.getConnectionDiagnostics = options.getConnectionDiagnostics;
-    testState.getSessionImportClient = options.getSessionImportClient;
+    testState.getSessionsClient = options.getSessionsClient;
     return {
       locale: "en",
       refresh: vi.fn(),
@@ -177,7 +177,7 @@ function installFakeBrowser(): void {
   testState.renderedModelViews = [];
   testState.selectModel = null;
   testState.getConnectionDiagnostics = null;
-  testState.getSessionImportClient = null;
+  testState.getSessionsClient = null;
   testState.documentListeners.clear();
   testState.modelTarget = ["conversation", "thread-a"];
   testState.prewarmClears = 0;
@@ -579,26 +579,19 @@ describe("Renderer binding Host-scoped Claude catalogs", () => {
     expect(applyAgent).not.toHaveBeenCalled();
   });
 
-  it("routes Session import to local while the current Composer Host is remote", async () => {
+  it("routes Sessions to local while the current Composer Host is remote", async () => {
     installFakeBrowser();
     const local = {
       inspectHarness: vi.fn(async () => readyInspection()),
-      listSessionImportSources: vi.fn(async () => ({
-        harnesses: [
-          { harnessId: harnessIdSchema.parse("deepseek-harness"), name: "DeepSeek Harness" },
-        ],
+      queryLocalSessions: vi.fn(async () => ({
+        status: "reading",
+        progress: { processed: 0, total: 0 },
       })),
-      listHarnessSessions: vi.fn(async () => ({ candidates: [] })),
       importHarnessSession: vi.fn(async () => ({ threadId: "local-thread" })),
     };
     const remote = {
       inspectHarness: vi.fn(async () => readyInspection()),
-      listSessionImportSources: vi.fn(async () => ({
-        harnesses: [
-          { harnessId: harnessIdSchema.parse("deepseek-harness"), name: "DeepSeek Harness" },
-        ],
-      })),
-      listHarnessSessions: vi.fn(),
+      queryLocalSessions: vi.fn(),
       importHarnessSession: vi.fn(),
     };
     const modelControl = {
@@ -622,23 +615,21 @@ describe("Renderer binding Host-scoped Claude catalogs", () => {
       modelControl as never,
     );
 
-    const client = testState.getSessionImportClient?.();
-    if (!client) throw new Error("Local Session import client was not installed");
-    await client.listSessionImportSources();
-    await client.listHarnessSessions({ harnessId: harnessIdSchema.parse("pi") });
+    const client = testState.getSessionsClient?.();
+    if (!client) throw new Error("Local Sessions client was not installed");
+    await client.queryLocalSessions({ refresh: true });
     await client.importHarnessSession({
       harnessId: harnessIdSchema.parse("pi"),
       nativeSessionId: "native-session",
     });
 
     expect(modelControl.clientForHost).toHaveBeenCalledWith("local");
-    expect(local.listSessionImportSources).toHaveBeenCalledOnce();
-    expect(local.listHarnessSessions).toHaveBeenCalledWith({ harnessId: "pi" });
+    expect(local.queryLocalSessions).toHaveBeenCalledWith({ refresh: true });
     expect(local.importHarnessSession).toHaveBeenCalledWith({
       harnessId: "pi",
       nativeSessionId: "native-session",
     });
-    expect(remote.listHarnessSessions).not.toHaveBeenCalled();
+    expect(remote.queryLocalSessions).not.toHaveBeenCalled();
     expect(remote.importHarnessSession).not.toHaveBeenCalled();
   });
 

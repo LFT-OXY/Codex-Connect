@@ -56,17 +56,8 @@ describe("Renderer settings localization", () => {
       "If Codex Connect has helped you, please Star it on GitHub. It means a lot to us 👉",
     );
     expect(chinese.updateStarLink).toBe("GitHub");
-    expect(chinese.pageLabels["session-import"]).toBe("会话导入");
-    expect(chinese.sessionImportAvailabilityNote).toContain("可选 Harness 来自本地 Host");
-    expect(chinese.sessionImportAvailabilityNote).toContain("先在原生客户端关闭该会话再导入");
-    expect(chinese.sessionImportAvailabilityNote).toContain("避免同时写入");
-    expect(english.sessionImportAvailabilityNote).toContain(
-      "Available Harnesses come from the local Host",
-    );
-    expect(english.sessionImportAvailabilityNote).toContain(
-      "close the session in its native client before importing",
-    );
-    expect(english.sessionImportAvailabilityNote).toContain("avoid concurrent writes");
+    expect(chinese.pageLabels.sessions).toBe("会话");
+    expect(english.pageLabels.sessions).toBe("Sessions");
     expect(Object.keys(chinese.pageLabels)).toEqual(Object.keys(english.pageLabels));
     expect(Object.isFrozen(english)).toBe(true);
     expect(Object.isFrozen(chinese.pageLabels)).toBe(true);
@@ -77,6 +68,6 @@ describe("Renderer settings localization", () => {
       createDefaultRendererSettingsPages(rendererSettingsMessages("zh-CN")).map(
         ({ label }) => label,
       ),
-    ).toEqual(["连接", "账号", "用量", "会话", "会话导入", "通用", "更新"]);
+    ).toEqual(["连接", "账号", "用量", "会话", "通用", "更新"]);
   });
 });

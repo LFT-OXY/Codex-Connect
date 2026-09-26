@@ -1,19 +1,11 @@
 import {
-  harnessSessionImportSourcesResultSchema,
-  harnessSessionListParamsSchema,
-  harnessSessionListResultSchema,
   harnessSessionImportParamsSchema,
   harnessSessionImportResultSchema,
-  type HarnessSessionImportSourcesResult,
-  type HarnessSessionListParams,
-  type HarnessSessionListResult,
   type HarnessSessionImportParams,
   type HarnessSessionImportResult,
 } from "@codexhost/shared-contracts";
 
 export interface RendererSessionImportClient {
-  listSessionImportSources(): Promise<HarnessSessionImportSourcesResult>;
-  listHarnessSessions(input: HarnessSessionListParams): Promise<HarnessSessionListResult>;
   importHarnessSession(input: HarnessSessionImportParams): Promise<HarnessSessionImportResult>;
 }
 
@@ -40,17 +32,6 @@ export function createRendererSessionImportClient(
     }
   };
   return {
-    async listSessionImportSources() {
-      return harnessSessionImportSourcesResultSchema.parse(
-        await request("codexhost/harness/session-import/sources", {}),
-      );
-    },
-    async listHarnessSessions(input) {
-      const params = harnessSessionListParamsSchema.parse(input);
-      return harnessSessionListResultSchema.parse(
-        await request("codexhost/harness/session-import/list", params),
-      );
-    },
     async importHarnessSession(input) {
       const params = harnessSessionImportParamsSchema.parse(input);
       const key = JSON.stringify([params.harnessId, params.nativeSessionId]);

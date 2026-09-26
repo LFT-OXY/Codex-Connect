@@ -17,10 +17,10 @@ import type {
   RendererSettingsPageMountContext,
 } from "../../src/settings/core.js";
 import { rendererSettingsMessages } from "../../src/settings/localization.js";
-import type { RendererImportedThreadOpener } from "../../src/settings/session-import-page.js";
 import { filterSessions, type SessionFilter } from "../../src/settings/sessions-filters.js";
 import {
   createSessionsSettingsPage,
+  type RendererImportedThreadOpener,
   type RendererSessionsClient,
 } from "../../src/settings/sessions-page.js";
 
@@ -316,6 +316,36 @@ describe("Sessions settings page", () => {
         "Set-Location -LiteralPath 'C:\\work'; if ($?) { claude --resume 11111111-1111-4111-8111-111111111111 }",
       ),
     );
+  });
+
+  it("leaves usage empty rather than 0 for Sessions known only from Session import", async () => {
+    const hermes = session({
+      harnessId: "hermes" as LocalSession["harnessId"],
+      nativeSessionId: "hermes-1",
+      model: null,
+      startedAt: null,
+      activeMs: null,
+      usage: null,
+      turns: null,
+      edits: null,
+      subagents: 0,
+      running: true,
+    });
+    const { find } = mount({ queryLocalSessions: vi.fn().mockResolvedValue(view([hermes])) });
+    await vi.waitFor(() =>
+      expect(find(({ dataset }) => dataset.sessionStats !== undefined)).toBeDefined(),
+    );
+    const stats = find(({ dataset }) => dataset.sessionStats !== undefined);
+    expect(stats.children.map((cell) => (cell as FakeElement).textContent)).toEqual([
+      "",
+      "",
+      "",
+      "",
+    ]);
+    const row = find(({ dataset }) => dataset.sessionId === "hermes-1");
+    expect(text(row)).toContain(messages.sessions.running);
+    expect(find(({ dataset }) => dataset.sessionAction === "resume").disabled).toBe(true);
+    expect(all(row).some(({ dataset }) => dataset.sessionAction === "copy-command")).toBe(false);
   });
 
   it("disables Resume for a Harness that cannot open existing Sessions", async () => {

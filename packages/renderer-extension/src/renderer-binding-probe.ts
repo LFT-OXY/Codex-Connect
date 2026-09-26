@@ -775,18 +775,6 @@ export function installRendererBindingProbe(
         importHarnessSession: (input) => importSession(input),
       };
     },
-    getSessionImportClient: () => {
-      const client = modelClientForHost("local");
-      const sources = client?.listSessionImportSources;
-      const list = client?.listHarnessSessions;
-      const importSession = client?.importHarnessSession;
-      if (!sources || !list || !importSession) return null;
-      return {
-        listSessionImportSources: () => sources(),
-        listHarnessSessions: (input) => list(input),
-        importHarnessSession: (input) => importSession(input),
-      };
-    },
     openImportedThread: (threadId, signal) =>
       openRendererThread(threadId, { hostId: "local", signal }),
     onLocaleChange() {

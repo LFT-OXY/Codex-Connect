@@ -1,5 +1,6 @@
 import {
   harnessIdSchema,
+  type HarnessSessionImportCandidate,
   type HostThreadId,
   type LocalSession,
   type LocalSessionsView,
@@ -80,9 +81,16 @@ function rootOf(nodes: ReadonlyMap<string, SessionNode>, node: SessionNode): Ses
   return current;
 }
 
+/** A Session import candidate of a Harness without native usage; it is listed without usage. */
+export interface LocalSessionCandidate {
+  harnessId: string;
+  candidate: HarnessSessionImportCandidate;
+}
+
 /**
  * Lists main Sessions with their subagents folded in. Tokens and cost include subagents; turns,
- * edits and active time are the main Session's own.
+ * edits and active time are the main Session's own. Session import candidates not already listed
+ * are added without usage.
  */
 export function buildLocalSessionsView(input: {
   summaries: readonly LocalSessionSummary[];
@@ -94,6 +102,7 @@ export function buildLocalSessionsView(input: {
   /** The Thread a Native Session is mapped to. */
   threadId(harnessId: string, nativeSessionId: string): HostThreadId | undefined;
   resumable(harnessId: string): boolean;
+  candidates: readonly LocalSessionCandidate[];
   failedHarnessIds: readonly string[];
 }): LocalSessionsView {
   const nodes = mergeSummaries(input.summaries);
@@ -148,6 +157,33 @@ export function buildLocalSessionsView(input: {
       threadId: input.threadId(root.harnessId, root.nativeSessionId) ?? null,
       resumable: input.resumable(root.harnessId),
       running: null,
+    });
+  }
+  const listed = new Set(
+    sessions.map(({ harnessId, nativeSessionId }) => sessionKey(harnessId, nativeSessionId)),
+  );
+  for (const { harnessId, candidate } of input.candidates) {
+    const key = sessionKey(harnessId, candidate.nativeSessionId);
+    if (listed.has(key)) continue;
+    listed.add(key);
+    harnesses.add(harnessId);
+    sessions.push({
+      harnessId: harnessIdSchema.parse(harnessId),
+      nativeSessionId: candidate.nativeSessionId,
+      title: candidate.title,
+      cwd: candidate.cwd,
+      project: input.project(candidate.cwd) ?? null,
+      model: null,
+      startedAt: null,
+      lastActivityAt: candidate.updatedAt,
+      activeMs: null,
+      usage: null,
+      turns: null,
+      edits: null,
+      subagents: 0,
+      threadId: input.threadId(harnessId, candidate.nativeSessionId) ?? null,
+      resumable: input.resumable(harnessId),
+      running: candidate.running,
     });
   }
   sessions.sort(

@@ -21,17 +21,16 @@ import {
   createConnectionsSettingsPage,
   type RendererConnectionDiagnostics,
 } from "./connections-page.js";
-import {
-  createSessionImportSettingsPage,
-  type RendererSessionImportClient,
-  type RendererImportedThreadOpener,
-} from "./session-import-page.js";
 import { createAppearanceSettingsPage } from "./appearance-page.js";
 import type { LoadedSessionsClient } from "./loaded-sessions-table.js";
 import { createReleaseNotesElement } from "./release-notes.js";
 import { createAccountsSettingsPage, type RendererCodexAccountClient } from "./accounts-page.js";
 import { createUsageSettingsPage, type RendererUsageClient } from "./usage-page.js";
-import { createSessionsSettingsPage, type RendererSessionsClient } from "./sessions-page.js";
+import {
+  createSessionsSettingsPage,
+  type RendererImportedThreadOpener,
+  type RendererSessionsClient,
+} from "./sessions-page.js";
 
 export type {
   RendererConnectionAgentSnapshot,
@@ -62,7 +61,6 @@ export const DEFAULT_RENDERER_SETTINGS_PAGE_IDS = [
   "accounts",
   "usage",
   "sessions",
-  "session-import",
   "appearance",
   "updates",
 ] as const;
@@ -551,19 +549,17 @@ export function createDefaultRendererSettingsPages(
   getUpdateClient: () => RendererUpdateClient | null = () => null,
   getDiagnostics: () => RendererConnectionDiagnostics | null = () => null,
   getAccountClient: () => RendererCodexAccountClient | null = () => null,
-  getSessionImportClient: () => RendererSessionImportClient | null = () => null,
+  getSessionsClient: () => RendererSessionsClient | null = () => null,
   openImportedThread: RendererImportedThreadOpener = () =>
     Promise.reject(new Error("Imported Thread navigation is unavailable")),
   getLoadedSessionsClient: () => LoadedSessionsClient | null = () => null,
   getUsageClient: () => RendererUsageClient | null = () => null,
-  getSessionsClient: () => RendererSessionsClient | null = () => null,
 ): readonly RendererSettingsPageDefinition[] {
   return Object.freeze([
     createConnectionsSettingsPage(messages, getDiagnostics),
     createAccountsSettingsPage(messages, getAccountClient),
     createUsageSettingsPage(messages, getUsageClient),
     createSessionsSettingsPage(messages, getSessionsClient, openImportedThread),
-    createSessionImportSettingsPage(messages, getSessionImportClient, openImportedThread),
     createAppearanceSettingsPage(messages, getLoadedSessionsClient),
     updatesPage(messages, getUpdateClient),
   ]);
@@ -574,7 +570,7 @@ export function createDefaultRendererSettingsRegistry(
   getUpdateClient: () => RendererUpdateClient | null = () => null,
   getDiagnostics: () => RendererConnectionDiagnostics | null = () => null,
   getAccountClient: () => RendererCodexAccountClient | null = () => null,
-  getSessionImportClient: () => RendererSessionImportClient | null = () => null,
+  getSessionsClient: () => RendererSessionsClient | null = () => null,
   openImportedThread?: RendererImportedThreadOpener,
 ): RendererSettingsPageRegistry {
   return createRendererSettingsPageRegistry(
@@ -583,7 +579,7 @@ export function createDefaultRendererSettingsRegistry(
       getUpdateClient,
       getDiagnostics,
       getAccountClient,
-      getSessionImportClient,
+      getSessionsClient,
       openImportedThread,
     ),
   );
@@ -591,4 +587,4 @@ export function createDefaultRendererSettingsRegistry(
 
 export type { RendererCodexAccountClient } from "./accounts-page.js";
 export type { RendererUsageClient } from "./usage-page.js";
-export type { RendererSessionsClient } from "./sessions-page.js";
+export type { RendererImportedThreadOpener, RendererSessionsClient } from "./sessions-page.js";

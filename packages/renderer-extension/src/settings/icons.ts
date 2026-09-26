@@ -13,7 +13,6 @@ import Copy from "lucide/dist/esm/icons/copy.mjs";
 import Download from "lucide/dist/esm/icons/download.mjs";
 import ExternalLink from "lucide/dist/esm/icons/external-link.mjs";
 import Ellipsis from "lucide/dist/esm/icons/ellipsis.mjs";
-import FolderInput from "lucide/dist/esm/icons/folder-input.mjs";
 import GripVertical from "lucide/dist/esm/icons/grip-vertical.mjs";
 import MessagesSquare from "lucide/dist/esm/icons/messages-square.mjs";
 import Info from "lucide/dist/esm/icons/info.mjs";
@@ -47,7 +46,6 @@ export const RENDERER_SETTINGS_ICON_NAMES = [
   "accounts",
   "usage",
   "sessions",
-  "session-import",
   "add",
   "model-pool",
   "routes",
@@ -97,7 +95,6 @@ const iconNodes = {
   accounts: Users,
   usage: ChartColumn,
   sessions: MessagesSquare,
-  "session-import": FolderInput,
   add: Plus,
   "model-pool": Boxes,
   routes: Route,

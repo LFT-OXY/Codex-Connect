@@ -75,36 +75,6 @@ export interface RendererSettingsMessages {
   readonly inDevelopment: string;
   readonly notAvailable: string;
   readonly runtimeCapabilityNotInstalled: string;
-  readonly sessionImportHarness: string;
-  readonly sessionImportDescription: string;
-  readonly sessionImportAvailabilityNote: string;
-  readonly sessionImportRefresh: string;
-  readonly sessionImportRefreshing: string;
-  readonly sessionImportUnavailable: string;
-  readonly sessionImportEmpty: string;
-  readonly sessionImportSearch: string;
-  readonly sessionImportSearchPlaceholder: string;
-  readonly sessionImportNoMatches: string;
-  readonly sessionImportPageSize: string;
-  readonly sessionImportPrevious: string;
-  readonly sessionImportNext: string;
-  readonly sessionImportPageSummary: string;
-  readonly sessionImportLoadFailed: string;
-  readonly sessionImportFailed: string;
-  readonly sessionImportUntitled: string;
-  readonly sessionImportUpdatedAt: string;
-  readonly sessionImportSessionId: string;
-  readonly sessionImportRunning: string;
-  readonly sessionImportRunningHint: string;
-  readonly sessionImportAction: string;
-  readonly sessionImportImporting: string;
-  readonly sessionImportImported: string;
-  readonly sessionImportOpenFailed: string;
-  readonly sessionImportCopyProjectPath: string;
-  readonly sessionImportPathCopied: string;
-  readonly sessionImportPathCopyFailed: string;
-  readonly sessionImportRetryOpen: string;
-  readonly sessionImportRetrying: string;
   readonly connectionsDescription: string;
   readonly accountConnected: string;
   readonly accountDefaultBadge: string;
@@ -306,42 +276,6 @@ const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
   inDevelopment: "In development",
   notAvailable: "Not available",
   runtimeCapabilityNotInstalled: "This runtime capability is not installed yet.",
-  sessionImportHarness: "Harness",
-  sessionImportDescription:
-    "Sessions keep their original project path. If a folder is not in the Codex sidebar, add it as a project first. Original history remains managed by the Harness.",
-  sessionImportAvailabilityNote:
-    "Available Harnesses come from the local Host. If activity is unknown, close the session in its native client before importing to avoid concurrent writes.",
-  sessionImportRefresh: "Refresh",
-  sessionImportRefreshing: "Loading local sessions...",
-  sessionImportUnavailable:
-    "Session import is unavailable for this local Harness or its current protocol. Update the Host/plugin or choose another Harness.",
-  sessionImportEmpty: "No local sessions are available to import.",
-  sessionImportSearch: "Search",
-  sessionImportSearchPlaceholder: "Search titles, session IDs or project paths",
-  sessionImportNoMatches: "No sessions match your search.",
-  sessionImportPageSize: "Per page",
-  sessionImportPrevious: "Previous",
-  sessionImportNext: "Next",
-  sessionImportPageSummary: "Page {page} of {pages} · {total} sessions",
-  sessionImportLoadFailed:
-    "Local sessions could not be loaded. Check directory access or duplicate session IDs, then retry.",
-  sessionImportFailed: "The session could not be imported.",
-  sessionImportUntitled: "Untitled session",
-  sessionImportUpdatedAt: "Updated",
-  sessionImportSessionId: "Session ID",
-  sessionImportRunning: "Running",
-  sessionImportRunningHint:
-    "Close this session in its native client before importing, then refresh.",
-  sessionImportAction: "Import and open",
-  sessionImportImporting: "Importing...",
-  sessionImportImported: "Session imported",
-  sessionImportOpenFailed:
-    "The Codex sidebar has not shown it yet. Make sure the folder below is added as a project, then try opening it again.",
-  sessionImportCopyProjectPath: "Copy project path",
-  sessionImportPathCopied: "Copied",
-  sessionImportPathCopyFailed: "Copy failed",
-  sessionImportRetryOpen: "Try opening again",
-  sessionImportRetrying: "Opening...",
   connectionsDescription:
     "View runtime status by Host. Select an item to inspect details or complete its setup.",
   accountConnected: "Accounts",
@@ -500,7 +434,6 @@ const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
     accounts: "Accounts",
     usage: "Usage",
     sessions: "Sessions",
-    "session-import": "Session Import",
     updates: "Updates",
   }),
 });
@@ -566,39 +499,6 @@ const CHINESE_MESSAGES: RendererSettingsMessages = Object.freeze({
   inDevelopment: "开发中",
   notAvailable: "暂不可用",
   runtimeCapabilityNotInstalled: "运行时尚未安装该项能力，因此暂不可用。",
-  sessionImportHarness: "Harness",
-  sessionImportDescription:
-    "会话将保留原始项目路径；若该文件夹尚未出现在 Codex 侧栏，请先将其添加为项目。原始历史仍由 Harness 管理。",
-  sessionImportAvailabilityNote:
-    "可选 Harness 来自本地 Host。运行状态未知时，请先在原生客户端关闭该会话再导入，避免同时写入。",
-  sessionImportRefresh: "刷新",
-  sessionImportRefreshing: "正在读取本地会话……",
-  sessionImportUnavailable:
-    "本地 Harness 或当前协议暂不支持会话导入，请更新 Host/插件或选择其他 Harness。",
-  sessionImportEmpty: "没有可导入的本地会话。",
-  sessionImportSearch: "搜索",
-  sessionImportSearchPlaceholder: "搜索标题、会话 ID 或项目路径",
-  sessionImportNoMatches: "没有匹配的会话。",
-  sessionImportPageSize: "每页",
-  sessionImportPrevious: "上一页",
-  sessionImportNext: "下一页",
-  sessionImportPageSummary: "第 {page} / {pages} 页 · 共 {total} 条",
-  sessionImportLoadFailed: "无法读取本地会话，请检查目录访问权限或重复的会话 ID 后重试。",
-  sessionImportFailed: "无法导入该会话。",
-  sessionImportUntitled: "未命名会话",
-  sessionImportUpdatedAt: "更新时间",
-  sessionImportSessionId: "会话 ID",
-  sessionImportRunning: "运行中",
-  sessionImportRunningHint: "请先在原生客户端关闭该会话，再刷新并导入。",
-  sessionImportAction: "导入并打开",
-  sessionImportImporting: "正在导入……",
-  sessionImportImported: "会话已导入",
-  sessionImportOpenFailed: "Codex 侧栏尚未显示该会话。请确认以下文件夹已添加为项目，然后重试打开。",
-  sessionImportCopyProjectPath: "复制项目路径",
-  sessionImportPathCopied: "已复制",
-  sessionImportPathCopyFailed: "复制失败",
-  sessionImportRetryOpen: "重试打开",
-  sessionImportRetrying: "正在打开……",
   connectionsDescription: "按 Host 查看运行时状态。选择一项，在右侧检查详情或完成配置。",
   accountConnected: "账号",
   accountDefaultBadge: "当前",
@@ -748,7 +648,6 @@ const CHINESE_MESSAGES: RendererSettingsMessages = Object.freeze({
     accounts: "账号",
     usage: "用量",
     sessions: "会话",
-    "session-import": "会话导入",
     updates: "更新",
   }),
 });

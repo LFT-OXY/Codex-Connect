@@ -1,6 +1,6 @@
 # 会话
 
-「设置 → 会话」列出本机各 Harness 的历史主会话及其用量，并可在 Codex Connect 中恢复。会话与用量来自同一次原生记录读取（见[用量统计](local-usage.md)），数据来源与解析归属见 [ADR-0001](../adr/0001-local-usage-from-native-session-records.md)、[ADR-0002](../adr/0002-native-usage-parsing-lives-in-adapters.md)。当前接入 Claude Code、官方 Codex、Pi 与 oh-my-pi。
+「设置 → 会话」列出本机各 Harness 的历史主会话及其用量，并可在 Codex Connect 中恢复；它取代了原来的「会话导入」页。会话与用量来自同一次原生记录读取（见[用量统计](local-usage.md)），数据来源与解析归属见 [ADR-0001](../adr/0001-local-usage-from-native-session-records.md)、[ADR-0002](../adr/0002-native-usage-parsing-lives-in-adapters.md)。当前接入 Claude Code、官方 Codex、Pi 与 oh-my-pi。
 
 ## 页面
 
@@ -12,7 +12,8 @@
 - 列表上方显示「N 个主线程 · M 个子代理已折叠」，N 与 M 按当前筛选结果计算；没有符合条件的会话时显示「没有符合条件的会话」。
 - 列表每次渲染 200 行，滚动到底部（或点击「显示更多」）时追加下一批，数千个会话也不会一次全部渲染。
 - 打开页面时 Host 先增量读取新增记录再返回；首次读取全部历史时显示「正在读取会话记录… N / M 个文件」与进度条，每 0.5 秒再查询一次直到得到结果，关闭设置后停止查询。「刷新」按钮强制重新增量读取。
-- 某个 Harness 最近一次读取失败时，列表上方为它显示一条提示，其他 Harness 的会话照常列出。本地 Host 不支持会话列表时显示「本地 Host 不支持会话列表」。
+- Hermes、DSH 没有原生用量读取，它们可导入的会话（会话导入候选）也列在其中：Token、费用、轮数、编辑数与活跃时长为空（不是 0），行内显示最后活动时间；已知正在其他地方运行的会话显示「运行中」且不能恢复。候选在打开页面或刷新时重新列举，读取进度轮询期间沿用上次结果；与已有行重复的候选不重复列出。
+- 某个 Harness 最近一次读取失败（或列举导入候选失败）时，列表上方为它显示一条提示，其他 Harness 的会话照常列出。本地 Host 不支持会话列表时显示「本地 Host 不支持会话列表」。
 
 ## 恢复
 
