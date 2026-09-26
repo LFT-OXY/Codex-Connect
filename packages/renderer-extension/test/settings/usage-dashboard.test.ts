@@ -87,6 +87,13 @@ const result = {
       conversations: 7,
     },
   ],
+  stats: {
+    last7Days: 1_234_567,
+    last30Days: 45_678_901,
+    dailyAverage: 2_283_945,
+    activeDays: 128,
+    firstActiveDate: "2025-06-01",
+  },
 };
 
 describe("Local Usage dashboard", () => {
@@ -147,6 +154,70 @@ describe("Local Usage dashboard", () => {
       "0",
       "7",
     ]);
+  });
+
+  it("shows rolling totals, the daily average, range conversations and usage history", () => {
+    const root = render(result);
+    const tiles = all(root).filter((element) => element.dataset.usageStat !== undefined);
+    expect(tiles.map((tile) => tile.dataset.usageStat)).toEqual([
+      "last7Days",
+      "last30Days",
+      "dailyAverage",
+      "conversations",
+    ]);
+    expect(tiles.map(text)).toEqual([
+      "1.23M 最近 7 天",
+      "45.68M 最近 30 天",
+      "2.28M 日均",
+      "12 对话数",
+    ]);
+    expect(tiles[1]?.children[0]?.title).toBe((45_678_901).toLocaleString());
+    const history = all(root).find((element) => element.dataset.usageHistory !== undefined);
+    expect(text(history as FakeElement)).toBe("开始使用 2025-06-01 活跃天数 128 天");
+    // Stat blocks sit between the Harness cards and the daily table.
+    const order = all(root)
+      .filter(
+        (element) =>
+          element.dataset.usageHarnessCard === "all" ||
+          element.dataset.usageStat === "last7Days" ||
+          element.tagName === "table",
+      )
+      .map((element) => element.tagName);
+    expect(order).toEqual(["div", "div", "table"]);
+  });
+
+  it("keeps stat blocks for an empty range and omits them without any history", () => {
+    const empty = {
+      ...result,
+      totals: {
+        ...result.totals,
+        total: 0,
+        input: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        output: 0,
+        conversations: 0,
+      },
+      models: 0,
+      harnesses: [],
+      daily: [],
+    };
+    const withHistory = render(empty);
+    expect(text(withHistory)).toContain("该周期内没有用量。");
+    expect(
+      all(withHistory)
+        .filter((element) => element.dataset.usageStat !== undefined)
+        .map(text),
+    ).toContain("0 对话数");
+
+    const noHistory = render({
+      ...empty,
+      stats: { last7Days: 0, last30Days: 0, dailyAverage: 0, activeDays: 0, firstActiveDate: null },
+    });
+    expect(all(noHistory).some((element) => element.dataset.usageStat !== undefined)).toBe(false);
+    expect(all(noHistory).some((element) => element.dataset.usageHistory !== undefined)).toBe(
+      false,
+    );
   });
 
   it("shows an empty state instead of cards and rows when the range has no usage", () => {

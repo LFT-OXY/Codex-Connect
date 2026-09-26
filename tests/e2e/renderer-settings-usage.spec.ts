@@ -35,6 +35,7 @@ const { outputFiles } = await build({
                 { date: "2026-03-04", total: 1035507564, input: 200000, output: 4307564, cacheRead: 1000000000, reasoning: 0, conversations: 331 },
                 { date: "2026-03-03", total: 5000000000, input: 1000000, output: 10000000, cacheRead: 4800000000, reasoning: 0, conversations: 4000 },
               ],
+              stats: { last7Days: 6035507564, last30Days: 9035507564, dailyAverage: 752958964, activeDays: 128, firstActiveDate: "2025-06-01" },
             };
           },
         };

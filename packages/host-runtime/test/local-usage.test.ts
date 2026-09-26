@@ -205,6 +205,69 @@ describe("Local Usage query", () => {
     expect(f.read).toHaveBeenCalledOnce();
   });
 
+  it("reports rolling 7- and 30-day totals, the active-day average and usage history", async () => {
+    const f = await fixture();
+    const output = (tokens: number) => ({ input: 0, cacheRead: 0, cacheWrite: 0, output: tokens });
+    // In Shanghai today is 2026-03-04, so 7 days start 02-26 and 30 days start 02-03.
+    await writeFile(
+      path.join(f.project, "33333333-3333-4333-8333-333333333333.jsonl"),
+      lines(
+        response("msg-7d-first", "2026-02-25T16:00:00.000Z", output(10)),
+        response("msg-7d-before", "2026-02-25T15:59:00.000Z", output(100)),
+        response("msg-30d-first", "2026-02-02T16:00:00.000Z", output(1_000)),
+        response("msg-30d-before", "2026-02-02T15:59:00.000Z", output(10_000)),
+        // Older than the 24-month "total" period, still the first day of use.
+        response("msg-first", "2024-01-15T12:00:00.000Z", output(100_000)),
+        // A day with conversations but no tokens is not an active day.
+        prompt("u-only", "2026-03-03T08:00:00.000Z"),
+        // A clock-skewed record after today counts in no stat block.
+        response("msg-tomorrow", "2026-03-05T12:00:00.000Z", output(1_000_000)),
+      ),
+    );
+    const service = f.service();
+
+    const stats = {
+      last7Days: 345 + 1_000_004 + 10,
+      last30Days: 345 + 1_000_004 + 10 + 100 + 1_000,
+      // 02-03, 02-25, 02-26, 02-27 and 03-02 have tokens in the last 30 days.
+      dailyAverage: Math.round((345 + 1_000_004 + 10 + 100 + 1_000) / 5),
+      activeDays: 7,
+      firstActiveDate: "2024-01-15",
+    };
+    const week = await result(service, { kind: "week" }, "Asia/Shanghai", true);
+    expect(week.stats).toEqual(stats);
+    expect(week.totals.conversations).toBe(3);
+    // Stat blocks do not depend on the selected period; conversations do.
+    const day = await result(service, { kind: "day" });
+    expect(day.stats).toEqual(stats);
+    expect(day.totals.conversations).toBe(0);
+    expect((await result(service, { kind: "total" })).stats).toEqual(stats);
+  });
+
+  it("reports empty stat blocks without usage and exact ones for a single day", async () => {
+    const f = await fixture();
+    await writeFile(f.mainFile, "");
+    const empty = await result(f.service(), { kind: "week" }, "Asia/Shanghai", true);
+    expect(empty.stats).toEqual({
+      last7Days: 0,
+      last30Days: 0,
+      dailyAverage: 0,
+      activeDays: 0,
+      firstActiveDate: null,
+    });
+
+    const oneDay = await fixture();
+    await writeFile(oneDay.mainFile, lines(prompt("u-2", "2026-03-02T09:59:00.000Z"), MONDAY));
+    const single = await result(oneDay.service(), { kind: "day" }, "Asia/Shanghai", true);
+    expect(single.stats).toEqual({
+      last7Days: 229,
+      last30Days: 229,
+      dailyAverage: 229,
+      activeDays: 1,
+      firstActiveDate: "2026-03-02",
+    });
+  });
+
   it("adds only new records on refresh and never double counts copies or restarts", async () => {
     const f = await fixture();
     const first = await result(f.service(), { kind: "total" }, "UTC", true);

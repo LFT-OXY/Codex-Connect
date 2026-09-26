@@ -117,6 +117,35 @@ export const localUsageQueryResultSchema = z.strictObject({
       }),
     )
     .max(LOCAL_USAGE_DAILY_MAX_LENGTH),
+  /**
+   * Independent of the selected period. Windows end today; an active day has tokens.
+   * `dailyAverage` is the last 30 days' total over their active days, rounded.
+   */
+  stats: z
+    .strictObject({
+      last7Days: countSchema,
+      last30Days: countSchema,
+      dailyAverage: countSchema,
+      /** Active days across all counted history, not only the "total" period. */
+      activeDays: countSchema,
+      firstActiveDate: localUsageDateSchema.nullable(),
+    })
+    .superRefine((stats, context) => {
+      if ((stats.firstActiveDate === null) !== (stats.activeDays === 0)) {
+        context.addIssue({
+          code: "custom",
+          path: ["firstActiveDate"],
+          message: "First active date exists exactly when there are active days",
+        });
+      }
+      if (stats.last7Days > stats.last30Days) {
+        context.addIssue({
+          code: "custom",
+          path: ["last7Days"],
+          message: "The last 7 days are part of the last 30 days",
+        });
+      }
+    }),
 });
 
 export type LocalUsagePeriod = z.infer<typeof localUsagePeriodSchema>;

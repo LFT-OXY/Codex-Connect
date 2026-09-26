@@ -47,7 +47,7 @@ function element<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-const HARNESS_CARD_CLASS = [
+const CARD_CLASS = [
   "flex min-w-40 flex-1 flex-col gap-1 rounded-[10px] px-4 py-3",
   "border border-settings-border bg-settings-panel",
 ].join(" ");
@@ -56,7 +56,7 @@ function harnessCard(
   document: Document,
   input: { id: string; name: string; share: string; models: string; series?: string },
 ): HTMLElement {
-  const card = element(document, "div", HARNESS_CARD_CLASS);
+  const card = element(document, "div", CARD_CLASS);
   card.dataset.usageHarnessCard = input.id;
   const heading = element(document, "div", "flex items-center gap-2");
   if (input.series) {
@@ -73,6 +73,58 @@ function harnessCard(
     element(document, "span", "text-xs text-settings-muted", input.models),
   );
   return card;
+}
+
+/** Rolling totals and history are period-independent; conversations follow the range. */
+function statBlocks(
+  document: Document,
+  result: LocalUsageQueryResult,
+  firstActiveDate: string,
+  messages: RendererSettingsMessages["usage"],
+): HTMLElement {
+  const section = element(document, "section", "flex flex-col gap-2");
+  const tiles = element(document, "div", "flex flex-wrap gap-3");
+  const stats = [
+    ["last7Days", result.stats.last7Days, messages.last7Days],
+    ["last30Days", result.stats.last30Days, messages.last30Days],
+    ["dailyAverage", result.stats.dailyAverage, messages.dailyAverage],
+    ["conversations", result.totals.conversations, messages.conversations],
+  ] as const;
+  for (const [id, value, label] of stats) {
+    const tile = element(document, "div", CARD_CLASS);
+    tile.dataset.usageStat = id;
+    const number = element(
+      document,
+      "span",
+      "text-lg leading-7 font-semibold tabular-nums",
+      formatUsageTokens(value),
+    );
+    number.title = value.toLocaleString();
+    tile.append(number, element(document, "span", "text-xs text-settings-muted", label));
+    tiles.append(tile);
+  }
+  const history = element(
+    document,
+    "div",
+    "flex flex-wrap justify-between gap-x-6 gap-y-1 px-1 text-xs text-settings-muted",
+  );
+  history.dataset.usageHistory = "";
+  for (const [label, value] of [
+    [messages.firstActiveDate, firstActiveDate],
+    [
+      messages.activeDays,
+      messages.activeDaysValue.replace("{count}", String(result.stats.activeDays)),
+    ],
+  ] as const) {
+    const pair = element(document, "span", "flex items-center gap-1.5");
+    pair.append(
+      element(document, "span", "", label),
+      element(document, "span", "text-settings-text tabular-nums", value),
+    );
+    history.append(pair);
+  }
+  section.append(tiles, history);
+  return section;
 }
 
 function dailyTable(
@@ -142,6 +194,10 @@ export function renderLocalUsage(
   settingsMessages: RendererSettingsMessages,
 ): HTMLElement {
   const messages = settingsMessages.usage;
+  const { firstActiveDate } = result.stats;
+  // Without any counted history the stat blocks would only repeat zeros.
+  const stats =
+    firstActiveDate === null ? [] : [statBlocks(document, result, firstActiveDate, messages)];
   const root = element(document, "div", "flex flex-col gap-6");
 
   const summary = element(document, "section", "flex flex-col items-center gap-1 py-4");
@@ -173,7 +229,7 @@ export function renderLocalUsage(
       messages.empty,
     );
     empty.setAttribute("role", "status");
-    root.append(empty);
+    root.append(empty, ...stats);
     return root;
   }
 
@@ -211,6 +267,6 @@ export function renderLocalUsage(
       }),
     );
   });
-  root.append(bar, cards, dailyTable(document, result.daily, messages));
+  root.append(bar, cards, ...stats, dailyTable(document, result.daily, messages));
   return root;
 }

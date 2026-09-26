@@ -57,6 +57,42 @@ export function localUsageRange(
   }
 }
 
+function shiftDate(date: string, days: number): string {
+  const { year, monthIndex, day } = dateParts(date);
+  return calendarDate(year, monthIndex, day + days);
+}
+
+/** Rolling windows end today; only days with tokens count as active, never days after today. */
+function usageStats(
+  dayTotals: ReadonlyMap<string, number>,
+  today: string,
+): LocalUsageQueryResult["stats"] {
+  const last7From = shiftDate(today, -6);
+  const last30From = shiftDate(today, -29);
+  const stats: LocalUsageQueryResult["stats"] = {
+    last7Days: 0,
+    last30Days: 0,
+    dailyAverage: 0,
+    activeDays: 0,
+    firstActiveDate: null,
+  };
+  let activeDaysIn30 = 0;
+  for (const [date, total] of dayTotals) {
+    if (total === 0 || date > today) continue;
+    stats.activeDays += 1;
+    if (stats.firstActiveDate === null || date < stats.firstActiveDate) {
+      stats.firstActiveDate = date;
+    }
+    if (date >= last30From) {
+      stats.last30Days += total;
+      activeDaysIn30 += 1;
+    }
+    if (date >= last7From) stats.last7Days += total;
+  }
+  if (activeDaysIn30 > 0) stats.dailyAverage = Math.round(stats.last30Days / activeDaysIn30);
+  return stats;
+}
+
 function tokenTotal(bucket: LocalUsageBucket): number {
   return bucket.input + bucket.cacheRead + bucket.cacheWrite + bucket.output + bucket.reasoning;
 }
@@ -70,7 +106,8 @@ export function buildLocalUsageView(input: {
   harnessName(harnessId: string): string;
 }): LocalUsageQueryResult {
   const localDate = localDateFormatter(input.timeZone);
-  const range = localUsageRange(input.period, localDate(input.now));
+  const today = localDate(input.now);
+  const range = localUsageRange(input.period, today);
   const totals = {
     total: 0,
     input: 0,
@@ -83,10 +120,12 @@ export function buildLocalUsageView(input: {
   const models = new Set<string>();
   const harnesses = new Map<string, { totalTokens: number; models: Set<string> }>();
   const daily = new Map<string, DailyRow>();
+  const dayTotals = new Map<string, number>();
   for (const bucket of input.buckets) {
     const date = localDate(bucket.start);
-    if (date < range.from || date > range.to) continue;
     const total = tokenTotal(bucket);
+    dayTotals.set(date, (dayTotals.get(date) ?? 0) + total);
+    if (date < range.from || date > range.to) continue;
     totals.total += total;
     totals.input += bucket.input;
     totals.cacheRead += bucket.cacheRead;
@@ -130,5 +169,6 @@ export function buildLocalUsageView(input: {
       }))
       .sort((left, right) => right.totalTokens - left.totalTokens),
     daily: [...daily.values()].sort((left, right) => right.date.localeCompare(left.date)),
+    stats: usageStats(dayTotals, today),
   };
 }

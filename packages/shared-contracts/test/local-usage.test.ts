@@ -73,8 +73,30 @@ describe("Local Usage query contracts", () => {
           conversations: 2,
         },
       ],
+      stats: {
+        last7Days: 10,
+        last30Days: 10,
+        dailyAverage: 10,
+        activeDays: 1,
+        firstActiveDate: "2026-03-02",
+      },
     };
     expect(localUsageQueryResultSchema.parse(result)).toEqual(result);
+    const noHistory = {
+      ...result,
+      stats: { last7Days: 0, last30Days: 0, dailyAverage: 0, activeDays: 0, firstActiveDate: null },
+    };
+    expect(localUsageQueryResultSchema.parse(noHistory)).toEqual(noHistory);
+    for (const stats of [
+      { ...result.stats, dailyAverage: 1.5 },
+      { ...result.stats, firstActiveDate: "2026-02-30" },
+      { ...result.stats, streak: 1 },
+      { ...result.stats, firstActiveDate: null },
+      { ...noHistory.stats, activeDays: 1 },
+      { ...result.stats, last7Days: 11 },
+    ]) {
+      expect(localUsageQueryResultSchema.safeParse({ ...result, stats }).success).toBe(false);
+    }
     expect(
       localUsageQueryResultSchema.safeParse({
         ...result,

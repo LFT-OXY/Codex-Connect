@@ -86,6 +86,13 @@ const result: LocalUsageQueryResult = {
   models: 1,
   harnesses: [],
   daily: [],
+  stats: {
+    last7Days: 3,
+    last30Days: 3,
+    dailyAverage: 3,
+    activeDays: 1,
+    firstActiveDate: "2026-03-02",
+  },
 };
 
 function mount(client: { queryLocalUsage: ReturnType<typeof vi.fn> } | null) {
