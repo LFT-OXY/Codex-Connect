@@ -360,10 +360,14 @@ describe("Pi native usage", () => {
           edits: 1,
         },
         expect.objectContaining({ nativeSessionId: FORK, parentSessionId: SESSION, turns: 1 }),
-        expect.objectContaining({ nativeSessionId: "fork-id", parentSessionId: SESSION }),
+        expect.objectContaining({ nativeSessionId: "fork-id" }),
       ]),
     );
     expect(first.sessions).toHaveLength(3);
+    // A fork names its source file; it is a Session of its own, resumed on its own.
+    expect(
+      first.sessions?.find(({ nativeSessionId }) => nativeSessionId === "fork-id"),
+    ).not.toHaveProperty("parentSessionId");
     expect((await f.read(first.cursor)).sessions).toEqual([]);
 
     await appendFile(

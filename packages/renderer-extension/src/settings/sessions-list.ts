@@ -4,7 +4,7 @@ import { KNOWN_RENDERER_AGENTS, type RendererAgent } from "../agent-selection-st
 import { createRendererAgentIcon } from "../renderer-agent-icon.js";
 import { createRendererSettingsIcon } from "./icons.js";
 import type { RendererSettingsMessages } from "./localization.js";
-import { formatUsageCost, formatUsageTokens } from "./usage-dashboard.js";
+import { element, formatUsageCost, formatUsageTokens } from "./usage-dashboard.js";
 
 type Messages = RendererSettingsMessages["sessions"];
 
@@ -17,18 +17,6 @@ export const SESSION_ACTION_CLASS = [
   "transition-colors hover:bg-settings-surface-hover disabled:cursor-default disabled:opacity-60",
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-settings-focus",
 ].join(" ");
-
-function element<K extends keyof HTMLElementTagNameMap>(
-  document: Document,
-  tagName: K,
-  className: string,
-  text?: string,
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tagName);
-  node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
 function isRendererAgent(harnessId: string): harnessId is RendererAgent {
   return (KNOWN_RENDERER_AGENTS as readonly string[]).includes(harnessId);

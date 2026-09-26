@@ -2,6 +2,7 @@ import type { LocalSession, LocalSessionsView } from "@codexhost/shared-contract
 
 import { createRendererSettingsIcon } from "./icons.js";
 import type { RendererSettingsMessages } from "./localization.js";
+import { SETTINGS_SEGMENT_CLASS } from "./control-classes.js";
 
 type Messages = RendererSettingsMessages["sessions"];
 
@@ -41,13 +42,6 @@ export function filterSessions(
 }
 
 const SEGMENTS_CLASS = "inline-flex flex-wrap gap-0.5 rounded-lg bg-settings-surface p-0.5";
-const SEGMENT_CLASS = [
-  "h-7 rounded-md border-0 px-3 text-[13px]",
-  "bg-transparent text-settings-muted",
-  "transition-colors hover:text-settings-text focus-visible:outline-2 focus-visible:outline-settings-focus",
-  "aria-pressed:bg-settings-panel aria-pressed:font-medium aria-pressed:text-settings-text",
-  "aria-pressed:shadow-[0_1px_2px_rgb(0_0_0/0.12)]",
-].join(" ");
 const FIELD_CLASS = [
   "h-8 rounded-md border border-settings-border bg-settings-surface px-2 text-[13px]",
   "text-settings-text focus-visible:outline-2 focus-visible:outline-settings-focus",
@@ -96,7 +90,7 @@ export function createSessionFilters(
   for (const range of SESSION_RANGES) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = SEGMENT_CLASS;
+    button.className = SETTINGS_SEGMENT_CLASS;
     button.dataset.sessionsRange = range;
     button.textContent = rangeLabel(range, messages);
     button.addEventListener("click", () => {
@@ -164,7 +158,7 @@ export function createSessionFilters(
       ...choices.map(({ id, name }) => {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = SEGMENT_CLASS;
+        button.className = SETTINGS_SEGMENT_CLASS;
         button.dataset.sessionsHarness = id ?? "all";
         button.textContent = name;
         button.addEventListener("click", () => {

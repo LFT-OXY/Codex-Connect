@@ -4,7 +4,6 @@ import path from "node:path";
 
 import {
   emptyNativeSessionActivity,
-  isFileEditTool,
   nativeSessionEdits,
   parseNativeSessionActivity,
   recordNativeSessionActivity,
@@ -34,7 +33,6 @@ const knownTextSchema = z.string().min(1).nullable();
 
 /** What a file has said about its Session up to `summarized`; never message text. */
 const fileSummarySchema = z.strictObject({
-  sessionId: knownTextSchema,
   customTitle: knownTextSchema,
   aiTitle: knownTextSchema,
   cwd: knownTextSchema,
@@ -62,8 +60,10 @@ const claudeUsageCursorSchema = z.strictObject({
 type ClaudeUsageCursor = z.infer<typeof claudeUsageCursorSchema>;
 type FileSummary = z.infer<typeof fileSummarySchema>;
 
-/** Claude marks these user messages itself; they are not turns the user typed. */
-const NOT_A_TURN = ["[Request interrupted by user]", "<task-notification>"];
+/** Claude writes these user messages itself; they are not turns the user typed. */
+const NOT_A_TURN = ["[Request interrupted by user", "<task-notification>"];
+/** Claude Code's file-editing tools, lowercased. */
+const EDIT_TOOLS = new Set(["edit", "write", "multiedit", "notebookedit"]);
 
 interface ClaudeUsageFile {
   relative: string;
@@ -214,8 +214,6 @@ function startsTurn(entry: Record<string, unknown>): boolean {
 
 /** Adds one transcript line to its file's Session summary. */
 function summarize(summary: FileSummary, entry: Record<string, unknown>): void {
-  const sessionId = text(entry.sessionId);
-  if (sessionId) summary.sessionId ??= sessionId;
   const cwd = text(entry.cwd);
   if (cwd) summary.cwd = cwd;
   const time = occurredAt(entry.timestamp);
@@ -240,7 +238,7 @@ function summarize(summary: FileSummary, entry: Record<string, unknown>): void {
           isRecord(block) &&
           block.type === "tool_use" &&
           typeof block.name === "string" &&
-          isFileEditTool(block.name),
+          EDIT_TOOLS.has(block.name.toLowerCase()),
       )
     ) {
       recordNativeSessionEdit(summary.activity);
@@ -250,7 +248,6 @@ function summarize(summary: FileSummary, entry: Record<string, unknown>): void {
 
 function emptyFileSummary(): FileSummary {
   return {
-    sessionId: null,
     customTitle: null,
     aiTitle: null,
     cwd: null,
@@ -260,18 +257,19 @@ function emptyFileSummary(): FileSummary {
 }
 
 /**
- * Main transcripts are Sessions of their own. A subagent transcript carries its parent's Session ID,
- * so it is summarized as a child named after its file.
+ * A main transcript is named after its Session, as Session import expects. A subagent transcript
+ * sits in `<session>/subagents` and is summarized as a child named after its file.
  */
 function sessionSummary(
   relative: string,
   main: boolean,
   summary: FileSummary,
 ): HarnessNativeSessionSummary | null {
-  const { sessionId, activity } = summary;
-  if (!sessionId || activity.firstActivityAt === null || activity.lastActivityAt === null) {
-    return null;
-  }
+  const { activity } = summary;
+  const sessionId = main
+    ? path.basename(relative, ".jsonl")
+    : path.basename(path.dirname(path.dirname(relative)));
+  if (activity.firstActivityAt === null || activity.lastActivityAt === null) return null;
   const title = summary.customTitle ?? summary.aiTitle;
   return {
     key: relative,

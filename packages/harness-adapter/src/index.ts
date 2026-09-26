@@ -12,9 +12,7 @@ export { sanitizeDiagnosticTail, filterAmbientNodeWarnings } from "./diagnostics
 export { validateHostQuestionResponse } from "./question.js";
 export { parseHostUsage } from "./usage.js";
 export {
-  NATIVE_SESSION_IDLE_GAP_MS,
   emptyNativeSessionActivity,
-  isFileEditTool,
   nativeSessionEdits,
   parseNativeSessionActivity,
   recordNativeSessionActivity,

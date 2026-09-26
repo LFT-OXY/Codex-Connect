@@ -4,7 +4,6 @@ import path from "node:path";
 
 import {
   emptyNativeSessionActivity,
-  isFileEditTool,
   nativeSessionEdits,
   parseNativeSessionActivity,
   recordNativeSessionActivity,
@@ -28,6 +27,8 @@ const ENTRY_TIMESTAMP = /"timestamp":"([^"]+)"/u;
 const TITLE_SLOT_MAX_BYTES = 64 * 1024;
 /** Titles are for a list row; a first message used as one is shortened to a line. */
 const TITLE_MAX_LENGTH = 120;
+/** OMP's file-editing tools. */
+const EDIT_TOOLS = new Set(["edit", "write"]);
 
 type OmpSessionContext = {
   id: string;
@@ -39,8 +40,6 @@ type OmpFileSummary = {
   /** The title slot, rewritten in place by OMP, then the header's title. */
   title: string | null;
   firstMessage: string | null;
-  /** A fork's source Session, from its header. */
-  forkedFrom: string | null;
   model: string | null;
   activity: NativeSessionActivity;
 };
@@ -90,7 +89,6 @@ function emptySummary(): OmpFileSummary {
   return {
     title: null,
     firstMessage: null,
-    forkedFrom: null,
     model: null,
     activity: emptyNativeSessionActivity(),
   };
@@ -102,14 +100,10 @@ function nullableText(value: unknown): value is string | null {
 
 function fileSummary(value: unknown): OmpFileSummary | undefined {
   if (!isRecord(value)) return undefined;
-  const { title, firstMessage, forkedFrom, model } = value;
+  const { title, firstMessage, model } = value;
   const activity = parseNativeSessionActivity(value.activity);
-  return nullableText(title) &&
-    nullableText(firstMessage) &&
-    nullableText(forkedFrom) &&
-    nullableText(model) &&
-    activity
-    ? { title, firstMessage, forkedFrom, model, activity }
+  return nullableText(title) && nullableText(firstMessage) && nullableText(model) && activity
+    ? { title, firstMessage, model, activity }
     : undefined;
 }
 
@@ -236,15 +230,6 @@ async function readTitleSlot(file: string): Promise<string | null> {
   }
 }
 
-/** A fork's header names its source session file, `<time>_<id>.jsonl`. */
-function forkedFrom(header: Record<string, unknown>): string | null {
-  const parent = text(header.parentSession);
-  if (!parent) return null;
-  if (!parent.endsWith(".jsonl")) return parent;
-  const name = path.basename(parent, ".jsonl");
-  return text(name.slice(name.lastIndexOf("_") + 1)) ?? null;
-}
-
 /** Adds one entry after the header to its file's Session summary. */
 function summarize(summary: OmpFileSummary, entry: Record<string, unknown>): void {
   const message = isRecord(entry.message) ? entry.message : null;
@@ -261,7 +246,7 @@ function summarize(summary: OmpFileSummary, entry: Record<string, unknown>): voi
           isRecord(block) &&
           block.type === "toolCall" &&
           typeof block.name === "string" &&
-          isFileEditTool(block.name),
+          EDIT_TOOLS.has(block.name),
       )
     ) {
       recordNativeSessionEdit(summary.activity);
@@ -271,7 +256,7 @@ function summarize(summary: OmpFileSummary, entry: Record<string, unknown>): voi
 
 /**
  * A subagent's session file sits in a folder named after its parent's file, possibly nested, so
- * its parent is the Session of that file.
+ * its parent is the Session of that file. A fork is a Session of its own and has no parent here.
  */
 function sessionSummary(
   relative: string,
@@ -284,7 +269,7 @@ function sessionSummary(
     return null;
   }
   const parentFile = files[`${path.dirname(relative)}.jsonl`];
-  const parentSessionId = parentFile?.session?.id ?? summary.forkedFrom;
+  const parentSessionId = parentFile?.session?.id;
   const title = summary.title ?? summary.firstMessage;
   return {
     key: relative,
@@ -377,7 +362,6 @@ async function readFileUsage(
       session = isRecord(entry) && entry.type === "session" ? sessionHeader(entry) : null;
       if (session && isRecord(entry)) {
         summary.title ??= shortTitle(text(entry.title) ?? null);
-        summary.forkedFrom = forkedFrom(entry);
         const time = Date.parse(String(entry.timestamp));
         if (Number.isFinite(time)) recordNativeSessionActivity(summary.activity, time);
       }

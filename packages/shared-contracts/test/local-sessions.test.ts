@@ -19,11 +19,11 @@ const session = {
   threadId: "thread-1",
   resumable: true,
   running: null,
+  resumeCommand: "claude --resume native-1",
 };
 const view = {
   status: "ready",
   sessions: [session],
-  foldedSubagents: 2,
   harnesses: [{ harnessId: "claude-code", name: "Claude Code" }],
   failures: [],
 };
@@ -67,6 +67,8 @@ describe("Local Sessions contract", () => {
       { ...view, sessions: [{ ...session, turns: -1 }] },
       { ...view, sessions: [{ ...session, usage: { totalTokens: 1, estimatedCostUsd: -1 } }] },
       { ...view, sessions: [{ ...session, nativeSessionId: " " }] },
+      { ...view, sessions: [{ ...session, resumeCommand: "claude --resume x; rm -rf ~" }] },
+      { ...view, sessions: [{ ...session, resumeCommand: "claude --resume $(x)" }] },
       { ...view, extra: true },
     ]) {
       expect(localSessionsQueryResultSchema.safeParse(invalid).success).toBe(false);

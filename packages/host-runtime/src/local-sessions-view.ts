@@ -102,6 +102,8 @@ export function buildLocalSessionsView(input: {
   /** The Thread a Native Session is mapped to. */
   threadId(harnessId: string, nativeSessionId: string): HostThreadId | undefined;
   resumable(harnessId: string): boolean;
+  /** Resumes a Session in its Harness's CLI, or null. */
+  resumeCommand(harnessId: string, nativeSessionId: string): string | null;
   candidates: readonly LocalSessionCandidate[];
   failedHarnessIds: readonly string[];
 }): LocalSessionsView {
@@ -134,12 +136,10 @@ export function buildLocalSessionsView(input: {
   }
   const sessions: LocalSession[] = [];
   const harnesses = new Set<string>();
-  let foldedSubagents = 0;
   for (const [root, tree] of roots) {
     // A Session that never reached the model has nothing to show or resume.
     if (tree.tokens === 0) continue;
     harnesses.add(root.harnessId);
-    foldedSubagents += tree.subagents;
     sessions.push({
       harnessId: harnessIdSchema.parse(root.harnessId),
       nativeSessionId: root.nativeSessionId,
@@ -157,6 +157,7 @@ export function buildLocalSessionsView(input: {
       threadId: input.threadId(root.harnessId, root.nativeSessionId) ?? null,
       resumable: input.resumable(root.harnessId),
       running: null,
+      resumeCommand: input.resumeCommand(root.harnessId, root.nativeSessionId),
     });
   }
   const listed = new Set(
@@ -184,6 +185,7 @@ export function buildLocalSessionsView(input: {
       threadId: input.threadId(harnessId, candidate.nativeSessionId) ?? null,
       resumable: input.resumable(harnessId),
       running: candidate.running,
+      resumeCommand: input.resumeCommand(harnessId, candidate.nativeSessionId),
     });
   }
   sessions.sort(
@@ -194,11 +196,12 @@ export function buildLocalSessionsView(input: {
   return {
     status: "ready",
     sessions,
-    foldedSubagents,
-    harnesses: [...harnesses].map((harnessId) => ({
-      harnessId: harnessIdSchema.parse(harnessId),
-      name: input.harnessName(harnessId),
-    })),
+    harnesses: [...harnesses]
+      .map((harnessId) => ({
+        harnessId: harnessIdSchema.parse(harnessId),
+        name: input.harnessName(harnessId),
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name)),
     failures: input.failedHarnessIds.map((harnessId) => ({
       harnessId: harnessIdSchema.parse(harnessId),
       name: input.harnessName(harnessId),

@@ -18,6 +18,12 @@ export const LOCAL_SESSIONS_QUERY_METHOD = "codexhost/sessions/query";
 /** Per-response wire bound; filtering and paging happen in Renderer. */
 export const LOCAL_SESSIONS_MAX_LENGTH = 100_000;
 export const LOCAL_SESSIONS_MODEL_MAX_LENGTH = 1_024;
+export const LOCAL_SESSIONS_RESUME_COMMAND_MAX_LENGTH = 256;
+/**
+ * A command pasted into a terminal: program, flags and a Session ID, with no quoting, variables,
+ * redirection or command separators.
+ */
+export const LOCAL_SESSIONS_RESUME_COMMAND_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ._:=/-]*$/u;
 
 const countSchema = z.number().int().nonnegative().safe();
 const timeSchema = countSchema;
@@ -61,15 +67,22 @@ export const localSessionSchema = z.strictObject({
   resumable: z.boolean(),
   /** Null when the Harness cannot tell whether another client is running it. */
   running: z.boolean().nullable(),
+  /**
+   * Resumes the Session in its Harness's own CLI when run from `cwd`; null when the Harness has
+   * no such command or the Session ID is not safe to paste into a terminal.
+   */
+  resumeCommand: z
+    .string()
+    .max(LOCAL_SESSIONS_RESUME_COMMAND_MAX_LENGTH)
+    .regex(LOCAL_SESSIONS_RESUME_COMMAND_PATTERN)
+    .nullable(),
 });
 
 export const localSessionsViewSchema = z.strictObject({
   status: z.literal("ready"),
   /** Most recently active first. */
   sessions: z.array(localSessionSchema).max(LOCAL_SESSIONS_MAX_LENGTH),
-  /** Subagent and child Sessions folded into listed Sessions. */
-  foldedSubagents: countSchema,
-  /** Harnesses with listed Sessions. */
+  /** Harnesses with listed Sessions, by name. */
   harnesses: z
     .array(z.strictObject({ harnessId: sessionHarnessIdSchema, name: harnessNameSchema }))
     .max(LOCAL_USAGE_HARNESS_MAX_LENGTH),

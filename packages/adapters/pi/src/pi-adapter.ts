@@ -2083,6 +2083,7 @@ export class PiAdapter implements HarnessAdapter {
         (signal) => readPiNativeUsage(this.#environment, cursor, signal, onProgress),
         "Pi usage records could not be read; check storage access and retry",
       ),
+    resumeCommand: (nativeSessionId: string) => `pi --session ${nativeSessionId}`,
   } satisfies HarnessNativeUsageCapability);
   readonly #environment: NodeJS.ProcessEnv;
   readonly #importIndex: PiSessionImportIndex;

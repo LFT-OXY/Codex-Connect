@@ -5,13 +5,15 @@ import type {
 } from "@codexhost/harness-adapter";
 import type { StoredThreadRecordV1 } from "@codexhost/mapping-store";
 import {
-  harnessSessionImportCandidateSchema,
+  LOCAL_SESSIONS_RESUME_COMMAND_MAX_LENGTH,
+  LOCAL_SESSIONS_RESUME_COMMAND_PATTERN,
   hostThreadIdSchema,
   jsonValueSchema,
   localSessionsQueryParamsSchema,
   localSessionsQueryResultSchema,
   localUsageQueryParamsSchema,
   localUsageQueryResultSchema,
+  localUsageReadingSchema,
   type HarnessPluginDescriptor,
   type HostThreadId,
   type JsonObject,
@@ -29,9 +31,16 @@ import { loadModelPrices } from "./local-usage-prices.js";
 import { createProjectResolver } from "./local-usage-projects.js";
 import { createModelPricer, type ModelPricer } from "./local-usage-pricing.js";
 import { buildLocalUsageView } from "./local-usage-view.js";
-import { buildLocalSessionsView, type LocalSessionCandidate } from "./local-sessions-view.js";
+import {
+  listLocalSessionCandidates,
+  type LocalSessionCandidates,
+} from "./local-session-candidates.js";
+import { buildLocalSessionsView } from "./local-sessions-view.js";
+import { ownedNativeSessionRef } from "./harness-session-import.js";
 
 const OFFICIAL_CODEX_ID = "codex";
+/** Session IDs pasted unquoted into a terminal: no flags, whitespace or shell syntax. */
+const SHELL_SAFE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/u;
 /** How long a query waits for a read before answering with its progress instead. */
 const PROGRESS_AFTER_MS = 500;
 
@@ -46,17 +55,18 @@ export interface LocalSessionMapping {
 export function localSessionMappings(
   records: readonly StoredThreadRecordV1[],
 ): LocalSessionMapping[] {
-  return records.flatMap((record) =>
-    !record.subagent && record.state === "ready" && record.nativeSessionRef
+  return records.flatMap((record) => {
+    const ref = ownedNativeSessionRef(record);
+    return ref
       ? [
           {
-            harnessId: record.nativeSessionRef.harnessId,
-            nativeSessionId: record.nativeSessionRef.nativeSessionId,
+            harnessId: ref.harnessId,
+            nativeSessionId: ref.nativeSessionId,
             threadId: record.hostThreadId,
           },
         ]
-      : [],
-  );
+      : [];
+  });
 }
 
 /**
@@ -76,7 +86,7 @@ export class LocalUsageService {
   /** A failed read no query was still waiting for, reported to the next query that polls. */
   #unreportedFailure: unknown = null;
   /** Session import candidates, listed again when Sessions are refreshed. */
-  #candidates: Promise<{ candidates: LocalSessionCandidate[]; failed: string[] }> | null = null;
+  #candidates: Promise<LocalSessionCandidates> | null = null;
   readonly #project = createProjectResolver();
 
   constructor(
@@ -124,7 +134,9 @@ export class LocalUsageService {
     if (!params.success) {
       return { error: { code: -32602, message: "Invalid local sessions query params" } };
     }
-    if (params.data.refresh || !this.#candidates) this.#candidates = this.#listCandidates();
+    if (params.data.refresh || !this.#candidates) {
+      this.#candidates = listLocalSessionCandidates(this.input.adapters, this.input.diagnose);
+    }
     const listing = this.#candidates;
     return this.#query(params.data.refresh, async (state, price) => {
       const { candidates, failed } = await listing;
@@ -159,48 +171,13 @@ export class LocalUsageService {
           resumable: (harnessId) =>
             harnessId === OFFICIAL_CODEX_ID ||
             Boolean(this.input.adapters.get(harnessId)?.sessionImport?.resolveCandidate),
+          resumeCommand: (harnessId, nativeSessionId) =>
+            this.#resumeCommand(harnessId, nativeSessionId),
           candidates,
           failedHarnessIds: [...new Set([...this.#failed, ...failed])],
         }),
       );
     });
-  }
-
-  /**
-   * Import candidates of Harnesses that can map existing Sessions but have no native usage, such
-   * as Hermes and DSH. Harnesses with native usage list their Sessions from their records.
-   */
-  async #listCandidates(): Promise<{ candidates: LocalSessionCandidate[]; failed: string[] }> {
-    const listed = await Promise.all(
-      [...this.input.adapters].flatMap(([harnessId, adapter]) => {
-        const capability = adapter.sessionImport;
-        if (adapter.nativeUsage || !capability?.resolveCandidate) return [];
-        return [
-          capability
-            .listCandidates()
-            .catch(() => null)
-            .then((result) => {
-              // Candidates are plugin data; a malformed list fails like a failed read.
-              const parsed = result?.ok
-                ? harnessSessionImportCandidateSchema.array().safeParse(result.value)
-                : null;
-              return { harnessId, candidates: parsed?.success ? parsed.data : null };
-            }),
-        ];
-      }),
-    );
-    const failed = listed.flatMap(({ harnessId, candidates }) => (candidates ? [] : [harnessId]));
-    for (const harnessId of failed) {
-      this.input.diagnose(
-        new Error(`Session import candidates could not be listed for ${harnessId}`),
-      );
-    }
-    return {
-      candidates: listed.flatMap(({ harnessId, candidates }) =>
-        (candidates ?? []).map((candidate) => ({ harnessId, candidate })),
-      ),
-      failed,
-    };
   }
 
   /**
@@ -223,7 +200,9 @@ export class LocalUsageService {
       );
       if (!state) {
         return {
-          result: jsonValueSchema.parse({ status: "reading", progress: this.#readProgress() }),
+          result: jsonValueSchema.parse(
+            localUsageReadingSchema.parse({ status: "reading", progress: this.#readProgress() }),
+          ),
         };
       }
       return { result: jsonValueSchema.parse(await build(state, await prices)) };
@@ -233,6 +212,27 @@ export class LocalUsageService {
       this.input.diagnose(error);
       return { error: { code: -32082, message: "Local usage could not be read" } };
     }
+  }
+
+  /** The Harness's command, offered only when neither the ID nor the command can inject shell. */
+  #resumeCommand(harnessId: string, nativeSessionId: string): string | null {
+    const usage =
+      harnessId === OFFICIAL_CODEX_ID
+        ? this.input.officialCodexUsage
+        : this.input.adapters.get(harnessId)?.nativeUsage;
+    if (!usage?.resumeCommand || !SHELL_SAFE_SESSION_ID.test(nativeSessionId)) return null;
+    let command: unknown;
+    try {
+      command = usage.resumeCommand(nativeSessionId);
+    } catch (error) {
+      this.input.diagnose(error);
+      return null;
+    }
+    return typeof command === "string" &&
+      command.length <= LOCAL_SESSIONS_RESUME_COMMAND_MAX_LENGTH &&
+      LOCAL_SESSIONS_RESUME_COMMAND_PATTERN.test(command)
+      ? command
+      : null;
   }
 
   async #projects(cwds: readonly string[]): Promise<Map<string, string>> {

@@ -166,9 +166,9 @@ describe("Renderer fixed Model request client", () => {
           threadId: null,
           resumable: true,
           running: null,
+          resumeCommand: null,
         },
       ],
-      foldedSubagents: 0,
       harnesses: [{ harnessId: "claude-code", name: "Claude Code" }],
       failures: [],
     };

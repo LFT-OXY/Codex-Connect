@@ -2246,6 +2246,7 @@ export class OmpAdapter implements HarnessAdapter {
         (signal) => readOmpNativeUsage(this.#environment, cursor, signal, onProgress),
         "Omp usage records could not be read; check storage access and retry",
       ),
+    resumeCommand: (nativeSessionId: string) => `omp --resume ${nativeSessionId}`,
   } satisfies HarnessNativeUsageCapability);
   readonly #closeTimeoutMs: number;
   readonly #createTransport: OmpAdapterDependencies["createTransport"];

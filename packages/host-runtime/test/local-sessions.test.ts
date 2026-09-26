@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -13,6 +13,7 @@ import {
   harnessPluginDescriptorSchema,
   jsonRpcRequestSchema,
   localSessionsQueryResultSchema,
+  localUsageQueryResultSchema,
   type JsonObject,
 } from "@codexhost/shared-contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -114,7 +115,7 @@ async function fixture() {
       ]),
       user(MAIN, cwd, "2026-03-02T10:12:00.000Z", "caveat", { isMeta: true }),
       user(MAIN, cwd, "2026-03-02T10:13:00.000Z", [
-        { type: "text", text: "[Request interrupted by user]" },
+        { type: "text", text: "[Request interrupted by user for tool use]" },
       ]),
       // An hour idle: not active time.
       user(MAIN, cwd, "2026-03-02T11:13:00.000Z", [{ type: "text", text: SECRET }]),
@@ -189,7 +190,6 @@ describe("Local Sessions query", () => {
     const f = await fixture();
     const { view, body } = await sessions(f.service());
     expect(JSON.stringify(body)).not.toContain(SECRET);
-    expect(view.foldedSubagents).toBe(1);
     expect(view.harnesses).toEqual([{ harnessId: "claude-code", name: "Claude Code" }]);
     expect(view.failures).toEqual([]);
     expect(view.sessions.map(({ nativeSessionId }) => nativeSessionId)).toEqual([OTHER, MAIN]);
@@ -214,6 +214,7 @@ describe("Local Sessions query", () => {
       threadId: null,
       resumable: true,
       running: null,
+      resumeCommand: `claude --resume ${MAIN}`,
     });
     expect(view.sessions[1]?.usage?.estimatedCostUsd).toBeCloseTo((1_300 + 130 * 2) / 1e6, 12);
   });
@@ -307,6 +308,7 @@ describe("Local Sessions query", () => {
         nativeSessionId: PARENT,
         threadId: PARENT,
         resumable: true,
+        resumeCommand: `codex resume ${PARENT}`,
         subagents: 1,
         turns: 1,
         lastActivityAt: Date.parse("2026-03-03T10:05:00.000Z"),
@@ -314,7 +316,6 @@ describe("Local Sessions query", () => {
       }),
     ]);
     expect(view.harnesses).toEqual(expect.arrayContaining([{ harnessId: "codex", name: "Codex" }]));
-    expect(view.foldedSubagents).toBe(2);
   });
 
   it("lists Pi Sessions and resumes one through Pi's Session import", async () => {
@@ -457,7 +458,7 @@ describe("Local Sessions query", () => {
     expect(resumed?.threadId).toBe(threadId);
   });
 
-  it("adds Session import candidates of Harnesses without usage, once each and without usage", async () => {
+  it("adds Session import candidates of Harnesses without usage, without usage", async () => {
     const f = await fixture();
     const hermes = new FakeHarnessAdapter(harnessIdSchema.parse("hermes"));
     const source: HarnessSessionImportSource = {
@@ -472,7 +473,7 @@ describe("Local Sessions query", () => {
     };
     const listCandidates = vi.fn(async () => ({
       ok: true as const,
-      value: [source.candidate, source.candidate],
+      value: [source.candidate],
     }));
     Object.assign(hermes, {
       sessionImport: {
@@ -513,17 +514,126 @@ describe("Local Sessions query", () => {
         threadId: null,
         resumable: true,
         running: true,
+        // Hermes has no resume command of its own to copy.
+        resumeCommand: null,
       },
     ]);
     // Most recent first, whether or not a Session has usage.
     expect(view.sessions[0]?.harnessId).toBe("hermes");
     expect(view.failures).toEqual([{ harnessId: "deepseek-harness", name: "deepseek-harness" }]);
-    expect(view.harnesses.map(({ harnessId }) => harnessId)).toEqual(["claude-code", "hermes"]);
+    // Harnesses by name.
+    expect(view.harnesses.map(({ name }) => name)).toEqual(["Claude Code", "hermes"]);
     // Polls reuse the candidates; a refresh lists them again.
     await sessions(service, false);
     expect(listCandidates).toHaveBeenCalledTimes(1);
     await sessions(service, true);
     expect(listCandidates).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps usage counted before Sessions existed and counts Session usage once", async () => {
+    const f = await fixture();
+    await sessions(f.service());
+    const file = path.join(f.root, "data", "usage", "local-usage.json");
+    const current = JSON.parse(await readFile(file, "utf8"));
+    // A version 2 file also holds usage whose native records Claude has since deleted.
+    const deleted = {
+      ...current.buckets[0],
+      start: Date.parse("2026-03-01T00:00:00.000Z"),
+      input: 5_000,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      cacheWrite1h: 0,
+    };
+    await writeFile(
+      file,
+      JSON.stringify({
+        formatVersion: 2,
+        sources: Object.fromEntries(
+          Object.entries(current.sources as Record<string, { counted: string[] }>).map(
+            ([id, { counted }]) => [id, { cursor: { stale: true }, counted }],
+          ),
+        ),
+        buckets: [...current.buckets, deleted],
+      }),
+    );
+    const service = f.service();
+    const { view } = await sessions(service);
+    expect(view.sessions.find(({ nativeSessionId }) => nativeSessionId === MAIN)?.usage).toEqual({
+      totalTokens: 1_430,
+      estimatedCostUsd: expect.any(Number),
+    });
+    const usage = localUsageQueryResultSchema.parse(
+      (
+        await service.handle(
+          jsonRpcRequestSchema.parse({
+            id: 5,
+            method: "codexhost/usage/query",
+            params: { period: { kind: "total" }, timeZone: "UTC", refresh: false },
+          }),
+        )
+      ).result,
+    );
+    if (usage.status !== "ready") throw new Error("Usage is still being read");
+    expect(usage.totals.total).toBe(1_430 + 10 + 5_000);
+    // Once caught up, later reads count both the usage and the Session from one set of keys.
+    await appendFile(
+      f.mainFile,
+      lines(assistant(MAIN, f.cwd, "msg-9", "2026-03-02T11:30:00.000Z", { input: 1, output: 1 })),
+    );
+    expect(
+      (await sessions(service)).view.sessions.find(
+        ({ nativeSessionId }) => nativeSessionId === MAIN,
+      )?.usage?.totalTokens,
+    ).toBe(1_432);
+  });
+
+  it("offers no resume command for a Session ID that is not safe to paste into a terminal", async () => {
+    const f = await fixture();
+    await writeFile(
+      path.join(path.dirname(f.mainFile), "unsafe $(id).jsonl"),
+      lines(
+        user("unsafe $(id)", f.cwd, "2026-03-03T12:00:00.000Z", "hi"),
+        assistant("unsafe $(id)", f.cwd, "msg-x", "2026-03-03T12:00:01.000Z", {
+          input: 1,
+          output: 1,
+        }),
+      ),
+    );
+    const { view } = await sessions(f.service());
+    expect(
+      view.sessions.find(({ nativeSessionId }) => nativeSessionId === "unsafe $(id)")
+        ?.resumeCommand,
+    ).toBeNull();
+  });
+
+  it("reports a Harness whose import candidates do not arrive in time without holding the list", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const f = await fixture();
+      const hanging = new FakeHarnessAdapter(harnessIdSchema.parse("hermes"));
+      Object.assign(hanging, {
+        sessionImport: {
+          listCandidates: () => new Promise(() => undefined),
+          resolveCandidate: async () => ({ ok: false }),
+        },
+      });
+      const service = f.service([["hermes", hanging]]);
+      const first = service.handleSessions(
+        jsonRpcRequestSchema.parse({
+          id: 6,
+          method: "codexhost/sessions/query",
+          params: { refresh: true },
+        }),
+      );
+      await vi.advanceTimersByTimeAsync(5_000);
+      await first;
+      const { view } = await sessions(service, false);
+      expect(view.failures).toEqual([{ harnessId: "hermes", name: "hermes" }]);
+      expect(view.sessions.map(({ nativeSessionId }) => nativeSessionId)).toEqual([OTHER, MAIN]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps listing other Harnesses' Sessions when one source fails", async () => {

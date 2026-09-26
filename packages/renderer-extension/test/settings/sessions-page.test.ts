@@ -114,6 +114,7 @@ function session(overrides: Partial<LocalSession> = {}): LocalSession {
     threadId: null,
     resumable: true,
     running: null,
+    resumeCommand: "claude --resume 11111111-1111-4111-8111-111111111111",
     ...overrides,
   };
 }
@@ -122,7 +123,6 @@ function view(sessions: LocalSession[]): LocalSessionsQueryResult {
   return {
     status: "ready",
     sessions,
-    foldedSubagents: sessions.reduce((sum, { subagents }) => sum + subagents, 0),
     harnesses: [{ harnessId: "claude-code" as LocalSession["harnessId"], name: "Claude Code" }],
     failures: [],
   };
@@ -278,7 +278,7 @@ describe("Sessions settings page", () => {
       expect(find((element) => element.dataset.sessionAction === "resume")).toBeDefined(),
     );
     find((element) => element.dataset.sessionAction === "resume").fire("click");
-    await vi.waitFor(() => expect(text(content)).toContain(messages.sessions.codexOpenFailed));
+    await vi.waitFor(() => expect(text(content)).toContain(messages.sessions.openFailed));
     expect(openThread).toHaveBeenCalledWith(codex.threadId, expect.anything());
     expect(importHarnessSession).not.toHaveBeenCalled();
   });
@@ -290,6 +290,7 @@ describe("Sessions settings page", () => {
       session({
         nativeSessionId: "dsh-1",
         harnessId: "deepseek-harness" as LocalSession["harnessId"],
+        resumeCommand: null,
       }),
     ];
     const posix = mount(
@@ -330,6 +331,7 @@ describe("Sessions settings page", () => {
       edits: null,
       subagents: 0,
       running: true,
+      resumeCommand: null,
     });
     const { find } = mount({ queryLocalSessions: vi.fn().mockResolvedValue(view([hermes])) });
     await vi.waitFor(() =>
@@ -356,7 +358,7 @@ describe("Sessions settings page", () => {
       expect(find((element) => element.dataset.sessionAction === "resume").disabled).toBe(true),
     );
     expect(find((element) => element.dataset.sessionAction === "resume").title).toBe(
-      messages.sessions.resumeUnavailable,
+      messages.sessions.resumeUnsupported,
     );
   });
 
@@ -371,6 +373,20 @@ describe("Sessions settings page", () => {
     await vi.advanceTimersByTimeAsync(500);
     expect(queryLocalSessions).toHaveBeenLastCalledWith({ refresh: false });
     await vi.waitFor(() => expect(rows()).toHaveLength(1));
+  });
+
+  it("keeps the listed Sessions on screen while a refresh is still reading", async () => {
+    const queryLocalSessions = vi
+      .fn()
+      .mockResolvedValueOnce(view([session()]))
+      .mockResolvedValueOnce({ status: "reading", progress: { processed: 1, total: 9 } })
+      .mockResolvedValue(view([session()]));
+    const { find, rows } = mount({ queryLocalSessions });
+    await vi.waitFor(() => expect(rows()).toHaveLength(1));
+    find(({ dataset }) => dataset.sessionsAction === "refresh").fire("click");
+    await vi.waitFor(() => expect(queryLocalSessions).toHaveBeenCalledTimes(2));
+    expect(rows()).toHaveLength(1);
+    expect(find(({ dataset }) => dataset.sessionsAction === "refresh").disabled).toBe(true);
   });
 
   it("lists other sources when one fails", async () => {

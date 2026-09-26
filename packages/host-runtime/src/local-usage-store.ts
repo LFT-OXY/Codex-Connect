@@ -115,20 +115,35 @@ const sessionUsageSchema = z.strictObject({
   reportedCostUsd: z.number().nonnegative().finite().optional(),
 });
 
+const sourceFields = {
+  cursor: jsonValueSchema.nullable(),
+  /** Short hashes of counted dedupe keys; keys themselves stay in native records. */
+  counted: z.array(z.string()),
+};
+
 const localUsageStateSchema = z.strictObject({
-  // Version 1 had no one-hour cache writes and version 2 no Sessions; older files are rebuilt.
   formatVersion: z.literal(3),
   sources: z.record(
     textSchema,
     z.strictObject({
-      cursor: jsonValueSchema.nullable(),
-      /** Short hashes of counted dedupe keys; keys themselves stay in native records. */
-      counted: z.array(z.string()),
+      ...sourceFields,
+      /**
+       * Keys counted into Session usage, when they differ from `counted`: state kept from before
+       * Sessions existed counts Session usage again from the native records still present.
+       */
+      sessionCounted: z.array(z.string()).optional(),
     }),
   ),
   buckets: z.array(bucketSchema),
   sessions: z.array(sessionSummarySchema),
   sessionUsage: z.array(sessionUsageSchema),
+});
+
+/** Before Sessions; version 1, without one-hour cache writes, is rebuilt from native records. */
+const localUsageStateV2Schema = z.strictObject({
+  formatVersion: z.literal(2),
+  sources: z.record(textSchema, z.strictObject(sourceFields)),
+  buckets: z.array(bucketSchema),
 });
 
 export type LocalUsageBucket = z.infer<typeof bucketSchema>;
@@ -153,6 +168,25 @@ function stateFile(directory: string): string {
   return path.join(directory, "local-usage.json");
 }
 
+/**
+ * Keeps usage counted before Sessions existed, including usage whose native records are gone. Every
+ * source reads its records again, so Sessions are summarized and their usage counted once.
+ */
+function withoutSessions(state: z.infer<typeof localUsageStateV2Schema>): LocalUsageState {
+  return {
+    formatVersion: 3,
+    sources: Object.fromEntries(
+      Object.entries(state.sources).map(([harnessId, { counted }]) => [
+        harnessId,
+        { cursor: null, counted, sessionCounted: [] },
+      ]),
+    ),
+    buckets: state.buckets,
+    sessions: [],
+    sessionUsage: [],
+  };
+}
+
 /** Returns null when nothing has been read yet. A damaged file starts over from native records. */
 export async function loadLocalUsageState(
   directory: string,
@@ -168,7 +202,9 @@ export async function loadLocalUsageState(
     throw error;
   }
   try {
-    return localUsageStateSchema.parse(JSON.parse(raw));
+    const value: unknown = JSON.parse(raw);
+    const previous = localUsageStateV2Schema.safeParse(value);
+    return previous.success ? withoutSessions(previous.data) : localUsageStateSchema.parse(value);
   } catch {
     diagnose(
       new Error("Local usage state is unreadable or outdated; rebuilding it from native records"),
@@ -214,6 +250,24 @@ function bucketKey(
   ]);
 }
 
+function zeroUsage() {
+  return { input: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, output: 0, reasoning: 0 };
+}
+
+/** Adds a record's tokens and reported cost to a bucket or a Session's usage. */
+function addUsage(
+  target: ReturnType<typeof zeroUsage> & { reportedCostUsd?: number | undefined },
+  record: z.infer<typeof nativeUsageBatchSchema>["records"][number],
+): void {
+  target.input += record.tokens.input;
+  target.cacheRead += record.tokens.cacheRead;
+  target.cacheWrite += record.tokens.cacheWrite;
+  target.cacheWrite1h += record.tokens.cacheWrite1h ?? 0;
+  target.output += record.tokens.output;
+  target.reasoning += record.tokens.reasoning;
+  if (target.reportedCostUsd !== undefined) target.reportedCostUsd += record.reportedCostUsd ?? 0;
+}
+
 function sessionUsageKey(
   usage: Pick<
     LocalSessionUsage,
@@ -239,7 +293,10 @@ export function applyNativeUsageBatch(
   batch: HarnessNativeUsageBatch,
 ): void {
   const { records, sessions, cursor } = nativeUsageBatchSchema.parse(batch);
-  const counted = new Set(state.sources[harnessId]?.counted);
+  const source = state.sources[harnessId];
+  const counted = new Set(source?.counted);
+  // Usually the same keys; kept apart only while migrated state catches Session usage up.
+  const sessionCounted = source?.sessionCounted ? new Set(source.sessionCounted) : counted;
   const buckets = new Map(
     state.buckets.map((bucket) => [
       bucketKey(bucket, bucket.reportedCostUsd !== undefined),
@@ -249,8 +306,10 @@ export function applyNativeUsageBatch(
   const sessionUsage = new Map(state.sessionUsage.map((usage) => [sessionUsageKey(usage), usage]));
   for (const record of records) {
     const key = countedKey(record.dedupeKey);
-    if (counted.has(key)) continue;
+    const newUsage = !counted.has(key);
+    const newSessionUsage = sessionCounted === counted ? newUsage : !sessionCounted.has(key);
     counted.add(key);
+    sessionCounted.add(key);
     const identity = {
       start: Math.floor(record.occurredAt / HALF_HOUR_MS) * HALF_HOUR_MS,
       harnessId,
@@ -258,34 +317,24 @@ export function applyNativeUsageBatch(
       model: record.model ?? null,
       cwd: record.cwd ?? null,
     };
-    // Reported and priced usage stay in separate buckets so each is costed its own way.
-    const id = bucketKey(identity, record.reportedCostUsd !== undefined);
-    let bucket = buckets.get(id);
-    if (!bucket) {
-      bucket = {
-        ...identity,
-        input: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        cacheWrite1h: 0,
-        output: 0,
-        reasoning: 0,
-        conversations: 0,
-        ...(record.reportedCostUsd === undefined ? {} : { reportedCostUsd: 0 }),
-      };
-      buckets.set(id, bucket);
-      state.buckets.push(bucket);
+    if (newUsage) {
+      // Reported and priced usage stay in separate buckets so each is costed its own way.
+      const id = bucketKey(identity, record.reportedCostUsd !== undefined);
+      let bucket = buckets.get(id);
+      if (!bucket) {
+        bucket = {
+          ...identity,
+          ...zeroUsage(),
+          conversations: 0,
+          ...(record.reportedCostUsd === undefined ? {} : { reportedCostUsd: 0 }),
+        };
+        buckets.set(id, bucket);
+        state.buckets.push(bucket);
+      }
+      addUsage(bucket, record);
+      bucket.conversations += record.conversations;
     }
-    bucket.input += record.tokens.input;
-    bucket.cacheRead += record.tokens.cacheRead;
-    bucket.cacheWrite += record.tokens.cacheWrite;
-    bucket.cacheWrite1h += record.tokens.cacheWrite1h ?? 0;
-    bucket.output += record.tokens.output;
-    bucket.reasoning += record.tokens.reasoning;
-    bucket.conversations += record.conversations;
-    if (bucket.reportedCostUsd !== undefined) {
-      bucket.reportedCostUsd += record.reportedCostUsd ?? 0;
-    }
+    if (!newSessionUsage) continue;
     const usageIdentity = {
       harnessId,
       nativeSessionId: record.nativeSessionId,
@@ -296,25 +345,11 @@ export function applyNativeUsageBatch(
     const usageId = sessionUsageKey(usageIdentity);
     let usage = sessionUsage.get(usageId);
     if (!usage) {
-      usage = {
-        ...usageIdentity,
-        input: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        cacheWrite1h: 0,
-        output: 0,
-        reasoning: 0,
-      };
+      usage = { ...usageIdentity, ...zeroUsage() };
       sessionUsage.set(usageId, usage);
       state.sessionUsage.push(usage);
     }
-    usage.input += record.tokens.input;
-    usage.cacheRead += record.tokens.cacheRead;
-    usage.cacheWrite += record.tokens.cacheWrite;
-    usage.cacheWrite1h += record.tokens.cacheWrite1h ?? 0;
-    usage.output += record.tokens.output;
-    usage.reasoning += record.tokens.reasoning;
-    if (usage.reportedCostUsd !== undefined) usage.reportedCostUsd += record.reportedCostUsd ?? 0;
+    addUsage(usage, record);
   }
   if (sessions?.length) {
     // A summary replaces the previous one of the same records.
@@ -339,5 +374,9 @@ export function applyNativeUsageBatch(
       });
     }
   }
-  state.sources[harnessId] = { cursor, counted: [...counted] };
+  state.sources[harnessId] = {
+    cursor,
+    counted: [...counted],
+    ...(sessionCounted === counted ? {} : { sessionCounted: [...sessionCounted] }),
+  };
 }

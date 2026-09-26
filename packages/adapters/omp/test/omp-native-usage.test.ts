@@ -433,10 +433,14 @@ describe("Omp native usage", () => {
         },
         expect.objectContaining({ nativeSessionId: CHILD, parentSessionId: SESSION, turns: 1 }),
         expect.objectContaining({ nativeSessionId: "nested-id", parentSessionId: CHILD }),
-        expect.objectContaining({ nativeSessionId: FORK, parentSessionId: SESSION }),
+        expect.objectContaining({ nativeSessionId: FORK }),
       ]),
     );
     expect(first.sessions).toHaveLength(4);
+    // A fork is a Session of its own, resumed on its own.
+    expect(
+      first.sessions?.find(({ nativeSessionId }) => nativeSessionId === FORK),
+    ).not.toHaveProperty("parentSessionId");
     expect((await f.read(first.cursor)).sessions).toEqual([]);
 
     // OMP names the session by rewriting the slot in place, without appending anything.

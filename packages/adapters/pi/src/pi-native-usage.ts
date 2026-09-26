@@ -4,7 +4,6 @@ import path from "node:path";
 
 import {
   emptyNativeSessionActivity,
-  isFileEditTool,
   nativeSessionEdits,
   parseNativeSessionActivity,
   recordNativeSessionActivity,
@@ -24,6 +23,8 @@ import { piSessionImportDirectory, piUserMessageTitle } from "./pi-session-impor
 const NEWLINE = 0x0a;
 /** Entries write their own timestamp before any nested field, so the first one is the entry's. */
 const ENTRY_TIMESTAMP = /"timestamp":"([^"]+)"/u;
+/** Pi's file-editing tools. */
+const EDIT_TOOLS = new Set(["edit", "write"]);
 /** Titles are for a list row; a first message used as one is shortened to a line. */
 const TITLE_MAX_LENGTH = 120;
 
@@ -199,15 +200,12 @@ function reportedCost(usage: Record<string, unknown>): number | undefined {
 }
 
 /**
- * A subagent's header names its parent Session; a fork's names the parent's session file,
- * `<time>_<id>.jsonl`.
+ * A subagent's header names its parent Session. A fork's names the parent's session file instead;
+ * a fork is a Session of its own, resumed on its own, so it has no parent here.
  */
 function parentSessionId(header: Record<string, unknown>): string | null {
   const parent = text(header.parentSession);
-  if (!parent) return null;
-  if (!parent.endsWith(".jsonl")) return parent;
-  const name = path.basename(parent, ".jsonl");
-  return text(name.slice(name.lastIndexOf("_") + 1)) ?? null;
+  return parent && !parent.endsWith(".jsonl") ? parent : null;
 }
 
 function shortTitle(value: string | null): string | null {
@@ -242,7 +240,7 @@ function summarize(summary: PiFileSummary, entry: Record<string, unknown>): void
           isRecord(block) &&
           block.type === "toolCall" &&
           typeof block.name === "string" &&
-          isFileEditTool(block.name),
+          EDIT_TOOLS.has(block.name),
       )
     ) {
       recordNativeSessionEdit(summary.activity);

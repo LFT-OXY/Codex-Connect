@@ -2505,6 +2505,7 @@ export class ClaudeCodeAdapter implements HarnessAdapter {
         (signal) => readClaudeNativeUsage(this.#environment, cursor, signal, onProgress),
         "Claude Code usage records could not be read; check storage access and retry",
       ),
+    resumeCommand: (nativeSessionId: string) => `claude --resume ${nativeSessionId}`,
   } satisfies HarnessNativeUsageCapability);
   readonly subagents = {
     readSnapshot: async (input: {

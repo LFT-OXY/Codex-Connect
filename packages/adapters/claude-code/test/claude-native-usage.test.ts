@@ -34,7 +34,8 @@ async function fixture() {
     if (!result.ok) throw new Error(result.error.message);
     return result.value;
   };
-  return { root, config, project, mainFile, subagentFile, read };
+  const resumeCommand = (id: string) => adapter.nativeUsage.resumeCommand?.(id);
+  return { root, config, project, mainFile, subagentFile, read, resumeCommand };
 }
 
 function lines(...entries: unknown[]): string {
@@ -308,6 +309,14 @@ describe("Claude Code native usage", () => {
         }),
       ),
     );
+    await appendFile(
+      f.mainFile,
+      lines(
+        // Claude's own notices are not turns.
+        user("u-int", [{ type: "text", text: "[Request interrupted by user for tool use]" }]),
+        user("u-meta", "caveat", { isMeta: true }),
+      ),
+    );
     await mkdir(path.dirname(f.subagentFile), { recursive: true });
     await writeFile(f.subagentFile, lines(user("u-2", "task", { isSidechain: true })));
     const first = await f.read();
@@ -362,5 +371,9 @@ describe("Claude Code native usage", () => {
     expect((await f.read(finished.cursor)).sessions).toEqual([
       expect.objectContaining({ nativeSessionId: SESSION, turns: 1, edits: 0, activeMs: 0 }),
     ]);
+  });
+  it("resumes a Session with claude --resume", async () => {
+    const f = await fixture();
+    expect(f.resumeCommand(SESSION)).toBe(`claude --resume ${SESSION}`);
   });
 });

@@ -4,7 +4,6 @@ import path from "node:path";
 
 import {
   emptyNativeSessionActivity,
-  isFileEditTool,
   nativeSessionEdits,
   parseNativeSessionActivity,
   recordNativeSessionActivity,
@@ -28,6 +27,8 @@ const SESSION_INDEX = "session_index.jsonl";
 const TITLE_MAX_LENGTH = 120;
 /** Every rollout line starts with its timestamp, so activity is read without parsing the line. */
 const LINE_TIMESTAMP = /^\{"timestamp":"([^"]+)"/u;
+/** Codex's file-editing tool. */
+const EDIT_TOOLS = new Set(["apply_patch"]);
 /** Edits made through the code-mode `exec` tool name the editing tool in its script. */
 const EXEC_TOOL_CALL = /\btools\.([A-Za-z_]+)\s*\(/gu;
 const countSchema = z.number().int().nonnegative().safe();
@@ -329,7 +330,9 @@ async function readRolloutUsage(
       // Rollouts written before turn contexts existed count each prompt as a turn.
       if (!state.turnContexts) startNativeSessionTurn(state.activity);
     } else if (entry.type === "response_item") {
-      if (calledTools(payload).some(isFileEditTool)) recordNativeSessionEdit(state.activity);
+      if (calledTools(payload).some((tool) => EDIT_TOOLS.has(tool))) {
+        recordNativeSessionEdit(state.activity);
+      }
     } else if (
       entry.type === "event_msg" &&
       payload.type === "token_count" &&
@@ -492,5 +495,6 @@ export function codexNativeUsage(codexHome: string): HarnessNativeUsageCapabilit
         };
       }
     },
+    resumeCommand: (nativeSessionId: string) => `codex resume ${nativeSessionId}`,
   });
 }

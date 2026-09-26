@@ -641,6 +641,12 @@ export interface HarnessNativeUsageCapability {
     cursor: JsonValue | null,
     onProgress?: (progress: HarnessNativeUsageProgress) => void,
   ): Promise<HarnessResult<HarnessNativeUsageBatch>>;
+  /**
+   * The command line that resumes a Native Session in this Harness's own CLI when run from the
+   * Session's working directory, such as `claude --resume <id>`. Host offers it to copy only for
+   * shell-safe IDs and commands; the working directory is added by Renderer.
+   */
+  resumeCommand?(nativeSessionId: string): string;
 }
 
 export interface HarnessAdapter {

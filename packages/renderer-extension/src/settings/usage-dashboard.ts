@@ -47,7 +47,8 @@ export function formatUsageShare(percent: number): string {
   return percent > 0 && percent < 0.005 ? "<0.01%" : `${percent.toFixed(2)}%`;
 }
 
-function element<K extends keyof HTMLElementTagNameMap>(
+/** An element with its classes and, optionally, its text. */
+export function element<K extends keyof HTMLElementTagNameMap>(
   document: Document,
   tagName: K,
   className: string,

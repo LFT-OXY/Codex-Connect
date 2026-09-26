@@ -12,6 +12,7 @@ import type { RendererSettingsPageDefinition, RendererSettingsPageMountContext }
 import { createRendererSettingsIcon } from "./icons.js";
 import type { RendererSettingsMessages } from "./localization.js";
 import { renderLocalUsage, usageBar, type UsageDetailTab } from "./usage-dashboard.js";
+import { SETTINGS_BUTTON_CLASS, SETTINGS_SEGMENT_CLASS } from "./control-classes.js";
 
 export interface RendererUsageClient {
   queryLocalUsage(input: LocalUsageQueryParams): Promise<LocalUsageQueryResult>;
@@ -41,19 +42,6 @@ function localTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
-const BUTTON_CLASS = [
-  "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px]",
-  "border border-settings-border bg-settings-surface text-settings-text",
-  "transition-colors hover:bg-settings-surface-hover disabled:cursor-default disabled:opacity-60",
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-settings-focus",
-].join(" ");
-const SEGMENT_CLASS = [
-  "h-7 rounded-md border-0 px-3 text-[13px]",
-  "bg-transparent text-settings-muted",
-  "transition-colors hover:text-settings-text focus-visible:outline-2 focus-visible:outline-settings-focus",
-  "aria-pressed:bg-settings-panel aria-pressed:font-medium aria-pressed:text-settings-text",
-  "aria-pressed:shadow-[0_1px_2px_rgb(0_0_0/0.12)]",
-].join(" ");
 const DATE_CLASS =
   "h-8 rounded-md border border-settings-border bg-settings-surface px-2 text-[13px] text-settings-text";
 
@@ -75,7 +63,7 @@ export function createUsageSettingsPage(
       heading.textContent = settingsMessages.pageLabels.usage;
       const refresh = document.createElement("button");
       refresh.type = "button";
-      refresh.className = BUTTON_CLASS;
+      refresh.className = SETTINGS_BUTTON_CLASS;
       refresh.dataset.usageAction = "refresh";
       header.append(heading, refresh);
 
@@ -93,7 +81,7 @@ export function createUsageSettingsPage(
       for (const kind of PERIOD_KINDS) {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = SEGMENT_CLASS;
+        button.className = SETTINGS_SEGMENT_CLASS;
         button.dataset.usagePeriod = kind;
         button.textContent = periodLabel(kind, messages);
         button.addEventListener("click", () => selectPeriod(kind));
@@ -121,7 +109,7 @@ export function createUsageSettingsPage(
       to.dataset.usageCustomTo = "";
       const apply = document.createElement("button");
       apply.type = "submit";
-      apply.className = BUTTON_CLASS;
+      apply.className = SETTINGS_BUTTON_CLASS;
       apply.textContent = messages.customApply;
       const customError = document.createElement("span");
       customError.className = "text-xs text-settings-danger";

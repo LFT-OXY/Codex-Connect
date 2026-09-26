@@ -1,22 +1,5 @@
 /** Gaps between consecutive native records longer than this are idle, not active time. */
-export const NATIVE_SESSION_IDLE_GAP_MS = 30 * 60_000;
-
-/** Tool names, lowercased, whose calls edit files; a turn with one of them counts as an edit. */
-const FILE_EDIT_TOOLS = new Set([
-  "apply_patch",
-  "edit",
-  "write",
-  "multiedit",
-  "notebookedit",
-  "str_replace",
-  "search_replace",
-  "create_file",
-  "write_file",
-]);
-
-export function isFileEditTool(name: string): boolean {
-  return FILE_EDIT_TOOLS.has(name.toLowerCase());
-}
+const NATIVE_SESSION_IDLE_GAP_MS = 30 * 60_000;
 
 /**
  * Activity counted so far from one Session's records. Plain JSON, so Adapters can keep it in their
@@ -91,6 +74,7 @@ export function startNativeSessionTurn(activity: NativeSessionActivity): void {
   activity.turns += 1;
 }
 
+/** The open turn called one of the Harness's file-editing tools. */
 export function recordNativeSessionEdit(activity: NativeSessionActivity): void {
   activity.editing = true;
 }

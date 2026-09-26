@@ -1,12 +1,13 @@
-import type {
-  HarnessSessionImportParams,
-  HarnessSessionImportResult,
-  HostThreadId,
-  LocalSession,
-  LocalSessionsQueryParams,
-  LocalSessionsQueryResult,
-  LocalSessionsView,
-  LocalUsageReading,
+import {
+  harnessPluginIdSchema,
+  type HarnessSessionImportParams,
+  type HarnessSessionImportResult,
+  type HostThreadId,
+  type LocalSession,
+  type LocalSessionsQueryParams,
+  type LocalSessionsQueryResult,
+  type LocalSessionsView,
+  type LocalUsageReading,
 } from "@codexhost/shared-contracts";
 
 import { RendererSessionImportUnavailableError } from "../renderer-session-import-client.js";
@@ -25,6 +26,7 @@ import { isWindowsRenderer } from "./renderer-platform.js";
 import { sessionResumeCommand } from "./session-resume-command.js";
 import { createSessionFilters, filterSessions } from "./sessions-filters.js";
 import { usageBar } from "./usage-dashboard.js";
+import { SETTINGS_BUTTON_CLASS } from "./control-classes.js";
 
 /** Opens a Thread in Codex Desktop; the settings dialog closes once it has opened. */
 export type RendererImportedThreadOpener = (
@@ -41,12 +43,6 @@ export interface RendererSessionsClient {
 const READING_POLL_MS = 500;
 /** Rows added at a time, so thousands of Sessions do not render at once. */
 const SESSION_BATCH = 200;
-const BUTTON_CLASS = [
-  "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px]",
-  "border border-settings-border bg-settings-surface text-settings-text",
-  "transition-colors hover:bg-settings-surface-hover disabled:cursor-default disabled:opacity-60",
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-settings-focus",
-].join(" ");
 
 function sessionKey(session: LocalSession): string {
   return JSON.stringify([session.harnessId, session.nativeSessionId]);
@@ -89,7 +85,7 @@ export function createSessionsSettingsPage(
       heading.textContent = settingsMessages.pageLabels.sessions;
       const refresh = document.createElement("button");
       refresh.type = "button";
-      refresh.className = BUTTON_CLASS;
+      refresh.className = SETTINGS_BUTTON_CLASS;
       refresh.dataset.sessionsAction = "refresh";
       header.append(heading, refresh);
 
@@ -135,7 +131,7 @@ export function createSessionsSettingsPage(
         for (const [key, { button, session }] of resumeButtons) {
           const available = session.threadId !== null || session.resumable;
           button.disabled = !available || session.running === true || resuming !== null;
-          button.title = available ? "" : messages.resumeUnavailable;
+          button.title = available ? "" : messages.resumeUnsupported;
           button.setAttribute("aria-busy", String(resuming === key));
           button.replaceChildren(
             createRendererSettingsIcon("external-link", 13),
@@ -394,13 +390,13 @@ export function createSessionsSettingsPage(
         context.signal.addEventListener("abort", abort, { once: true });
         let threadId: HostThreadId | null = session.threadId;
         try {
-          const { harnessId } = session;
           if (threadId === null) {
-            // Official Codex Sessions are Codex's own Threads and never need mapping.
-            if (harnessId === "codex") throw new RendererSessionImportUnavailableError();
+            // Host gives every Session it can open without mapping, such as official Codex, a Thread.
+            const harnessId = harnessPluginIdSchema.safeParse(session.harnessId);
+            if (!harnessId.success) throw new RendererSessionImportUnavailableError();
             threadId = (
               await client.importHarnessSession({
-                harnessId,
+                harnessId: harnessId.data,
                 nativeSessionId: session.nativeSessionId,
               })
             ).threadId;
@@ -412,11 +408,7 @@ export function createSessionsSettingsPage(
           if (!controller.signal.aborted) {
             renderRecovery(
               session,
-              threadId === null
-                ? resumeFailure(error, messages)
-                : session.harnessId === "codex"
-                  ? messages.codexOpenFailed
-                  : messages.openFailed,
+              threadId === null ? resumeFailure(error, messages) : messages.openFailed,
               threadId !== null,
             );
           }
@@ -442,8 +434,11 @@ export function createSessionsSettingsPage(
           success(result) {
             if (result.status === "reading") {
               // The read continues in Host; ask again without starting another one.
-              showingProgress = true;
-              renderProgress(result.progress);
+              // A refresh keeps the listed Sessions on screen; the button shows it is reading.
+              if (!view) {
+                showingProgress = true;
+                renderProgress(result.progress);
+              }
               if (!context.signal.aborted) {
                 poll = setTimeout(() => void load(false), READING_POLL_MS);
               }
