@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { ClaudeCodeAdapter } from "@codexhost/adapter-claude-code";
+import { OmpAdapter } from "@codexhost/adapter-omp";
 import { PiAdapter } from "@codexhost/adapter-pi";
 import type { HarnessAdapter } from "@codexhost/harness-adapter";
 import {
@@ -605,6 +606,138 @@ describe("Local Usage query", () => {
       (1_000 * 1 + 5_000 * 0.1 + 400 * 10 + (11 * 1 + 22 * 2 + 33 * 0.1 + 44 * 1)) / 1e6;
     const claudeCost = (2 * 2 + 7 * 4 + 200 * 0.2 + 20 * 2) / 1e6;
     expect(week.estimatedCostUsd).toBeCloseTo(piCost + claudeCost, 12);
+  });
+
+  it("adds native oh-my-pi usage, subagent sessions included, as a card broken down by Provider", async () => {
+    const f = await fixture();
+    const agent = path.join(f.root, "omp");
+    const project = path.join(agent, "sessions", "-work-omp");
+    const stem = "2026-03-03T07-59-00-000Z_omp-session-1";
+    await mkdir(path.join(project, stem), { recursive: true });
+    const title = { type: "title", v: 1, title: "synthetic", updatedAt: "", pad: " " };
+    const header = (id: string) => ({
+      type: "session",
+      version: 3,
+      id,
+      timestamp: "2026-03-03T07:59:00.000Z",
+      cwd: "/work/omp",
+    });
+    const reply = (
+      id: string,
+      timestamp: string,
+      provider: string,
+      model: string,
+      usage: { input: number; output: number; cacheRead: number; cacheWrite: number },
+      extra: { reasoningTokens?: number; cost?: number } = {},
+    ) => ({
+      type: "message",
+      id,
+      parentId: null,
+      timestamp,
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "synthetic answer" }],
+        provider,
+        model,
+        usage: {
+          ...usage,
+          ...(extra.reasoningTokens ? { reasoningTokens: extra.reasoningTokens } : {}),
+          totalTokens: usage.input + usage.output + usage.cacheRead + usage.cacheWrite,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: extra.cost ?? 0 },
+        },
+        stopReason: "stop",
+      },
+    });
+    const main = reply(
+      "a-1",
+      "2026-03-03T08:00:00.000Z",
+      "openai-codex",
+      "gpt-synthetic-3",
+      { input: 1_000, output: 400, cacheRead: 5_000, cacheWrite: 0 },
+      { reasoningTokens: 100 },
+    );
+    await writeFile(
+      path.join(project, `${stem}.jsonl`),
+      lines(
+        title,
+        header("omp-session-1"),
+        main,
+        reply(
+          "a-2",
+          "2026-03-03T08:01:00.000Z",
+          "Anthropic",
+          "claude-synthetic-1",
+          { input: 10, output: 20, cacheRead: 30, cacheWrite: 40 },
+          { cost: 0.5 },
+        ),
+      ),
+    );
+    // A fork copies the original entry; it is counted once.
+    await writeFile(
+      path.join(project, "2026-03-03T09-00-00-000Z_omp-session-2.jsonl"),
+      lines(title, header("omp-session-2"), main),
+    );
+    const subagent = path.join(project, stem, "Reviewer.jsonl");
+    await writeFile(
+      subagent,
+      lines(
+        title,
+        header("omp-subagent-1"),
+        reply("c-1", "2026-03-03T08:02:00.000Z", "openai-codex", "gpt-synthetic-3", {
+          input: 100,
+          output: 50,
+          cacheRead: 0,
+          cacheWrite: 0,
+        }),
+      ),
+    );
+    const omp = new OmpAdapter({ environment: { PI_CODING_AGENT_DIR: agent } });
+    cleanup.push(() => omp.close());
+    const service = f.service({
+      others: [["omp", omp]],
+      names: () => ({ "claude-code": "Claude Code", omp: "oh-my-pi" }),
+    });
+
+    const first = await result(service, { kind: "week" }, "UTC", true);
+    expect(first.harnesses[0]).toEqual({
+      harnessId: "omp",
+      name: "oh-my-pi",
+      totalTokens: 6_550 + 100,
+      models: 2,
+      providers: [
+        { provider: "openai-codex", totalTokens: 6_550, models: 1 },
+        { provider: "Anthropic", totalTokens: 100, models: 1 },
+      ],
+    });
+
+    await appendFile(
+      subagent,
+      lines(
+        reply("c-2", "2026-03-03T09:00:00.000Z", "openai-codex", "gpt-synthetic-3", {
+          input: 1,
+          output: 2,
+          cacheRead: 3,
+          cacheWrite: 4,
+        }),
+      ),
+    );
+    const week = await result(service, { kind: "week" }, "UTC", true);
+    const ompDay = week.daily.find((day) => day.date === "2026-03-03");
+    // Reasoning tokens are split out of OMP's output; each assistant message is one conversation.
+    expect(ompDay).toEqual({
+      date: "2026-03-03",
+      total: 6_660,
+      input: 1_111,
+      output: 300 + 20 + 50 + 2,
+      cacheRead: 5_033,
+      reasoning: 100,
+      conversations: 4,
+    });
+    // The Anthropic reply carries OMP's own cost; the others are priced from LiteLLM.
+    const ompCost =
+      0.5 + (1_000 * 1 + 5_000 * 0.1 + 400 * 10 + (101 * 1 + 52 * 10 + 3 * 0.1)) / 1e6;
+    const claudeCost = (2 * 2 + 7 * 4 + 200 * 0.2 + 20 * 2) / 1e6;
+    expect(week.estimatedCostUsd).toBeCloseTo(ompCost + claudeCost, 12);
   });
 
   it("reports rolling 7- and 30-day totals, the active-day average and usage history", async () => {

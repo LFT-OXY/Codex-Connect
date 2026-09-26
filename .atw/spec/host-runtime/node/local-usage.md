@@ -4,7 +4,7 @@
 
 ## 1. Scope / Trigger
 
-- 修改 `HarnessAdapter.nativeUsage`（Claude Code、Pi 的 Adapter 实现分别见各自 spec 的「原生用量」）、`LOCAL_USAGE_QUERY_METHOD` 的参数/结果、`host-runtime/src/local-usage-*.ts`（含计价与价格来源）、`host-runtime/src/codex-runtime/codex-native-usage.ts`（官方 Codex rollout 读取）、Renderer 用量页，或新增一个 Harness 的原生用量读取时阅读。
+- 修改 `HarnessAdapter.nativeUsage`（Claude Code、Pi、oh-my-pi 的 Adapter 实现分别见各自 spec 的「原生用量」）、`LOCAL_USAGE_QUERY_METHOD` 的参数/结果、`host-runtime/src/local-usage-*.ts`（含计价与价格来源）、`host-runtime/src/codex-runtime/codex-native-usage.ts`（官方 Codex rollout 读取）、Renderer 用量页，或新增一个 Harness 的原生用量读取时阅读。
 - 这是跨层契约：Adapter 输出 → Host 校验、去重、持久化 → shared-contracts 结果 schema → Renderer 渲染，任一层改字段都要同步其余三层。
 
 ## 2. Signatures
@@ -66,7 +66,7 @@ readCodexNativeUsage(codexHome, cursor): Promise<HarnessNativeUsageBatch>
 - `cursor` 对 Host 不透明，Host 原样持久化；Adapter 不保存读取状态。无法识别的游标 = 从头读。允许重复返回已读记录，Host 按 `dedupeKey` 每个 Harness 只计一次（先到先得）。因此 Adapter **只能交出终值**：可能仍在增长的记录（例如流式中的回复）要等到终值再交出，把游标退回到它的第一行。
 - 请求 `codexhost/usage/query`：`{ period: {kind:"day"|"week"|"month"|"total"} | {kind:"custom", from, to}, timeZone: IANA, refresh: boolean }`，全部 strict。日期 `YYYY-MM-DD` 且是真实日历日；自定义 `from ≤ to`，跨度 < 3660 天。
 - 结果（strict）：`range{from,to}`、`totals{total,input,cacheRead,cacheWrite,output,reasoning,conversations}`（refine：`total` = 五项之和）、`estimatedCostUsd`（非负有限数，所选范围的 Estimated Cost，USD）、`models`、`harnesses[{harnessId,name,totalTokens,models,providers}]`（`harnessId` = `"codex"` | 插件 ID；按用量降序，只含 Token > 0 的 Harness）、`daily[{date,total,input,output,cacheRead,reasoning,conversations}]`（有 Token 或对话的日期，倒序）、`stats{last7Days,last30Days,dailyAverage,activeDays,firstActiveDate}`。不含正文、会话 ID、工作目录。
-- `providers`（必填，可为空数组，≤ `LOCAL_USAGE_PROVIDER_MAX_LENGTH` = 128 项）：`[{provider, totalTokens, models}]`，`provider` 1..`LOCAL_USAGE_PROVIDER_NAME_MAX_LENGTH`（1024）字符，与 Host 接受的记录 `provider` 上限一致。由范围内 Token > 0 且 `provider !== null` 的桶按原样 Provider 名聚合，按用量降序；`models` 为该 Provider 下的不同 Model 数。`provider === null` 的用量不进入任何子项，因此 schema 只 refine「子项之和 ≤ Harness `totalTokens`」，不要求相等。Host 不按 Harness 判断是否给子项：记录了 Provider 的来源都有（Pi、官方 Codex 的 `model_provider`），不记录的（Claude Code）为空。Renderer 在 `providers.length > 0` 时渲染展开项，占比 = 子项 ÷ 该 Harness 总量。
+- `providers`（必填，可为空数组，≤ `LOCAL_USAGE_PROVIDER_MAX_LENGTH` = 128 项）：`[{provider, totalTokens, models}]`，`provider` 1..`LOCAL_USAGE_PROVIDER_NAME_MAX_LENGTH`（1024）字符，与 Host 接受的记录 `provider` 上限一致。由范围内 Token > 0 且 `provider !== null` 的桶按原样 Provider 名聚合，按用量降序；`models` 为该 Provider 下的不同 Model 数。`provider === null` 的用量不进入任何子项，因此 schema 只 refine「子项之和 ≤ Harness `totalTokens`」，不要求相等。Host 不按 Harness 判断是否给子项：记录了 Provider 的来源都有（Pi、oh-my-pi、官方 Codex 的 `model_provider`），不记录的（Claude Code）为空。Renderer 在 `providers.length > 0` 时渲染展开项，占比 = 子项 ÷ 该 Harness 总量。
 - `stats`（统计块，与所选周期无关，由 `local-usage-view.ts#usageStats` 从**全部**桶按请求时区归日后计算）：活跃日 = 当天 Token > 0 且不晚于今天（只有对话的日期、时钟偏差产生的未来日期都不算）；`last7Days`/`last30Days` = 今天往前 7/30 个日历日（含今天）的 Token 总数；`dailyAverage` = `Math.round(last30Days ÷ 其中活跃日数)`，无活跃日为 0；`activeDays`/`firstActiveDate` 覆盖全部已统计历史，不受「总计」24 个月限制，无历史时 `0`/`null`。schema `superRefine`：`firstActiveDate === null` ⇔ `activeDays === 0`；`last7Days ≤ last30Days`。统计块「对话数」不在 `stats` 中，Renderer 用 `totals.conversations`（所选范围之和）。
 - 计价（Estimated Cost，查询时计算，不写入桶，价格更新后历史范围的费用随之变化）：
   - 每个范围内的桶：有 `reportedCostUsd` 用它（包括 0，例如订阅通道）；`model === null`（只计对话）为 0；否则 `usageCostUsd(bucket, price(model))` = `input×in + cacheRead×cacheRead + cacheWrite×cacheWrite + (output + reasoning)×out`。推理不重复计由记录契约保证：`tokens.reasoning` 只在 Harness 单独上报时非 0（`text-session.ts` 注释），已含在输出中的推理（Claude Code 思考、Codex 的 reasoning 子集）Adapter 必须报 0 或从 output 中扣除，不能两边都报。
@@ -128,8 +128,9 @@ readCodexNativeUsage(codexHome, cursor): Promise<HarnessNativeUsageBatch>
 - 计价（主切入点内）：`estimatedCostUsd` 精确值（各周期、跨桶）、价格更新后历史费用变化且不重读、LiteLLM 挂起时不等待且只有一次加载、无价格模型记 0、自报费用优先（含 0）、离线用内置快照。
 - `host-runtime/test/local-usage-pricing.test.ts`（纯函数）：精确/大小写、装饰后缀、双向厂商前缀与确定性选择、最长包含名、拒绝 `fast`/`o1`/空名等泛名、别名、覆盖在每一步优先、费用公式与推理按输出价、无价格 0。
 - `host-runtime/test/local-usage-prices.test.ts`：解析过滤、24 h 内缓存不联网、过期缓存联网并写缓存、联网失败用过期缓存、无缓存无网用快照、无价格响应视为失败、损坏缓存被忽略，以及各情形的 `refreshAfter`。
-- 各 Adapter 的解析测试（例如 `claude-native-usage.test.ts`、`pi-native-usage.test.ts`）：重复行去重、增量只读完整行、流式等待、记录不含正文。
+- 各 Adapter 的解析测试（例如 `claude-native-usage.test.ts`、`pi-native-usage.test.ts`、`omp-native-usage.test.ts`）：重复行去重、增量只读完整行、流式等待、记录不含正文。
 - 主切入点内的 Pi 用例：真实 `PiAdapter`（`PI_CODING_AGENT_DIR` 指向临时目录）作为 `others` 注入，断言 Pi 卡片 `providers`（两个 Provider、降序、各自模型数）、Fork 复制的消息不翻倍、追加后子项增量更新、每日明细中推理从输出拆出（Token 总数不变）、对话数 = assistant 消息数、费用按 `(output + reasoning) × 输出价`；其余 Harness 断言 `providers: []`（Claude Code）或 `[{provider:"openai",…}]`（Codex）。
+- 主切入点内的 oh-my-pi 用例：真实 `OmpAdapter`（`PI_CODING_AGENT_DIR` 指向临时目录，文件带标题行）作为 `others` 注入，断言卡片 `providers` 含子代理文件（`<会话文件名>/Reviewer.jsonl`）的用量、Fork 复制不翻倍、向子代理文件追加后增量计入、`reasoningTokens` 从输出拆出、对话数 = assistant 消息数、`cost.total > 0` 的回复用自报费用、其余按 LiteLLM。
 - `host-runtime/test/codex-native-usage.test.ts`：累计差分、缓存扣除（含 cache write）、推理为 0、模型/工作目录取最近 turn_context、Provider 取自身 session_meta、重复累计值与 `info` 缺失不计、archived_sessions、增量与半行、未知游标重读键不变、Fork 与 Fork 的 Fork 重放同键、累计值重启（变小与 total == last）按 last、归档移动同键、无目录空批次、不含正文。
 - 主切入点内的 Codex 用例：`officialCodexUsage` 注入真实读取器，断言 Codex 卡片 `{harnessId:"codex", name:"Codex"}`、Fork 重放不翻倍、增量追加、`reasoning` 为 0、费用只按输出价、每日明细与对话数。
 - `shared-contracts/test/local-usage.test.ts`：params/结果 schema 边界、`providers` 接受空数组与多项，拒绝子项之和超过 Harness 总量、空名、多余字段、缺失字段；`harnessId` 接受 `"codex"` 与插件 ID 而拒绝空串/大写/非法 ID、`total` refine、`stats` 的两条 `superRefine` 与非整数/非法日期/多余字段，`estimatedCostUsd` 负数/无穷/NaN/字符串/缺失被拒。

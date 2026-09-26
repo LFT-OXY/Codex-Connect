@@ -34,3 +34,12 @@
   - oh-my-pi：`~/.omp/agent/sessions/**/*.jsonl` 及子代理文件；TokenTracker 源码中未能定位其解析定义（导入名存在但定义未找到），**对话数口径待实现时核对**，默认与 Pi 相同。
 - TokenTracker 计价：花费 = (input×in + output×out + cached×cache_read + cache_creation×cache_write + reasoning×out) / 1e6；reasoning 已含在 output 内的 Harness（Codex）不重复计；不使用 total_tokens；模型名匹配含别名、去后缀、去厂商前缀、最长子串兜底。
 - TokenTracker 口径：「总计」= 最近 24 个月；7 天/30 天为计费总量；平均 = 最近 30 天总量 ÷ 其中有数据的天数；对话数 = 所选范围内对话数之和；每日明细「缓存」列仅缓存读。聚合粒度为 UTC 半小时桶，查询时按时区归日。
+
+## oh-my-pi 核实结论（issue 06，2026-09-26）
+
+- 对话数口径：与 Pi 相同，每条 assistant 消息计 1（含失败/中止、Token 为 0 的回复）。TokenTracker 源码中 `parseOmpIncremental` 的实现仍未找到，但其测试（`test/rollout-parser.test.js` 的 oh-my-pi 段）按每条带 `usage` 的 assistant 消息产生一个事件，与此一致。本机 501 个文件、14,087 条去重 assistant 消息，其中 240 条 Token 为 0。
+- 文件格式（omp 二进制内源码与本机数据核对）：第一行是固定宽度、原地改写的标题行（`type:"title"`），会话头在第二行；较早的文件可能没有标题行。子代理会话保存在以父会话文件名命名的目录中（`<会话文件名>/<代理名>.jsonl`，可再嵌套），本机 177 个文件、约占 oh-my-pi Token 的 31%。
+- 用量字段：`usage.input/output/cacheRead/cacheWrite/reasoningTokens/totalTokens/cost`。字段名是 `reasoningTokens`（不是 Pi 的 `reasoning`）；本机 9,653 条带该字段的记录全部满足 `totalTokens = input + output + cacheRead + cacheWrite` 且 `reasoningTokens ≤ output`，即推理是输出的子集，按 Pi 同样的方式拆出。TokenTracker 测试把 `reasoningTokens` 另加到总量上，与实际数据不符，未采用。
+- 去重：`entry.id + timestamp`，本机 95 条 Fork 复制记录内容一致，无撞键。
+- 目录：omp 读取 `PI_CODING_AGENT_DIR`、`PI_CODING_AGENT_SESSION_DIR`、`PI_CONFIG_DIR`（默认 `.omp`），默认 agent 目录的数据在 `$XDG_DATA_HOME/omp` 存在时改放该处；另有配置档 `OMP_PROFILE`/`PI_PROFILE`（`~/.omp/profiles/<名>/agent`），本次未支持。
+- 验证：Adapter 读取本机全部记录的五项 Token 与对话数和独立 Python 求和逐项一致；首次全量约 0.9 s，无新增时增量约 30 ms。

@@ -44,7 +44,7 @@
 - `provider`、`model` 取消息自身字段。对话数：每条 assistant 消息 `conversations: 1`，包括失败/中止、Token 全 0 的回复（本机约 300 条）；这类记录省略 `model`（契约：只计对话的记录）与费用，保留 `provider`。
 - `reportedCostUsd`：只在 `usage.cost.total > 0` 且有 Token 时填写。Pi 对订阅通道和未配置价格的自定义 Provider 都写 0，无法区分免费与未知（本机几乎全部为 0，只有 `xai` 有正值），按契约「未知不能记 0」交给 Host 按 LiteLLM 估价。
 - Pi 只在 `message_end` 后整条追加，不存在流式部分用量，不需要 Claude 那样的等待窗口。
-- `completeLines` 等辅助函数与 Claude、Codex 读取器各有一份：Adapter 之间、Adapter 与 host-runtime 之间不能共享（ADR-0002、边界规则），oh-my-pi 接入时同样自带一份。
+- `completeLines` 等辅助函数与 Claude、Codex 读取器各有一份：Adapter 之间、Adapter 与 host-runtime 之间不能共享（ADR-0002、边界规则），oh-my-pi 的读取器（`packages/adapters/omp/src/omp-native-usage.ts`）同样自带一份。
 
 ## 技术债
 

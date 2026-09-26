@@ -41,16 +41,27 @@
 
 | 文件 | 职责 |
 |---|---|
-| `omp-adapter.ts`（约 2550 行） | `OmpAdapter`（inspect/open/subagents.readSnapshot）与 Session 实现（Turn、交互、配置、权限模式重启、`/compact`、子代理事件） |
+| `omp-adapter.ts`（约 2580 行） | `OmpAdapter`（inspect/open/subagents.readSnapshot）与 Session 实现（Turn、交互、配置、权限模式重启、`/compact`、子代理事件） |
 | `omp-rpc-session.ts`（约 1720 行） | `OmpRpcSession`：子进程、握手、命令关联与超时、事件归一化为 `OmpTurnEvent`、子代理帧解析 |
 | `omp-protocol.ts` | `OmpFrameDecoder`（`rpc_chunk` 重组）与通知类型 |
 | `omp-history.ts` / `omp-session-file.ts` / `omp-last-turn-rollback.ts` | 历史映射；读取 Session JSONL 与文件头 cwd 校验；回滚上一轮 |
 | `omp-subagent-lifecycle.ts` | Turn 内 `subagentDelegation` 状态机 |
+| `omp-native-usage.ts` | `nativeUsage.read` 的原生用量解析，规则见下文「原生用量」 |
 | `omp-permission-modes.ts` / `omp-model-catalog.ts` / `omp-usage.ts` / `omp-slash-commands.ts` / `omp-tool-presentation.ts` | 权限目录；Model Ref；Usage；实时命令；工具项投影 |
+
+## 原生用量（`omp-native-usage.ts`）
+
+跨层契约见 `.atw/spec/host-runtime/node/local-usage.md`。规则与 Pi（`.atw/spec/adapter-pi/node/index.md`「原生用量」）相同的部分：递归列出 `*.jsonl`、不跟随符号链接；游标 `{ formatVersion: 1, files: { [相对路径]: { ino, offset, session: {id, cwd?} | null } } }`，任一项不合法整个作废；inode 变化或文件变短从头读；只读到最后一个 `\n`；`dedupeKey = message:<entry.id>:<entry.timestamp>`；每条带 `usage` 的 assistant 消息计 1 次对话（含 Token 全 0 的失败/中止回复，这类省略 `model` 与费用）；Provider、Model 取消息自身字段；`reportedCostUsd` 只在 `usage.cost.total > 0` 且有 Token 时填写。`completeLines` 等辅助函数自带一份，不 import `adapter-pi`。OMP 特有（`test/omp-native-usage.test.ts` 固化；本机 501 个文件、14,087 条去重记录与独立脚本逐项一致）：
+
+- 目录（`ompSessionsDirectory`，对照 omp 二进制内的 `agentSubdir(…, "sessions", "data")`）：`PI_CODING_AGENT_SESSION_DIR` → `path.resolve(PI_CODING_AGENT_DIR)/sessions` → 默认 `~/${PI_CONFIG_DIR || ".omp"}/agent/sessions`；agent 目录等于默认值且 `$XDG_DATA_HOME/omp` 是目录时改为 `$XDG_DATA_HOME/omp/sessions`。omp 对 `PI_CODING_AGENT_DIR` 只做 `path.resolve`、不展开 `~`，这里对两个变量都同样处理。**不支持**配置档 `OMP_PROFILE`/`PI_PROFILE`（`~/.omp/profiles/<名>/agent`）。
+- 文件头：第一行通常是固定宽度、原地改写的标题行 `{type:"title", …, pad}`（偏移不变，游标仍有效），会话头 `type:"session"` 在其后；旧文件可能没有标题行。读取时跳过开头的 `title` 行，第一条非标题行不是带 `id` 的会话头 → `session: null`，整个文件不计。**会话头尚未完整写入时返回 `offset: 0`**（下次从头再判断），不要把「只读到标题行」记成非会话文件。
+- 子代理：保存在以父会话文件名（不含 `.jsonl`）命名的目录里，`<会话文件名>/<代理名>.jsonl`，可再嵌套 `<代理名>/<子代理名>.jsonl`；会话头带自己的 `id`，少数带 `parentSession`。本机约占 oh-my-pi Token 的 31%。
+- 推理字段是 `usage.reasoningTokens`（不是 Pi 的 `reasoning`），同样是 `output` 的子集（本机所有记录 `totalTokens = input + output + cacheRead + cacheWrite`）→ `reasoning = min(reasoningTokens, output)`，`output − reasoning`。不要像 TokenTracker 测试那样把它另加到总量上。
+- `nativeUsage.read` 在 `OmpAdapter` 内经 `#usageAbort` / `#usageRequests` 收口：关闭后返回 `invalidState`，`close()` 先 abort 再等待进行中的读取；读取抛错映射为 `{ code: "unavailable", retryable: true }`。读取用 `{ ...process.env, ...options.environment }`，与会话启动的环境一致。
 
 ## 技术债
 
-- `omp-adapter.ts` 约 2550 行、`omp-rpc-session.ts` 约 1720 行，远超 800 行审视线，新能力放独立的 `omp-*.ts` 模块。
+- `omp-adapter.ts` 约 2580 行、`omp-rpc-session.ts` 约 1720 行，远超 800 行审视线，新能力放独立的 `omp-*.ts` 模块。
 - 能力声明在 Session 构造函数（约 633 行）和 `#inspectCwd`（约 2277 行）两处重复，改动需同步。
 
 ## 改动前检查清单
@@ -66,7 +77,7 @@
 
 ```bash
 npx vitest run --config tests/vitest.config.js packages/adapters/omp/test/omp-rpc-session.test.ts packages/adapters/omp/test/omp-adapter.test.ts
-npx vitest run --config tests/vitest.config.js packages/adapters/omp/test/omp-protocol.test.ts packages/adapters/omp/test/omp-session-file.test.ts packages/adapters/omp/test/omp-slash-commands.test.ts
+npx vitest run --config tests/vitest.config.js packages/adapters/omp/test/omp-protocol.test.ts packages/adapters/omp/test/omp-session-file.test.ts packages/adapters/omp/test/omp-slash-commands.test.ts packages/adapters/omp/test/omp-native-usage.test.ts
 # 原生 ask 回归（macOS/Linux，本地模型夹具，不调用外部模型；未设置时跳过）
 CODEXHOST_OMP_NATIVE_TEST_COMMAND=$(which omp) \
   npx vitest run --config tests/vitest.config.js packages/adapters/omp/test/omp-native-ask.test.ts

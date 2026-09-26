@@ -15,6 +15,8 @@ import {
   type HarnessError,
   type HarnessInspection,
   type HarnessModelRef,
+  type HarnessNativeUsageBatch,
+  type HarnessNativeUsageCapability,
   type HarnessOutput,
   type HarnessResult,
   type HarnessSession,
@@ -84,6 +86,7 @@ import {
 } from "./omp-slash-commands.js";
 import { mapOmpSnapshot, resolveOmpForkBoundary, type OmpSessionHistory } from "./omp-history.js";
 import { rollbackOmpLastTurn } from "./omp-last-turn-rollback.js";
+import { readOmpNativeUsage } from "./omp-native-usage.js";
 import {
   OmpRpcFaultError,
   OmpRpcSession,
@@ -2198,8 +2201,31 @@ export class OmpAdapter implements HarnessAdapter {
       }
     },
   };
+  readonly nativeUsage = Object.freeze({
+    read: (cursor: JsonValue | null): Promise<HarnessResult<HarnessNativeUsageBatch>> => {
+      if (this.#closePromise) {
+        return Promise.resolve({ ok: false, error: invalidState("Omp Adapter is closed") });
+      }
+      const request = readOmpNativeUsage(this.#environment, cursor, this.#usageAbort.signal)
+        .then((value): HarnessResult<HarnessNativeUsageBatch> => ({ ok: true, value }))
+        .catch((): HarnessResult<HarnessNativeUsageBatch> => ({
+          ok: false,
+          error: {
+            code: "unavailable",
+            message: "Omp usage records could not be read; check storage access and retry",
+            retryable: true,
+          },
+        }))
+        .finally(() => this.#usageRequests.delete(request));
+      this.#usageRequests.add(request);
+      return request;
+    },
+  } satisfies HarnessNativeUsageCapability);
   readonly #closeTimeoutMs: number;
   readonly #createTransport: OmpAdapterDependencies["createTransport"];
+  readonly #environment: NodeJS.ProcessEnv;
+  readonly #usageAbort = new AbortController();
+  readonly #usageRequests = new Set<Promise<unknown>>();
   readonly #inspectionCache = new Map<string, Extract<HarnessInspection, { status: "ready" }>>();
   readonly #inspectionInFlight = new Map<string, Promise<HarnessInspection>>();
   readonly #inspections = new Set<OmpTurnTransport>();
@@ -2215,6 +2241,7 @@ export class OmpAdapter implements HarnessAdapter {
     },
   ) {
     this.#createTransport = dependencies.createTransport;
+    this.#environment = { ...process.env, ...options.environment };
     this.#closeTimeoutMs = options.closeTimeoutMs ?? 2_000;
     this.#toolOutputLimit = options.toolOutputLimit ?? DEFAULT_TOOL_OUTPUT_LIMIT;
   }
@@ -2535,7 +2562,9 @@ export class OmpAdapter implements HarnessAdapter {
 
   close(): Promise<void> {
     if (!this.#closePromise) {
+      this.#usageAbort.abort();
       this.#closePromise = Promise.all([
+        ...this.#usageRequests,
         ...[...this.#inspections].map((transport) => transport.close()),
         ...[...this.#sessions].map((session) => session.close()),
       ]).then(() => undefined);
