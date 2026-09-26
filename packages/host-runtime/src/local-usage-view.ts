@@ -4,6 +4,7 @@ import {
   type LocalUsageQueryResult,
 } from "@codexhost/shared-contracts";
 
+import { usageCostUsd, type ModelPricer } from "./local-usage-pricing.js";
 import type { LocalUsageBucket } from "./local-usage-store.js";
 
 type DailyRow = LocalUsageQueryResult["daily"][number];
@@ -104,6 +105,7 @@ export function buildLocalUsageView(input: {
   timeZone: string;
   now: number;
   harnessName(harnessId: string): string;
+  price: ModelPricer;
 }): LocalUsageQueryResult {
   const localDate = localDateFormatter(input.timeZone);
   const today = localDate(input.now);
@@ -117,6 +119,7 @@ export function buildLocalUsageView(input: {
     reasoning: 0,
     conversations: 0,
   };
+  let estimatedCostUsd = 0;
   const models = new Set<string>();
   const harnesses = new Map<string, { totalTokens: number; models: Set<string> }>();
   const daily = new Map<string, DailyRow>();
@@ -133,6 +136,10 @@ export function buildLocalUsageView(input: {
     totals.output += bucket.output;
     totals.reasoning += bucket.reasoning;
     totals.conversations += bucket.conversations;
+    // Priced now rather than when read, so updated prices apply to earlier usage too.
+    estimatedCostUsd +=
+      bucket.reportedCostUsd ??
+      (bucket.model === null ? 0 : usageCostUsd(bucket, input.price(bucket.model)));
     let row = daily.get(date);
     if (!row) {
       row = { date, total: 0, input: 0, output: 0, cacheRead: 0, reasoning: 0, conversations: 0 };
@@ -159,6 +166,7 @@ export function buildLocalUsageView(input: {
   return {
     range,
     totals,
+    estimatedCostUsd,
     models: models.size,
     harnesses: [...harnesses]
       .map(([harnessId, harness]) => ({

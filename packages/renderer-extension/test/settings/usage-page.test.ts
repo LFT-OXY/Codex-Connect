@@ -83,6 +83,7 @@ const result: LocalUsageQueryResult = {
     reasoning: 0,
     conversations: 1,
   },
+  estimatedCostUsd: 0,
   models: 1,
   harnesses: [],
   daily: [],

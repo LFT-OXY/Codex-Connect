@@ -90,6 +90,28 @@ const PREVIOUS_FRIDAY = response("msg-c", "2026-02-27T10:00:00.000Z", {
   output: 1_000_000,
 });
 
+// USD per million tokens, as LiteLLM lists them per token.
+function litellmPrices(prices: Record<string, [number, number, number, number]>) {
+  return Object.fromEntries(
+    Object.entries(prices).map(([model, [input, output, cacheRead, cacheWrite]]) => [
+      model,
+      {
+        mode: "chat",
+        input_cost_per_token: input / 1e6,
+        output_cost_per_token: output / 1e6,
+        cache_read_input_token_cost: cacheRead / 1e6,
+        cache_creation_input_token_cost: cacheWrite / 1e6,
+      },
+    ]),
+  );
+}
+const PRICES = litellmPrices({
+  "claude-synthetic-1": [1, 2, 0.1, 1],
+  "claude-synthetic-2": [2, 4, 0.2, 2],
+});
+// SUNDAY_NIGHT_UTC at claude-synthetic-1 plus MONDAY at claude-synthetic-2.
+const WEEK_COST = (1 + 5 * 2 + 100 * 0.1 + 10 * 1 + (2 * 2 + 7 * 4 + 200 * 0.2 + 20 * 2)) / 1e6;
+
 async function fixture() {
   const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "codexhost-local-usage-")));
   cleanup.push(() => rm(root, { recursive: true, force: true }));
@@ -116,7 +138,12 @@ async function fixture() {
   } as unknown as HarnessAdapter;
   const directory = path.join(root, "data", "usage");
   const service = (
-    options: { others?: [string, HarnessAdapter][]; names?: () => Record<string, string> } = {},
+    options: {
+      others?: [string, HarnessAdapter][];
+      names?: () => Record<string, string>;
+      fetchLiteLlm?: () => Promise<unknown>;
+      now?: () => number;
+    } = {},
   ) =>
     new LocalUsageService({
       adapters: new Map([["claude-code", adapter], ...(options.others ?? [])]),
@@ -125,8 +152,9 @@ async function fixture() {
           harnessPluginDescriptorSchema.parse({ id, name, version: "0.0.0" }),
         ),
       directory,
+      fetchLiteLlm: options.fetchLiteLlm ?? (async () => PRICES),
       diagnose: () => undefined,
-      now: () => NOW,
+      now: options.now ?? (() => NOW),
     });
   return { project, mainFile, read, service };
 }
@@ -199,10 +227,121 @@ describe("Local Usage query", () => {
     expect(total.totals.total).toBe(345 + 1_000_004);
     expect(total.daily.map((row) => row.date)).toEqual(["2026-03-02", "2026-02-27"]);
 
+    expect(week.estimatedCostUsd).toBeCloseTo(WEEK_COST, 12);
+    expect(day.estimatedCostUsd).toBe(0);
+    // PREVIOUS_FRIDAY: 4 input and one million output tokens of claude-synthetic-1.
+    expect(total.estimatedCostUsd).toBeCloseTo(4 / 1e6 + 2 + WEEK_COST, 12);
+
     const custom = await result(service, { kind: "custom", from: "2026-02-27", to: "2026-03-01" });
     expect(custom.range).toEqual({ from: "2026-02-27", to: "2026-03-01" });
     expect(custom.totals.total).toBe(1_000_004);
     expect(f.read).toHaveBeenCalledOnce();
+  });
+
+  it("prices usage when queried, so price updates change earlier costs", async () => {
+    const f = await fixture();
+    let now = NOW;
+    const fetchLiteLlm = vi.fn(async () => PRICES);
+    const service = f.service({ fetchLiteLlm, now: () => now });
+    expect(
+      (await result(service, { kind: "week" }, "Asia/Shanghai", true)).estimatedCostUsd,
+    ).toBeCloseTo(WEEK_COST, 12);
+
+    // A day later LiteLLM doubles every price; the counted usage is not read again.
+    fetchLiteLlm.mockResolvedValue(
+      litellmPrices({ "claude-synthetic-1": [2, 4, 0.2, 2], "claude-synthetic-2": [4, 8, 0.4, 4] }),
+    );
+    now += 25 * 3_600_000;
+    const custom = { kind: "custom", from: "2026-03-02", to: "2026-03-08" };
+    // Expired prices answer at once while new ones load in the background.
+    expect((await result(service, custom)).estimatedCostUsd).toBeCloseTo(WEEK_COST, 12);
+    await vi.waitFor(async () => {
+      expect((await result(service, custom)).estimatedCostUsd).toBeCloseTo(2 * WEEK_COST, 12);
+    });
+    expect(fetchLiteLlm).toHaveBeenCalledTimes(2);
+    expect(f.read).toHaveBeenCalledOnce();
+  });
+
+  it("does not wait for LiteLLM once prices are loaded", async () => {
+    const f = await fixture();
+    let now = NOW;
+    const fetchLiteLlm = vi.fn(async () => PRICES);
+    const service = f.service({ fetchLiteLlm, now: () => now });
+    await result(service, { kind: "week" }, "Asia/Shanghai", true);
+
+    fetchLiteLlm.mockImplementation(() => new Promise(() => undefined));
+    now += 25 * 3_600_000;
+    const custom = { kind: "custom", from: "2026-03-02", to: "2026-03-08" };
+    expect((await result(service, custom)).estimatedCostUsd).toBeCloseTo(WEEK_COST, 12);
+    expect((await result(service, custom)).estimatedCostUsd).toBeCloseTo(WEEK_COST, 12);
+    await vi.waitFor(() => expect(fetchLiteLlm).toHaveBeenCalledTimes(2));
+    // One refresh at a time, even while it hangs.
+    expect((await result(service, custom)).estimatedCostUsd).toBeCloseTo(WEEK_COST, 12);
+    expect(fetchLiteLlm).toHaveBeenCalledTimes(2);
+  });
+
+  it("costs 0 for unpriced models and prefers a Harness's own reported cost", async () => {
+    const f = await fixture();
+    const record = (dedupeKey: string, model: string, reportedCostUsd?: number) => ({
+      dedupeKey,
+      occurredAt: Date.parse("2026-03-03T08:00:00.000Z"),
+      nativeSessionId: "s",
+      model,
+      tokens: { input: 1_000_000, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 },
+      conversations: 1,
+      ...(reportedCostUsd === undefined ? {} : { reportedCostUsd }),
+    });
+    const pi = {
+      harnessId: "pi",
+      nativeUsage: {
+        read: vi.fn(async () => ({
+          ok: true,
+          value: {
+            records: [
+              record("unknown", "house-model-without-price"),
+              record("reported", "claude-synthetic-1", 0.25),
+              // A subscription route reports zero; it is not priced at API rates.
+              record("subscription", "claude-synthetic-2", 0),
+            ],
+            cursor: null,
+          },
+        })),
+      },
+    } as unknown as HarnessAdapter;
+
+    const week = await result(f.service({ others: [["pi", pi]] }), { kind: "week" }, "UTC", true);
+
+    expect(week.totals.total).toBe(229 + 3_000_000);
+    expect(week.estimatedCostUsd).toBeCloseTo(
+      (2 * 2 + 7 * 4 + 200 * 0.2 + 20 * 2) / 1e6 + 0.25,
+      12,
+    );
+  });
+
+  it("uses bundled prices when LiteLLM is unreachable", async () => {
+    const f = await fixture();
+    await writeFile(
+      f.mainFile,
+      lines(
+        response(
+          "msg-opus",
+          "2026-03-02T10:00:00.000Z",
+          {
+            input: 1_000_000,
+            cacheRead: 0,
+            cacheWrite: 0,
+            output: 1_000_000,
+          },
+          "claude-opus-5",
+        ),
+      ),
+    );
+    const offline = f.service({ fetchLiteLlm: () => Promise.reject(new Error("offline")) });
+
+    const week = await result(offline, { kind: "week" }, "UTC", true);
+
+    // Anthropic's published Opus 5 price: $5 / $25 per million tokens.
+    expect(week.estimatedCostUsd).toBeCloseTo(30, 9);
   });
 
   it("reports rolling 7- and 30-day totals, the active-day average and usage history", async () => {

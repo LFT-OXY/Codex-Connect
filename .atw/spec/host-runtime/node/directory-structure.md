@@ -23,7 +23,7 @@
 | 原生 Subagent 物化为子 Thread | `external-subagent-threads.ts` |
 | Harness 命令（`/xxx`） | `external-command-routing.ts`、`live-command-catalog-cache.ts` |
 | 会话导入 | `harness-session-import.ts`（`HarnessSessionImporter`）、`session-import-requests.ts`（包括旧 DSH RPC 别名） |
-| Local Usage（`codexhost/usage/query`） | `local-usage-service.ts`（请求、共享读取）、`local-usage-store.ts`（校验、去重、半小时桶、持久化）、`local-usage-view.ts`（纯函数：周期与时区归日），见 [local-usage.md](./local-usage.md) |
+| Local Usage（`codexhost/usage/query`） | `local-usage-service.ts`（请求、共享读取）、`local-usage-store.ts`（校验、去重、半小时桶、持久化）、`local-usage-view.ts`（纯函数：周期与时区归日、查询时计价）、`local-usage-pricing.ts`（纯函数：模型名匹配、费用公式、手工覆盖与别名表）、`local-usage-prices.ts`（价格来源回退与 `model-prices.json` 缓存）、`local-usage-price-snapshot.ts`（生成文件，由 `tools/update-model-price-snapshot.mjs` 刷新），见 [local-usage.md](./local-usage.md) |
 | 插件加载与目录 | `harness-plugin-loader.ts`、`harness-plugin-registry.ts`、`plugin-files.ts`、`installed-harness-plugins.ts`，详见 [plugin-loading.md](./plugin-loading.md) |
 | 插件级设置、账号额度 | `harness-launch-settings.ts`（每个插件一个文件）、`harness-accounts.ts` |
 | 委派（Delegation） | `harness-delegation-coordinator.ts`，控制面是 `delegation-control-server.ts`（127.0.0.1 + Bearer token）和 `delegation-control-registry.ts`；CLI 是 `delegation-cli*.ts`；Skill 安装在 `delegation-skill.ts`（写到 `~/.agents` 和 `~/.claude`）；官方 Turn 的 `#` 提及改写在 `delegation-mention-rewrite.ts` |

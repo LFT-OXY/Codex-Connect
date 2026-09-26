@@ -60,6 +60,7 @@ describe("Local Usage query contracts", () => {
     const result = {
       range: { from: "2026-03-01", to: "2026-03-07" },
       totals: { ...tokens, conversations: 2 },
+      estimatedCostUsd: 0.125,
       models: 1,
       harnesses: [{ harnessId: "claude-code", name: "Claude Code", totalTokens: 10, models: 1 }],
       daily: [
@@ -103,6 +104,17 @@ describe("Local Usage query contracts", () => {
         totals: { ...result.totals, total: 11 },
       }).success,
     ).toBe(false);
+    for (const estimatedCostUsd of [
+      -0.01,
+      Number.POSITIVE_INFINITY,
+      Number.NaN,
+      "0.1",
+      undefined,
+    ]) {
+      expect(localUsageQueryResultSchema.safeParse({ ...result, estimatedCostUsd }).success).toBe(
+        false,
+      );
+    }
     expect(
       localUsageQueryResultSchema.safeParse({
         ...result,

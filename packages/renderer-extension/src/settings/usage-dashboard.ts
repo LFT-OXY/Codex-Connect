@@ -31,6 +31,13 @@ export function formatUsageTokens(value: number): string {
   return text;
 }
 
+const USD = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+
+/** Estimated Cost with cents; a nonzero amount below a cent is not shown as zero. */
+export function formatUsageCost(value: number): string {
+  return value > 0 && value < 0.005 ? `<${USD.format(0.01)}` : USD.format(value);
+}
+
 function sharePercent(part: number, total: number): number {
   return total > 0 ? (part / total) * 100 : 0;
 }
@@ -209,9 +216,17 @@ export function renderLocalUsage(
   );
   total.dataset.usageTotal = "";
   total.title = result.totals.total.toLocaleString();
+  const cost = element(
+    document,
+    "span",
+    "text-base leading-6 font-medium tabular-nums",
+    formatUsageCost(result.estimatedCostUsd),
+  );
+  cost.dataset.usageCost = "";
   summary.append(
     element(document, "span", "text-xs text-settings-muted", messages.totalTokens),
     total,
+    cost,
     element(
       document,
       "span",

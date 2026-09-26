@@ -112,6 +112,7 @@ describe("Renderer fixed Model request client", () => {
         reasoning: 0,
         conversations: 1,
       },
+      estimatedCostUsd: 0,
       models: 1,
       harnesses: [{ harnessId: "claude-code", name: "Claude Code", totalTokens: 3, models: 1 }],
       daily: [],

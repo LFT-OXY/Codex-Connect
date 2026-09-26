@@ -15,6 +15,8 @@ import {
   saveLocalUsageState,
   type LocalUsageState,
 } from "./local-usage-store.js";
+import { loadModelPrices } from "./local-usage-prices.js";
+import { createModelPricer, type ModelPricer } from "./local-usage-pricing.js";
 import { buildLocalUsageView } from "./local-usage-view.js";
 
 /**
@@ -24,12 +26,16 @@ import { buildLocalUsageView } from "./local-usage-view.js";
 export class LocalUsageService {
   #state: LocalUsageState | null = null;
   #reading: Promise<LocalUsageState> | null = null;
+  #prices: { price: ModelPricer; refreshAfter: number } | null = null;
+  #loadingPrices: Promise<ModelPricer> | null = null;
 
   constructor(
     private readonly input: {
       adapters: ReadonlyMap<string, HarnessAdapter>;
       descriptors: () => readonly HarnessPluginDescriptor[];
       directory: string;
+      /** LiteLLM's public price table as JSON. */
+      fetchLiteLlm: () => Promise<unknown>;
       diagnose: (error: unknown) => void;
       now?: () => number;
     },
@@ -42,18 +48,20 @@ export class LocalUsageService {
     }
     try {
       // A period switch during a refresh waits for it rather than answering from older totals.
-      const state = params.data.refresh
-        ? await this.#read()
-        : await (this.#reading ?? this.#state ?? this.#initial());
+      const [state, price] = await Promise.all([
+        params.data.refresh ? this.#read() : (this.#reading ?? this.#state ?? this.#initial()),
+        this.#price(),
+      ]);
       const descriptors = this.input.descriptors();
       const result = localUsageQueryResultSchema.parse(
         buildLocalUsageView({
           buckets: state.buckets,
           period: params.data.period,
           timeZone: params.data.timeZone,
-          now: this.input.now?.() ?? Date.now(),
+          now: this.#now(),
           harnessName: (harnessId) =>
             descriptors.find(({ id }) => id === harnessId)?.name ?? harnessId,
+          price,
         }),
       );
       return { result: jsonValueSchema.parse(result) };
@@ -61,6 +69,38 @@ export class LocalUsageService {
       this.input.diagnose(error);
       return { error: { code: -32082, message: "Local usage could not be read" } };
     }
+  }
+
+  #now(): number {
+    return this.input.now?.() ?? Date.now();
+  }
+
+  /**
+   * Only the first load is awaited. Expired prices keep answering while newer ones load in the
+   * background, so an unreachable LiteLLM never delays a query. Concurrent loads are shared.
+   */
+  async #price(): Promise<ModelPricer> {
+    if (!this.#prices) return this.#loadPrices();
+    if (this.#now() >= this.#prices.refreshAfter) void this.#loadPrices();
+    return this.#prices.price;
+  }
+
+  #loadPrices(): Promise<ModelPricer> {
+    this.#loadingPrices ??= loadModelPrices({
+      directory: this.input.directory,
+      now: this.#now(),
+      fetchLiteLlm: this.input.fetchLiteLlm,
+      diagnose: this.input.diagnose,
+    })
+      .then(({ prices, refreshAfter }) => {
+        const price = createModelPricer(prices);
+        this.#prices = { price, refreshAfter };
+        return price;
+      })
+      .finally(() => {
+        this.#loadingPrices = null;
+      });
+    return this.#loadingPrices;
   }
 
   /** Answers from persisted totals when present; reads native records only the first time. */

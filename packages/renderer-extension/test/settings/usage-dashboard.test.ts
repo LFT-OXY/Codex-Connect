@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { localUsageQueryResultSchema } from "@codexhost/shared-contracts";
 
-import { formatUsageTokens, renderLocalUsage } from "../../src/settings/usage-dashboard.js";
+import {
+  formatUsageCost,
+  formatUsageTokens,
+  renderLocalUsage,
+} from "../../src/settings/usage-dashboard.js";
 import { rendererSettingsMessages } from "../../src/settings/localization.js";
 
 class FakeElement {
@@ -62,6 +66,7 @@ const result = {
     reasoning: 0,
     conversations: 12,
   },
+  estimatedCostUsd: 1234.567,
   models: 3,
   harnesses: [
     { harnessId: "claude-code", name: "Claude Code", totalTokens: 1_000_000, models: 2 },
@@ -107,11 +112,27 @@ describe("Local Usage dashboard", () => {
     expect(formatUsageTokens(6_035_507_564)).toBe("6.04B");
   });
 
+  it("formats Estimated Cost in US dollars with cents", () => {
+    expect(formatUsageCost(0)).toBe("$0.00");
+    expect(formatUsageCost(0.004)).toBe("<$0.01");
+    expect(formatUsageCost(0.005)).toBe("$0.01");
+    expect(formatUsageCost(1234.567)).toBe("$1,234.57");
+  });
+
   it("shows the range total, Harness shares, cards and newest-first daily rows", () => {
     const root = render(result);
     const total = all(root).find((element) => element.dataset.usageTotal !== undefined);
     expect(total?.textContent).toBe("1.23M");
     expect(total?.title).toBe((1_234_567).toLocaleString());
+    // The cost sits directly below the total, above the range dates, with no pricing caveat.
+    const summary = all(root).find((element) => element.children.includes(total as FakeElement));
+    expect(summary?.children.map((element) => element.textContent)).toEqual([
+      "Token 总数",
+      "1.23M",
+      "$1,234.57",
+      "2026-03-02 – 2026-03-08",
+    ]);
+    expect(summary?.children[2]?.dataset.usageCost).toBe("");
     expect(text(root)).toContain("Token 总数");
     expect(text(root)).toContain("2026-03-02 – 2026-03-08");
 

@@ -94,6 +94,7 @@ import {
 } from "@codexhost/shared-contracts";
 import { executeExternalThreadFork } from "./external-thread-fork.js";
 import { isSessionImportRequest, SessionImportRequests } from "./session-import-requests.js";
+import { fetchLiteLlmPrices } from "./local-usage-prices.js";
 import { defaultLocalUsageDirectory } from "./local-usage-store.js";
 import { LocalUsageService } from "./local-usage-service.js";
 import {
@@ -2416,6 +2417,7 @@ export class AppServerHost {
       adapters: this.#externalAdapters,
       descriptors: () => this.#pluginDescriptors,
       directory: defaultLocalUsageDirectory(this.#options.environment ?? process.env),
+      fetchLiteLlm: fetchLiteLlmPrices,
       diagnose: (error) => this.#diagnose(error),
     });
     await this.#writer.json(rpcEnvelope(request, await this.#localUsage.handle(request)));

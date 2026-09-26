@@ -26,6 +26,7 @@ const { outputFiles } = await build({
             return {
               range: { from: "2026-03-02", to: "2026-03-08" },
               totals: { total: 6035507564, input: 1200000, cacheRead: 5800000000, cacheWrite: 220000000, output: 14307564, reasoning: 0, conversations: 4331 },
+              estimatedCostUsd: 4213.58,
               models: 4,
               harnesses: [
                 { harnessId: "claude-code", name: "Claude Code", totalTokens: 5035507564, models: 3 },
@@ -85,6 +86,7 @@ test("expands the settings dialog for the usage page and shows the dashboard", a
   expect(defaultWidth).toBeLessThan(1600 - 32);
 
   await expect(page.locator("[data-usage-total]")).toHaveText("6.04B");
+  await expect(page.locator("[data-usage-cost]")).toHaveText("$4,213.58");
   await expect(page.locator("[data-usage-harness-card]")).toHaveCount(3);
   await expect(page.locator("[data-usage-day]")).toHaveCount(2);
   const segment = await page.locator('[data-usage-segment="claude-code"]').boundingBox();

@@ -91,6 +91,11 @@ export const localUsageQueryResultSchema = z.strictObject({
         totals.input + totals.cacheRead + totals.cacheWrite + totals.output + totals.reasoning,
       { path: ["total"], message: "Total must equal its parts" },
     ),
+  /**
+   * Estimated Cost of the range in USD: Harness-reported cost where present, otherwise public
+   * model prices applied when queried. Models without a price add 0.
+   */
+  estimatedCostUsd: z.number().nonnegative().finite(),
   /** Distinct Models with usage in the range, across Harnesses. */
   models: countSchema,
   harnesses: z

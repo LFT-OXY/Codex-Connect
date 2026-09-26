@@ -49,6 +49,8 @@ const bucketSchema = z.strictObject({
   output: countSchema,
   reasoning: countSchema,
   conversations: countSchema,
+  /** Present only in buckets of records whose Harness reported their cost. */
+  reportedCostUsd: z.number().nonnegative().finite().optional(),
 });
 
 const localUsageStateSchema = z.strictObject({
@@ -106,19 +108,23 @@ export async function loadLocalUsageState(
   }
 }
 
-export async function saveLocalUsageState(
-  directory: string,
-  state: LocalUsageState,
-): Promise<void> {
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  const file = stateFile(directory);
+/** Replaces `file` in the usage directory atomically; readable by the owner only. */
+export async function writeUsageFile(file: string, value: unknown): Promise<void> {
+  await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
   const temporary = `${file}.${randomUUID()}.tmp`;
   try {
-    await writeFile(temporary, JSON.stringify(state), { mode: 0o600, flag: "wx" });
+    await writeFile(temporary, JSON.stringify(value), { mode: 0o600, flag: "wx" });
     await rename(temporary, file);
   } finally {
     await rm(temporary, { force: true });
   }
+}
+
+export async function saveLocalUsageState(
+  directory: string,
+  state: LocalUsageState,
+): Promise<void> {
+  await writeUsageFile(stateFile(directory), state);
 }
 
 function countedKey(dedupeKey: string): string {
@@ -127,6 +133,7 @@ function countedKey(dedupeKey: string): string {
 
 function bucketKey(
   bucket: Pick<LocalUsageBucket, "start" | "harnessId" | "provider" | "model" | "cwd">,
+  costReported: boolean,
 ): string {
   return JSON.stringify([
     bucket.start,
@@ -134,6 +141,7 @@ function bucketKey(
     bucket.provider,
     bucket.model,
     bucket.cwd,
+    costReported,
   ]);
 }
 
@@ -148,7 +156,12 @@ export function applyNativeUsageBatch(
 ): void {
   const { records, cursor } = nativeUsageBatchSchema.parse(batch);
   const counted = new Set(state.sources[harnessId]?.counted);
-  const buckets = new Map(state.buckets.map((bucket) => [bucketKey(bucket), bucket]));
+  const buckets = new Map(
+    state.buckets.map((bucket) => [
+      bucketKey(bucket, bucket.reportedCostUsd !== undefined),
+      bucket,
+    ]),
+  );
   for (const record of records) {
     const key = countedKey(record.dedupeKey);
     if (counted.has(key)) continue;
@@ -160,7 +173,8 @@ export function applyNativeUsageBatch(
       model: record.model ?? null,
       cwd: record.cwd ?? null,
     };
-    const id = bucketKey(identity);
+    // Reported and priced usage stay in separate buckets so each is costed its own way.
+    const id = bucketKey(identity, record.reportedCostUsd !== undefined);
     let bucket = buckets.get(id);
     if (!bucket) {
       bucket = {
@@ -171,6 +185,7 @@ export function applyNativeUsageBatch(
         output: 0,
         reasoning: 0,
         conversations: 0,
+        ...(record.reportedCostUsd === undefined ? {} : { reportedCostUsd: 0 }),
       };
       buckets.set(id, bucket);
       state.buckets.push(bucket);
@@ -181,6 +196,9 @@ export function applyNativeUsageBatch(
     bucket.output += record.tokens.output;
     bucket.reasoning += record.tokens.reasoning;
     bucket.conversations += record.conversations;
+    if (bucket.reportedCostUsd !== undefined) {
+      bucket.reportedCostUsd += record.reportedCostUsd ?? 0;
+    }
   }
   state.sources[harnessId] = { cursor, counted: [...counted] };
 }
