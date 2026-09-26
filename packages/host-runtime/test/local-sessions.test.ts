@@ -13,6 +13,7 @@ import {
 } from "@codexhost/shared-contracts";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { codexNativeUsage } from "../src/codex-runtime/codex-native-usage.js";
 import { ExternalThreadRepository } from "../src/external-thread-repository.js";
 import { LocalUsageService, localSessionMappings } from "../src/local-usage-service.js";
 import { SessionImportRequests } from "../src/session-import-requests.js";
@@ -149,9 +150,11 @@ async function fixture() {
   const descriptors = () => [
     harnessPluginDescriptorSchema.parse({ id: "claude-code", name: "Claude Code", version: "0" }),
   ];
-  const service = (others: [string, HarnessAdapter][] = []) =>
+  const codexHome = path.join(root, "codex");
+  const service = (others: [string, HarnessAdapter][] = [], officialCodex = false) =>
     new LocalUsageService({
       adapters: new Map<string, HarnessAdapter>([["claude-code", claude], ...others]),
+      ...(officialCodex ? { officialCodexUsage: codexNativeUsage(codexHome) } : {}),
       descriptors,
       mappings: async () => localSessionMappings(await repository.list()),
       directory: path.join(root, "data", "usage"),
@@ -165,7 +168,7 @@ async function fixture() {
     repository,
     diagnose: () => undefined,
   });
-  return { root, cwd, mainFile, repository, service, imports };
+  return { root, cwd, mainFile, codexHome, repository, service, imports };
 }
 
 async function sessions(service: LocalUsageService, refresh = true) {
@@ -257,6 +260,57 @@ describe("Local Sessions query", () => {
       lastActivityAt: Date.parse("2026-03-02T11:21:00.000Z"),
       usage: { totalTokens: 1_430 + 2 },
     });
+  });
+
+  it("lists official Codex Sessions as their own Threads with child threads folded in", async () => {
+    const f = await fixture();
+    const day = path.join(f.codexHome, "sessions", "2026", "03", "03");
+    await mkdir(day, { recursive: true });
+    const PARENT = "01a0cbbd-4cfb-7771-ad32-a4ecf7f134f9";
+    const CHILD = "01a0cbbd-4cfb-7771-ad32-a4ecf7f134fa";
+    const rollout = (id: string, time: string, output: number, extra = {}) =>
+      lines(
+        {
+          timestamp: time,
+          type: "session_meta",
+          payload: { id, cwd: f.cwd, model_provider: "openai", ...extra },
+        },
+        { timestamp: time, type: "turn_context", payload: { turn_id: id, cwd: f.cwd, model: "m" } },
+        {
+          timestamp: time,
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: { input_tokens: 10, output_tokens: output },
+              last_token_usage: { input_tokens: 10, output_tokens: output },
+            },
+          },
+        },
+      );
+    await writeFile(
+      path.join(day, `rollout-2026-03-03T10-00-00-${PARENT}.jsonl`),
+      rollout(PARENT, "2026-03-03T10:00:00.000Z", 5),
+    );
+    await writeFile(
+      path.join(day, `rollout-2026-03-03T10-05-00-${CHILD}.jsonl`),
+      rollout(CHILD, "2026-03-03T10:05:00.000Z", 7, { forked_from_id: PARENT }),
+    );
+    const { view } = await sessions(f.service([], true));
+    const codex = view.sessions.filter(({ harnessId }) => harnessId === "codex");
+    expect(codex).toEqual([
+      expect.objectContaining({
+        nativeSessionId: PARENT,
+        threadId: PARENT,
+        resumable: true,
+        subagents: 1,
+        turns: 1,
+        lastActivityAt: Date.parse("2026-03-03T10:05:00.000Z"),
+        usage: { totalTokens: 15 + 17, estimatedCostUsd: 0 },
+      }),
+    ]);
+    expect(view.harnesses).toEqual(expect.arrayContaining([{ harnessId: "codex", name: "Codex" }]));
+    expect(view.foldedSubagents).toBe(2);
   });
 
   it("keeps listing other Harnesses' Sessions when one source fails", async () => {

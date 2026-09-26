@@ -2,11 +2,20 @@ import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
-import type {
-  HarnessNativeUsageBatch,
-  HarnessNativeUsageProgress,
-  HarnessNativeUsageCapability,
-  HarnessNativeUsageRecord,
+import {
+  emptyNativeSessionActivity,
+  isFileEditTool,
+  nativeSessionEdits,
+  parseNativeSessionActivity,
+  recordNativeSessionActivity,
+  recordNativeSessionEdit,
+  startNativeSessionTurn,
+  type HarnessNativeSessionSummary,
+  type HarnessNativeUsageBatch,
+  type HarnessNativeUsageProgress,
+  type HarnessNativeUsageCapability,
+  type HarnessNativeUsageRecord,
+  type NativeSessionActivity,
 } from "@codexhost/harness-adapter";
 import type { JsonValue } from "@codexhost/shared-contracts";
 import { z } from "zod";
@@ -14,6 +23,13 @@ import { z } from "zod";
 const NEWLINE = 0x0a;
 const ROLLOUT_DIRECTORIES = ["sessions", "archived_sessions"] as const;
 const ROLLOUT_NAME = /^rollout-.*\.jsonl$/u;
+/** Codex keeps the names of its threads here, one `{ id, thread_name }` line per rename. */
+const SESSION_INDEX = "session_index.jsonl";
+const TITLE_MAX_LENGTH = 120;
+/** Every rollout line starts with its timestamp, so activity is read without parsing the line. */
+const LINE_TIMESTAMP = /^\{"timestamp":"([^"]+)"/u;
+/** Edits made through the code-mode `exec` tool name the editing tool in its script. */
+const EXEC_TOOL_CALL = /\btools\.([A-Za-z_]+)\s*\(/gu;
 const countSchema = z.number().int().nonnegative().safe();
 
 /** Codex's cumulative token usage: cached and cache-written input are part of `input`. */
@@ -36,12 +52,22 @@ const rolloutStateSchema = z.strictObject({
   model: z.string().nullable(),
   cwd: z.string().nullable(),
   total: codexUsageSchema.nullable(),
+  /** The Session this rollout forked from or was spawned by. */
+  parentSessionId: z.string().nullable(),
+  activity: z.custom<NativeSessionActivity>((value) => parseNativeSessionActivity(value) !== null),
+  /** Turns are counted from turn contexts once the rollout has any; before that, from prompts. */
+  turnContexts: z.boolean(),
+  turnId: z.string().nullable(),
 });
 
 type RolloutState = z.infer<typeof rolloutStateSchema>;
 
 const codexUsageCursorSchema = z.strictObject({
-  formatVersion: z.literal(1),
+  // Version 1 had no Session summaries; such a cursor reads everything again.
+  formatVersion: z.literal(2),
+  /** Read position in the session index, and the thread names read from it so far. */
+  index: z.strictObject({ ino: z.string(), offset: countSchema }).nullable(),
+  titles: z.record(z.string(), z.string()),
   /** Keyed by path relative to CODEX_HOME. */
   files: z.record(
     z.string(),
@@ -72,7 +98,52 @@ function text(value: unknown): string | null {
 }
 
 function emptyState(): RolloutState {
-  return { sessionId: null, historyId: null, provider: null, model: null, cwd: null, total: null };
+  return {
+    sessionId: null,
+    historyId: null,
+    provider: null,
+    model: null,
+    cwd: null,
+    total: null,
+    parentSessionId: null,
+    activity: emptyNativeSessionActivity(),
+    turnContexts: false,
+    turnId: null,
+  };
+}
+
+function cleanTitle(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const title = value.replaceAll(/\s+/gu, " ").trim();
+  if (!title) return null;
+  const characters = [...title];
+  return characters.length <= TITLE_MAX_LENGTH
+    ? title
+    : `${characters
+        .slice(0, TITLE_MAX_LENGTH - 1)
+        .join("")
+        .trimEnd()}…`;
+}
+
+/** A forked rollout names its source; a spawned subagent names the thread that spawned it. */
+function parentSessionId(meta: Record<string, unknown>): string | null {
+  const { source } = meta;
+  const spawn =
+    isRecord(source) && isRecord(source.subagent) && isRecord(source.subagent.thread_spawn)
+      ? text(source.subagent.thread_spawn.parent_thread_id)
+      : null;
+  return text(meta.forked_from_id) ?? text(meta.parent_thread_id) ?? spawn;
+}
+
+/** Tool names a function or custom tool call uses, including those in a code-mode script. */
+function calledTools(payload: Record<string, unknown>): string[] {
+  if (payload.type !== "function_call" && payload.type !== "custom_tool_call") return [];
+  const name = text(payload.name)?.replace(/^functions[.:/]/u, "");
+  if (!name) return [];
+  if (name !== "exec") return [name];
+  return typeof payload.input === "string"
+    ? [...payload.input.matchAll(EXEC_TOOL_CALL)].flatMap((match) => (match[1] ? [match[1]] : []))
+    : [];
 }
 
 function codexUsage(value: unknown): CodexUsage | null {
@@ -213,11 +284,18 @@ async function readRolloutUsage(
   let consumed = input.start;
   for await (const { line, end } of completeLines(file, input.start, input.end)) {
     consumed = end;
-    // Skip parsing the large message and tool lines that cannot change usage or its context.
+    const timestamp = LINE_TIMESTAMP.exec(line)?.[1];
+    const time = timestamp === undefined ? Number.NaN : Date.parse(timestamp);
+    if (Number.isFinite(time)) recordNativeSessionActivity(state.activity, time);
+    // Skip parsing the large message and tool lines that cannot change usage, its context, or the
+    // Session's turns and edits.
     if (
       !line.includes('"token_count"') &&
       !line.includes('"turn_context"') &&
-      !line.includes('"session_meta"')
+      !line.includes('"session_meta"') &&
+      !line.includes('"user_message"') &&
+      !line.includes('"function_call"') &&
+      !line.includes('"custom_tool_call"')
     ) {
       continue;
     }
@@ -236,11 +314,22 @@ async function readRolloutUsage(
         state.sessionId = id;
         state.provider = text(payload.model_provider);
         state.cwd = text(payload.cwd);
+        state.parentSessionId = parentSessionId(payload);
       }
       state.historyId = id ?? state.historyId;
     } else if (entry.type === "turn_context") {
       state.model = text(payload.model) ?? state.model;
       state.cwd = text(payload.cwd) ?? state.cwd;
+      const turnId = text(payload.turn_id);
+      // Codex can repeat a turn's context within the turn.
+      if (turnId === null || turnId !== state.turnId) startNativeSessionTurn(state.activity);
+      state.turnContexts = true;
+      state.turnId = turnId;
+    } else if (entry.type === "event_msg" && payload.type === "user_message") {
+      // Rollouts written before turn contexts existed count each prompt as a turn.
+      if (!state.turnContexts) startNativeSessionTurn(state.activity);
+    } else if (entry.type === "response_item") {
+      if (calledTools(payload).some(isFileEditTool)) recordNativeSessionEdit(state.activity);
     } else if (
       entry.type === "event_msg" &&
       payload.type === "token_count" &&
@@ -253,6 +342,77 @@ async function readRolloutUsage(
   return consumed;
 }
 
+function sessionSummary(
+  state: RolloutState,
+  titles: Readonly<Record<string, string>>,
+): HarnessNativeSessionSummary | null {
+  const { sessionId, activity } = state;
+  if (!sessionId || activity.firstActivityAt === null || activity.lastActivityAt === null) {
+    return null;
+  }
+  const title = titles[sessionId];
+  return {
+    // Keyed by Session rather than file, so an archived rollout replaces its earlier summary.
+    key: sessionId,
+    nativeSessionId: sessionId,
+    ...(state.parentSessionId ? { parentSessionId: state.parentSessionId } : {}),
+    ...(title ? { title } : {}),
+    ...(state.cwd ? { cwd: state.cwd } : {}),
+    ...(state.model ? { model: state.model } : {}),
+    firstActivityAt: activity.firstActivityAt,
+    lastActivityAt: activity.lastActivityAt,
+    activeMs: activity.activeMs,
+    turns: activity.turns,
+    edits: nativeSessionEdits(activity),
+  };
+}
+
+/** Reads thread names added to the session index since `previous`; returns the renamed IDs. */
+async function readSessionIndex(
+  codexHome: string,
+  previous: CodexUsageCursor,
+  next: CodexUsageCursor,
+): Promise<Set<string>> {
+  const file = path.join(codexHome, SESSION_INDEX);
+  const renamed = new Set<string>();
+  let metadata;
+  try {
+    metadata = await stat(file, { bigint: true });
+  } catch (error) {
+    if (missing(error)) return renamed;
+    throw error;
+  }
+  const ino = metadata.ino.toString();
+  const size = Number(metadata.size);
+  const continued =
+    previous.index && previous.index.ino === ino && previous.index.offset <= size
+      ? previous.index
+      : null;
+  if (continued) next.titles = { ...previous.titles };
+  let offset = continued?.offset ?? 0;
+  for await (const { line, end } of completeLines(file, offset, size)) {
+    offset = end;
+    let entry: unknown;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!isRecord(entry)) continue;
+    const id = text(entry.id);
+    const title = cleanTitle(entry.thread_name);
+    if (!id || !title || next.titles[id] === title) continue;
+    next.titles[id] = title;
+    renamed.add(id);
+  }
+  next.index = { ino, offset };
+  if (!continued) {
+    // A rewritten index may have dropped names; every Session is summarized again.
+    for (const id of Object.keys(previous.titles)) renamed.add(id);
+  }
+  return renamed;
+}
+
 /** Reads usage appended to Codex rollouts under `sessions` and `archived_sessions` since `cursor`. */
 export async function readCodexNativeUsage(
   codexHome: string,
@@ -260,11 +420,15 @@ export async function readCodexNativeUsage(
   onProgress?: (progress: HarnessNativeUsageProgress) => void,
 ): Promise<HarnessNativeUsageBatch> {
   const previous: CodexUsageCursor = codexUsageCursorSchema.safeParse(cursor).data ?? {
-    formatVersion: 1,
+    formatVersion: 2,
+    index: null,
+    titles: {},
     files: {},
   };
-  const next: CodexUsageCursor = { formatVersion: 1, files: {} };
+  const next: CodexUsageCursor = { formatVersion: 2, index: null, titles: {}, files: {} };
   const records: HarnessNativeUsageRecord[] = [];
+  const sessions: HarnessNativeSessionSummary[] = [];
+  const renamed = await readSessionIndex(codexHome, previous, next);
   const files = await rolloutFiles(codexHome);
   onProgress?.({ processed: 0, total: files.length });
   for (const [index, relative] of files.entries()) {
@@ -284,13 +448,21 @@ export async function readCodexNativeUsage(
         records,
       );
       next.files[relative] = { ino, offset, state };
+      if (
+        !resume ||
+        offset > resume.offset ||
+        (state.sessionId !== null && renamed.has(state.sessionId))
+      ) {
+        const session = sessionSummary(state, next.titles);
+        if (session) sessions.push(session);
+      }
     } catch (error) {
       // Codex may archive or delete a rollout while it is being listed.
       if (!missing(error)) throw error;
     }
     onProgress?.({ processed: index + 1, total: files.length });
   }
-  return { records, cursor: next };
+  return { records, sessions, cursor: next };
 }
 
 /**

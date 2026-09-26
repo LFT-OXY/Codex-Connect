@@ -299,7 +299,11 @@ export function createSessionsSettingsPage(
           if (!controller.signal.aborted) {
             renderRecovery(
               session,
-              threadId === null ? resumeFailure(error, messages) : messages.openFailed,
+              threadId === null
+                ? resumeFailure(error, messages)
+                : session.harnessId === "codex"
+                  ? messages.codexOpenFailed
+                  : messages.openFailed,
               threadId !== null,
             );
           }

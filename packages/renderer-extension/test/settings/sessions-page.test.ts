@@ -251,6 +251,27 @@ describe("Sessions settings page", () => {
     expect(importHarnessSession).toHaveBeenCalledTimes(2);
   });
 
+  it("opens an official Codex Session as the Codex Thread of the same ID", async () => {
+    const importHarnessSession = vi.fn();
+    const openThread = vi.fn().mockRejectedValueOnce(new Error("not in sidebar"));
+    const codex = session({
+      harnessId: "codex",
+      nativeSessionId: "01a0cbbd-4cfb-7771-ad32-a4ecf7f134f9",
+      threadId: "01a0cbbd-4cfb-7771-ad32-a4ecf7f134f9" as HostThreadId,
+    });
+    const { find, content } = mount(
+      { queryLocalSessions: vi.fn().mockResolvedValue(view([codex])), importHarnessSession },
+      { openThread },
+    );
+    await vi.waitFor(() =>
+      expect(find((element) => element.dataset.sessionAction === "resume")).toBeDefined(),
+    );
+    find((element) => element.dataset.sessionAction === "resume").fire("click");
+    await vi.waitFor(() => expect(text(content)).toContain(messages.sessions.codexOpenFailed));
+    expect(openThread).toHaveBeenCalledWith(codex.threadId, expect.anything());
+    expect(importHarnessSession).not.toHaveBeenCalled();
+  });
+
   it("disables Resume for a Harness that cannot open existing Sessions", async () => {
     const { find } = mount({
       queryLocalSessions: vi.fn().mockResolvedValue(view([session({ resumable: false })])),

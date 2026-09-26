@@ -5,6 +5,7 @@ import type {
 } from "@codexhost/harness-adapter";
 import type { StoredThreadRecordV1 } from "@codexhost/mapping-store";
 import {
+  hostThreadIdSchema,
   jsonValueSchema,
   localSessionsQueryParamsSchema,
   localSessionsQueryResultSchema,
@@ -139,9 +140,13 @@ export class LocalUsageService {
           price,
           harnessName: (harnessId) => this.#harnessName(harnessId),
           project: (cwd) => projects.get(cwd),
+          // An official Codex Session is a Codex Thread of the same ID, never mapped.
           threadId: (harnessId, nativeSessionId) =>
-            threads.get(JSON.stringify([harnessId, nativeSessionId])),
+            harnessId === OFFICIAL_CODEX_ID
+              ? hostThreadIdSchema.safeParse(nativeSessionId).data
+              : threads.get(JSON.stringify([harnessId, nativeSessionId])),
           resumable: (harnessId) =>
+            harnessId === OFFICIAL_CODEX_ID ||
             Boolean(this.input.adapters.get(harnessId)?.sessionImport?.resolveCandidate),
           failedHarnessIds: this.#failed,
         }),

@@ -1,6 +1,6 @@
 # 会话
 
-「设置 → 会话」列出本机各 Harness 的历史主会话及其用量，并可在 Codex Connect 中恢复。会话与用量来自同一次原生记录读取（见[用量统计](local-usage.md)），数据来源与解析归属见 [ADR-0001](../adr/0001-local-usage-from-native-session-records.md)、[ADR-0002](../adr/0002-native-usage-parsing-lives-in-adapters.md)。当前接入 Claude Code。
+「设置 → 会话」列出本机各 Harness 的历史主会话及其用量，并可在 Codex Connect 中恢复。会话与用量来自同一次原生记录读取（见[用量统计](local-usage.md)），数据来源与解析归属见 [ADR-0001](../adr/0001-local-usage-from-native-session-records.md)、[ADR-0002](../adr/0002-native-usage-parsing-lives-in-adapters.md)。当前接入 Claude Code 与官方 Codex。
 
 ## 页面
 
@@ -17,6 +17,7 @@
 - 未映射的会话先做[会话导入](../architecture/harness-session-import.md)（只登记映射，不复制 Transcript），再打开新 Thread；打开时 Host 以 `resume` 恢复原生会话并继续。
 - 同一时刻只恢复一个会话。Harness 不支持导入时「恢复」不可用，悬停说明原因。
 - 恢复失败时列表上方显示原因（会话已不在本机、会话正在其他地方运行、Harness 不支持、其他失败）、项目路径与「复制项目路径」，以及再试一次的按钮；映射已建立但 Thread 打开失败时按钮为「重试打开」，重试只打开已映射的 Thread，不再导入。
+- 官方 Codex 会话本身就是 Codex Desktop 的 Thread（ID 相同），「恢复」直接打开它，不做导入。Codex Desktop 侧栏默认列出交互来源（终端 CLI 与 Desktop）的 Thread，打开方式是在侧栏中找到该 Thread 并点击；侧栏只加载最近的 Thread（默认 50 个），更早的会话或 `codex exec` 产生的会话可能不在侧栏中，此时显示「侧栏中未找到该 Codex Thread」与重试。
 - Claude Code 无法可靠判断会话是否正被其他客户端使用，恢复前应先在终端或其他客户端关闭该会话。
 
 ## 口径
@@ -26,6 +27,7 @@
 - 子代理折叠：子代理会话不单独成行，其 Token 与费用计入主会话；轮数、编辑数与活跃时长只统计主会话自身。
 - 费用与用量页同价计算：每个会话按其各模型的用量在查询时计价，Harness 自带费用时直接采用。
 - Claude Code：标题取最新的 `custom-title`（用户命名），否则取最新的 `ai-title`（Claude 生成），不回退到首条消息；轮数计主会话中不是 `isMeta`、不全是工具结果、有文本且不是中断提示（`[Request interrupted by user…`）或任务通知（`<task-notification>`）的用户消息；模型取最后一条回复的模型（忽略 `<synthetic>`）；`<session>/subagents/*.jsonl` 是该会话的子代理。
+- Codex：标题取 `$CODEX_HOME/session_index.jsonl` 中该 Thread 最新的 `thread_name`（重命名后下次读取即更新）；轮数按 `turn_context` 计（同一 `turn_id` 重复出现只算一次），rollout 中没有 `turn_context` 时按用户消息（`user_message`）计；编辑数计调用过 `apply_patch` 等编辑类工具的回合，包括在 `exec` 代码模式脚本中调用的；模型与工作目录取最近一次 `turn_context`。Fork 出的会话（`forked_from_id`）与子代理线程（`parent_thread_id` 或 `source.subagent.thread_spawn.parent_thread_id`）按父子关系折叠进主线程，可多层；父线程不在本机时单独成行。Fork 开头复制的父会话历史也算作 Fork 自身的轮数，但 Fork 折叠后不单独显示。会话归档（移到 `archived_sessions/`）后仍是同一行。
 
 ## 读取与缓存
 

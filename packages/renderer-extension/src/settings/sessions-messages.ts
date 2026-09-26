@@ -33,6 +33,8 @@ export const sessionsEnglish = {
   resumeUnsupported: "This harness cannot open existing sessions in Codex Connect.",
   openFailed:
     "The session was added to Codex Connect, but the thread could not be opened. Try opening it again or find it in the sidebar.",
+  codexOpenFailed:
+    "The Codex thread was not found in the sidebar. The sidebar loads recent threads only; find it there or try again.",
   retryOpen: "Retry opening",
   retrying: "Opening…",
   copyProjectPath: "Copy project path",
@@ -74,6 +76,8 @@ export const sessionsChinese: SessionsMessages = {
   resumeBusy: "该会话正在其他地方运行，请先在那里关闭后重试。",
   resumeUnsupported: "该 Harness 不支持在 Codex Connect 中打开已有会话。",
   openFailed: "会话已加入 Codex Connect，但 Thread 打开失败。可以重试打开，或在侧栏中找到它。",
+  codexOpenFailed:
+    "侧栏中未找到该 Codex Thread。侧栏只加载最近的 Thread，可以在侧栏中找到它或重试。",
   retryOpen: "重试打开",
   retrying: "打开中…",
   copyProjectPath: "复制项目路径",

@@ -309,4 +309,90 @@ describe("Codex native usage", () => {
     const result = await codexNativeUsage(path.join(root, "missing")).read(null);
     expect(result).toMatchObject({ ok: true, value: { records: [] } });
   });
+  it("summarizes each rollout with its thread name, turns, edits and parent", async () => {
+    const f = await fixture();
+    await writeFile(
+      path.join(f.codexHome, "session_index.jsonl"),
+      lines(
+        { id: PARENT, thread_name: "First  name", updated_at: "2026-03-02T10:00:00Z" },
+        { id: PARENT, thread_name: "Parent\nthread", updated_at: "2026-03-02T10:02:00Z" },
+      ),
+    );
+    const parentFile = path.join(f.day, rolloutName("2026-03-02T10-00-00", PARENT));
+    await writeFile(
+      parentFile,
+      lines(
+        ...PARENT_LINES,
+        // Turn 2 edits a file directly; the repeated context is still turn 2.
+        {
+          timestamp: "2026-03-02T10:01:06.000Z",
+          type: "response_item",
+          payload: { type: "custom_tool_call", name: "apply_patch", input: SECRET },
+        },
+        turnContext("2026-03-02T10:01:00.000Z", "gpt-synthetic-2", "/work/other"),
+        // An hour idle, then turn 3 edits through a code-mode script.
+        turnContext("2026-03-02T11:01:07.000Z", "gpt-synthetic-2", "/work/other"),
+        {
+          timestamp: "2026-03-02T11:01:08.000Z",
+          type: "response_item",
+          payload: {
+            type: "custom_tool_call",
+            name: "exec",
+            input: `await tools.apply_patch("${SECRET}")`,
+          },
+        },
+      ),
+    );
+    await writeFile(
+      path.join(f.day, rolloutName("2026-03-02T10-30-00", FORK)),
+      lines(
+        meta(FORK, "2026-03-02T10:30:00.000Z", {
+          source: { subagent: { thread_spawn: { parent_thread_id: PARENT, depth: 1 } } },
+        }),
+        // A rollout from before turn contexts counts prompts.
+        {
+          timestamp: "2026-03-02T10:30:01.000Z",
+          type: "event_msg",
+          payload: { type: "user_message", message: SECRET },
+        },
+      ),
+    );
+    const first = await f.read();
+    expect(JSON.stringify(first.sessions)).not.toContain(SECRET);
+    expect(first.sessions).toEqual([
+      {
+        key: PARENT,
+        nativeSessionId: PARENT,
+        title: "Parent thread",
+        cwd: "/work/other",
+        model: "gpt-synthetic-2",
+        firstActivityAt: Date.parse("2026-03-02T10:00:00.000Z"),
+        lastActivityAt: Date.parse("2026-03-02T11:01:08.000Z"),
+        activeMs: 66_000 + 1_000,
+        turns: 3,
+        edits: 2,
+      },
+      expect.objectContaining({ key: FORK, parentSessionId: PARENT, turns: 1, edits: 0 }),
+    ]);
+    // Nothing new: nothing to replace.
+    expect((await f.read(first.cursor)).sessions).toEqual([]);
+
+    // A rename is a new summary even though the rollout did not change.
+    await appendFile(
+      path.join(f.codexHome, "session_index.jsonl"),
+      lines({ id: PARENT, thread_name: "Renamed", updated_at: "2026-03-02T12:00:00Z" }),
+    );
+    const renamed = await f.read(first.cursor);
+    expect(renamed.sessions).toEqual([
+      expect.objectContaining({ key: PARENT, title: "Renamed", turns: 3 }),
+    ]);
+
+    // Archiving moves the rollout; its summary keeps the Session's key.
+    const archived = path.join(f.codexHome, "archived_sessions");
+    await mkdir(archived);
+    await rename(parentFile, path.join(archived, path.basename(parentFile)));
+    expect((await f.read(renamed.cursor)).sessions).toEqual([
+      expect.objectContaining({ key: PARENT, title: "Renamed", turns: 3, edits: 2 }),
+    ]);
+  });
 });
