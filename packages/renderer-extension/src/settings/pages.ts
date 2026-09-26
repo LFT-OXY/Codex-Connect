@@ -39,6 +39,7 @@ export type {
   RendererConnectionHostSnapshot,
   RendererConnectionSnapshot,
 } from "./connections-page.js";
+import { isWindowsRenderer, rendererUserAgentData } from "./renderer-platform.js";
 import {
   RendererUpdateRequestTimeoutError,
   runBoundedRendererUpdateRequest,
@@ -47,23 +48,6 @@ import {
 export const CODEXHOST_GITHUB_REPOSITORY_URL = "https://github.com/LFT-OXY/Codex-Connect";
 export const CODEXHOST_RELEASES_LATEST_URL = `${CODEXHOST_GITHUB_REPOSITORY_URL}/releases/latest`;
 export const CODEXHOST_NPM_MANUAL_UPDATE_COMMAND = "npm install -g @chinhae/codex-connect@latest";
-
-interface RendererUserAgentData {
-  readonly platform?: string;
-  readonly architecture?: string;
-  readonly bitness?: string;
-}
-
-function rendererUserAgentData(navigator: Navigator): RendererUserAgentData | undefined {
-  return (navigator as Navigator & { userAgentData?: RendererUserAgentData }).userAgentData;
-}
-
-function isWindowsRenderer(window: Window | null | undefined): boolean {
-  const navigator = window?.navigator;
-  if (!navigator) return false;
-  const identity = `${rendererUserAgentData(navigator)?.platform ?? ""} ${navigator.platform ?? ""} ${navigator.userAgent}`;
-  return /windows|win32|win64/iu.test(identity);
-}
 
 function windowsInstallerDownloadUrl(window: Window | null | undefined, version: string): string {
   const navigator = window?.navigator;

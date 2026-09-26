@@ -10,6 +10,7 @@ type Messages = RendererSettingsMessages["sessions"];
 
 // Header and rows share these columns so the numbers line up.
 const STATS_CLASS = "grid w-[17rem] shrink-0 grid-cols-[4.5rem_4.5rem_3.5rem_3.5rem] text-right";
+const ACTIONS_WIDTH_CLASS = "w-52 shrink-0";
 export const SESSION_ACTION_CLASS = [
   "inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-xs",
   "border border-settings-border bg-settings-surface text-settings-text",
@@ -64,7 +65,7 @@ export function sessionColumnsHeader(document: Document, messages: Messages): HT
     element(document, "span", "min-w-0 flex-1"),
     stats,
     // Room for the row actions.
-    element(document, "span", "w-40 shrink-0"),
+    element(document, "span", ACTIONS_WIDTH_CLASS),
   );
   return header;
 }
@@ -140,7 +141,7 @@ export function renderSessionRow(
   const actionArea = element(
     document,
     "div",
-    "flex w-40 shrink-0 items-center justify-end gap-1.5",
+    `flex ${ACTIONS_WIDTH_CLASS} items-center justify-end gap-1.5`,
   );
   if (session.running === true) {
     const running = element(document, "span", "text-xs text-settings-muted", messages.running);

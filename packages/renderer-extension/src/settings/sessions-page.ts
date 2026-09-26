@@ -22,6 +22,8 @@ import {
   sessionColumnsHeader,
   sessionTitle,
 } from "./sessions-list.js";
+import { isWindowsRenderer } from "./renderer-platform.js";
+import { sessionResumeCommand } from "./session-resume-command.js";
 import { createSessionFilters, filterSessions } from "./sessions-filters.js";
 import { usageBar } from "./usage-dashboard.js";
 
@@ -74,6 +76,7 @@ export function createSessionsSettingsPage(
     icon: "sessions",
     mount(context: RendererSettingsPageMountContext) {
       const document = context.content.ownerDocument;
+      const shell = isWindowsRenderer(document.defaultView) ? "powershell" : "posix";
       const header = document.createElement("div");
       header.className = "flex items-center justify-between gap-4";
       const heading = document.createElement("h2");
@@ -224,7 +227,11 @@ export function createSessionsSettingsPage(
             const resume = resumeButton(document, messages);
             resume.addEventListener("click", () => void resumeSession(session));
             resumeButtons.set(sessionKey(session), { button: resume, session });
-            const row = renderSessionRow(document, session, settingsMessages, [resume]);
+            const command = sessionResumeCommand(session, shell);
+            const row = renderSessionRow(document, session, settingsMessages, [
+              resume,
+              ...(command ? [copyCommandButton(command)] : []),
+            ]);
             row.setAttribute("role", "listitem");
             list.append(row);
           }
@@ -269,30 +276,45 @@ export function createSessionsSettingsPage(
         renderControls();
       }
 
-      const copyButton = (text: string): HTMLButtonElement => {
+      /** Copies `text`, briefly showing whether it worked in place of the label. */
+      const copyButton = (
+        text: string,
+        action: string,
+        labels: { idle: string; copied: string; failed: string },
+      ): HTMLButtonElement => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = SESSION_ACTION_CLASS;
-        button.dataset.sessionAction = "copy-project-path";
+        button.dataset.sessionAction = action;
         const setLabel = (label: string): void => {
           button.replaceChildren(createRendererSettingsIcon("copy", 13), label);
         };
         const feedback = (label: string): void => {
           setLabel(label);
-          document.defaultView?.setTimeout(() => setLabel(messages.copyProjectPath), 2_000);
+          document.defaultView?.setTimeout(() => setLabel(labels.idle), 2_000);
         };
-        setLabel(messages.copyProjectPath);
+        setLabel(labels.idle);
         button.addEventListener("click", () => {
           const clipboard = document.defaultView?.navigator.clipboard;
           if (!clipboard) {
-            feedback(messages.pathCopyFailed);
+            feedback(labels.failed);
             return;
           }
           void clipboard.writeText(text).then(
-            () => feedback(messages.pathCopied),
-            () => feedback(messages.pathCopyFailed),
+            () => feedback(labels.copied),
+            () => feedback(labels.failed),
           );
         });
+        return button;
+      };
+
+      const copyCommandButton = (command: string): HTMLButtonElement => {
+        const button = copyButton(command, "copy-command", {
+          idle: messages.copyCommand,
+          copied: messages.commandCopied,
+          failed: messages.commandCopyFailed,
+        });
+        button.title = command;
         return button;
       };
 
@@ -317,7 +339,14 @@ export function createSessionsSettingsPage(
           cwd.className = "min-w-0 truncate text-xs";
           cwd.textContent = session.cwd;
           cwd.title = session.cwd;
-          actions.append(cwd, copyButton(session.cwd));
+          actions.append(
+            cwd,
+            copyButton(session.cwd, "copy-project-path", {
+              idle: messages.copyProjectPath,
+              copied: messages.pathCopied,
+              failed: messages.pathCopyFailed,
+            }),
+          );
         }
         const retry = document.createElement("button");
         retry.type = "button";

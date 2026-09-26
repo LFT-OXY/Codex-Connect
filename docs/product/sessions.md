@@ -23,6 +23,13 @@
 - 官方 Codex 会话本身就是 Codex Desktop 的 Thread（ID 相同），「恢复」直接打开它，不做导入。Codex Desktop 侧栏默认列出交互来源（终端 CLI 与 Desktop）的 Thread，打开方式是在侧栏中找到该 Thread 并点击；侧栏只加载最近的 Thread（默认 50 个），更早的会话或 `codex exec` 产生的会话可能不在侧栏中，此时显示「侧栏中未找到该 Codex Thread」与重试。
 - Claude Code 无法可靠判断会话是否正被其他客户端使用，恢复前应先在终端或其他客户端关闭该会话。
 
+## 复制指令
+
+- Claude Code、Codex、Pi、oh-my-pi 的行有「复制指令」，复制一行「进入项目文件夹 + 恢复命令」，粘进本机终端即可在该 Harness 自己的 CLI 中继续；悬停可看到完整指令，复制后按钮短暂显示「已复制」（失败时显示「复制失败」）。
+- 恢复命令：`claude --resume <id>`、`codex resume <id>`、`pi --session <id>`、`omp --resume <id>`。
+- macOS / Linux：`cd -- '<项目路径>' && <命令>`，路径用单引号包裹，其中的单引号写作 `'\''`，空格、`$`、反引号、非 ASCII 字符都原样保留。Windows：`Set-Location -LiteralPath '<项目路径>'; if ($?) { <命令> }`（兼容没有 `&&` 的 Windows PowerShell 5.1），单引号及 PowerShell 视同单引号的 `‘’‚‛` 写两遍。
+- 会话 ID 只接受字母、数字开头、由字母数字与 `.` `_` `:` `-` 组成、不超过 200 个字符的值（本机文件可能被其他程序改写，指令不能夹带参数或 shell 语法）；不符合、工作目录未知或含控制字符（如换行）时不提供复制指令。Hermes、DSH 不提供。
+
 ## 口径
 
 - 活跃时长：相邻两条带时间戳的记录间隔不超过 30 分钟的部分之和；更长的间隔视为闲置，不计入。

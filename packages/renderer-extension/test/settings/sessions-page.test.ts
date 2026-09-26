@@ -69,10 +69,13 @@ class FakeElement {
   }
 }
 
-function createDocument(clipboard?: { writeText: ReturnType<typeof vi.fn> }): Document {
+function createDocument(
+  clipboard?: { writeText: ReturnType<typeof vi.fn> },
+  userAgent = "Macintosh",
+): Document {
   const document = {
     createElement: (tagName: string) => new FakeElement(tagName, document),
-    defaultView: { navigator: { clipboard }, setTimeout: () => 0 },
+    defaultView: { navigator: { clipboard, userAgent, platform: "" }, setTimeout: () => 0 },
   } as unknown as Document;
   return document;
 }
@@ -130,6 +133,7 @@ function mount(
   options: {
     openThread?: ReturnType<typeof vi.fn>;
     clipboard?: { writeText: ReturnType<typeof vi.fn> };
+    userAgent?: string;
   } = {},
 ) {
   const openThread = options.openThread ?? vi.fn().mockResolvedValue(undefined);
@@ -138,7 +142,7 @@ function mount(
     () => client as RendererSessionsClient | null,
     openThread as unknown as RendererImportedThreadOpener,
   );
-  const content = new FakeElement("div", createDocument(options.clipboard));
+  const content = new FakeElement("div", createDocument(options.clipboard, options.userAgent));
   const context = {
     content,
     signal: new AbortController().signal,
@@ -277,6 +281,41 @@ describe("Sessions settings page", () => {
     await vi.waitFor(() => expect(text(content)).toContain(messages.sessions.codexOpenFailed));
     expect(openThread).toHaveBeenCalledWith(codex.threadId, expect.anything());
     expect(importHarnessSession).not.toHaveBeenCalled();
+  });
+
+  it("copies a command that resumes the Session in its CLI from the project folder", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const sessions = [
+      session({ cwd: "/work/my project" }),
+      session({
+        nativeSessionId: "dsh-1",
+        harnessId: "deepseek-harness" as LocalSession["harnessId"],
+      }),
+    ];
+    const posix = mount(
+      { queryLocalSessions: vi.fn().mockResolvedValue(view(sessions)) },
+      { clipboard: { writeText } },
+    );
+    const copy = () => posix.find(({ dataset }) => dataset.sessionAction === "copy-command");
+    await vi.waitFor(() => expect(copy()).toBeDefined());
+    copy().fire("click");
+    expect(writeText).toHaveBeenCalledWith(
+      "cd -- '/work/my project' && claude --resume 11111111-1111-4111-8111-111111111111",
+    );
+    await vi.waitFor(() => expect(text(copy())).toContain(messages.sessions.commandCopied));
+    // A Harness without a resume command in its CLI gets no button.
+    const dsh = posix.find(({ dataset }) => dataset.sessionId === "dsh-1");
+    expect(all(dsh).some(({ dataset }) => dataset.sessionAction === "copy-command")).toBe(false);
+
+    const windows = mount(
+      { queryLocalSessions: vi.fn().mockResolvedValue(view([session({ cwd: "C:\\work" })])) },
+      { clipboard: { writeText }, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+    );
+    await vi.waitFor(() =>
+      expect(windows.find(({ dataset }) => dataset.sessionAction === "copy-command").title).toBe(
+        "Set-Location -LiteralPath 'C:\\work'; if ($?) { claude --resume 11111111-1111-4111-8111-111111111111 }",
+      ),
+    );
   });
 
   it("disables Resume for a Harness that cannot open existing Sessions", async () => {
