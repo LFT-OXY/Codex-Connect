@@ -2,25 +2,49 @@ import { createReadStream } from "node:fs";
 import { opendir, stat } from "node:fs/promises";
 import path from "node:path";
 
-import type {
-  HarnessNativeUsageBatch,
-  HarnessNativeUsageProgress,
-  HarnessNativeUsageRecord,
-  HarnessNativeUsageTokens,
+import {
+  emptyNativeSessionActivity,
+  isFileEditTool,
+  nativeSessionEdits,
+  parseNativeSessionActivity,
+  recordNativeSessionActivity,
+  recordNativeSessionEdit,
+  startNativeSessionTurn,
+  type HarnessNativeSessionSummary,
+  type HarnessNativeUsageBatch,
+  type HarnessNativeUsageProgress,
+  type HarnessNativeUsageRecord,
+  type HarnessNativeUsageTokens,
+  type NativeSessionActivity,
 } from "@codexhost/harness-adapter";
 import type { JsonValue } from "@codexhost/shared-contracts";
 
-import { piSessionImportDirectory } from "./pi-session-import.js";
+import { piSessionImportDirectory, piUserMessageTitle } from "./pi-session-import.js";
 
 const NEWLINE = 0x0a;
+/** Entries write their own timestamp before any nested field, so the first one is the entry's. */
+const ENTRY_TIMESTAMP = /"timestamp":"([^"]+)"/u;
+/** Titles are for a list row; a first message used as one is shortened to a line. */
+const TITLE_MAX_LENGTH = 120;
 
 type PiSessionContext = {
   id: string;
   cwd?: string;
 };
 
+/** What a session file has said about its Session so far; never message text beyond its title. */
+type PiFileSummary = {
+  parentSessionId: string | null;
+  /** The latest `session_info` name. */
+  name: string | null;
+  firstMessage: string | null;
+  model: string | null;
+  activity: NativeSessionActivity;
+};
+
 type PiUsageCursor = {
-  formatVersion: 1;
+  // Version 1 had no Session summaries; such a cursor reads everything again.
+  formatVersion: 2;
   /** Keyed by path relative to the sessions directory. */
   files: Record<
     string,
@@ -29,6 +53,7 @@ type PiUsageCursor = {
       offset: number;
       /** The file's header, needed to attribute lines after `offset`; null when not a session. */
       session: PiSessionContext | null;
+      summary: PiFileSummary;
     }
   >;
 };
@@ -56,27 +81,56 @@ function sessionContext(value: unknown): PiSessionContext | null | undefined {
   return value.cwd === undefined ? { id: value.id } : { id: value.id, cwd: value.cwd };
 }
 
+function emptySummary(): PiFileSummary {
+  return {
+    parentSessionId: null,
+    name: null,
+    firstMessage: null,
+    model: null,
+    activity: emptyNativeSessionActivity(),
+  };
+}
+
+function nullableText(value: unknown): value is string | null {
+  return value === null || (typeof value === "string" && value.length > 0);
+}
+
+function fileSummary(value: unknown): PiFileSummary | undefined {
+  if (!isRecord(value)) return undefined;
+  const { parentSessionId, name, firstMessage, model } = value;
+  const activity = parseNativeSessionActivity(value.activity);
+  return nullableText(parentSessionId) &&
+    nullableText(name) &&
+    nullableText(firstMessage) &&
+    nullableText(model) &&
+    activity
+    ? { parentSessionId, name, firstMessage, model, activity }
+    : undefined;
+}
+
 /** A cursor that is not entirely valid reads everything again, like a missing one. */
 function parseCursor(value: JsonValue | null): PiUsageCursor {
-  const empty: PiUsageCursor = { formatVersion: 1, files: {} };
-  if (!isRecord(value) || value.formatVersion !== 1 || !isRecord(value.files)) return empty;
+  const empty: PiUsageCursor = { formatVersion: 2, files: {} };
+  if (!isRecord(value) || value.formatVersion !== 2 || !isRecord(value.files)) return empty;
   const files: PiUsageCursor["files"] = {};
   for (const [relative, file] of Object.entries(value.files)) {
     if (!isRecord(file)) return empty;
     const session = sessionContext(file.session);
+    const summary = fileSummary(file.summary);
     const { ino, offset } = file;
     if (
       typeof ino !== "string" ||
       typeof offset !== "number" ||
       !Number.isSafeInteger(offset) ||
       offset < 0 ||
-      session === undefined
+      session === undefined ||
+      summary === undefined
     ) {
       return empty;
     }
-    files[relative] = { ino, offset, session };
+    files[relative] = { ino, offset, session, summary };
   }
-  return { formatVersion: 1, files };
+  return { formatVersion: 2, files };
 }
 
 /**
@@ -144,6 +198,83 @@ function reportedCost(usage: Record<string, unknown>): number | undefined {
   return typeof total === "number" && Number.isFinite(total) && total > 0 ? total : undefined;
 }
 
+/**
+ * A subagent's header names its parent Session; a fork's names the parent's session file,
+ * `<time>_<id>.jsonl`.
+ */
+function parentSessionId(header: Record<string, unknown>): string | null {
+  const parent = text(header.parentSession);
+  if (!parent) return null;
+  if (!parent.endsWith(".jsonl")) return parent;
+  const name = path.basename(parent, ".jsonl");
+  return text(name.slice(name.lastIndexOf("_") + 1)) ?? null;
+}
+
+function shortTitle(value: string | null): string | null {
+  const title = value?.replaceAll(/\s+/gu, " ").trim();
+  if (!title) return null;
+  const characters = [...title];
+  return characters.length <= TITLE_MAX_LENGTH
+    ? title
+    : `${characters
+        .slice(0, TITLE_MAX_LENGTH - 1)
+        .join("")
+        .trimEnd()}…`;
+}
+
+/** Adds one entry after the header to its file's Session summary. */
+function summarize(summary: PiFileSummary, entry: Record<string, unknown>): void {
+  if (entry.type === "session_info") {
+    summary.name = typeof entry.name === "string" ? shortTitle(entry.name) : null;
+    return;
+  }
+  const message = isRecord(entry.message) ? entry.message : null;
+  if (entry.type !== "message" || !message) return;
+  if (message.role === "user") {
+    summary.firstMessage ??= shortTitle(piUserMessageTitle(message));
+    startNativeSessionTurn(summary.activity);
+  } else if (message.role === "assistant") {
+    summary.model = text(message.model) ?? summary.model;
+    if (
+      Array.isArray(message.content) &&
+      message.content.some(
+        (block) =>
+          isRecord(block) &&
+          block.type === "toolCall" &&
+          typeof block.name === "string" &&
+          isFileEditTool(block.name),
+      )
+    ) {
+      recordNativeSessionEdit(summary.activity);
+    }
+  }
+}
+
+function sessionSummary(
+  relative: string,
+  session: PiSessionContext | null,
+  summary: PiFileSummary,
+): HarnessNativeSessionSummary | null {
+  const { activity } = summary;
+  if (!session || activity.firstActivityAt === null || activity.lastActivityAt === null) {
+    return null;
+  }
+  const title = summary.name ?? summary.firstMessage;
+  return {
+    key: relative,
+    nativeSessionId: session.id,
+    ...(summary.parentSessionId ? { parentSessionId: summary.parentSessionId } : {}),
+    ...(title ? { title } : {}),
+    ...(session.cwd ? { cwd: session.cwd } : {}),
+    ...(summary.model ? { model: summary.model } : {}),
+    firstActivityAt: activity.firstActivityAt,
+    lastActivityAt: activity.lastActivityAt,
+    activeMs: activity.activeMs,
+    turns: activity.turns,
+    edits: nativeSessionEdits(activity),
+  };
+}
+
 function sessionHeader(entry: Record<string, unknown>): PiSessionContext | null {
   const id = text(entry.id);
   if (entry.type !== "session" || !id) return null;
@@ -185,16 +316,29 @@ function assistantRecord(
 
 async function readFileUsage(
   file: string,
-  input: { start: number; end: number; session: PiSessionContext | null },
+  input: { start: number; end: number; session: PiSessionContext | null; summary: PiFileSummary },
   records: HarnessNativeUsageRecord[],
 ): Promise<{ offset: number; session: PiSessionContext | null }> {
+  const { summary } = input;
   let { session } = input;
   let offset = input.start;
   for await (const { line, end } of completeLines(file, input.start, input.end)) {
     const first = offset === 0;
     offset = end;
-    // Skip parsing tool results and other large lines that cannot carry usage.
-    if (!first && !line.includes('"usage"')) continue;
+    const timestamp = ENTRY_TIMESTAMP.exec(line)?.[1];
+    const time = timestamp === undefined ? Number.NaN : Date.parse(timestamp);
+    if ((first || session) && Number.isFinite(time)) {
+      recordNativeSessionActivity(summary.activity, time);
+    }
+    // Skip parsing tool results and other large lines that cannot carry usage or a summary.
+    if (
+      !first &&
+      !line.includes('"usage"') &&
+      !line.includes('"role":"user"') &&
+      !line.includes('"session_info"')
+    ) {
+      continue;
+    }
     let entry: unknown;
     try {
       entry = JSON.parse(line);
@@ -204,9 +348,11 @@ async function readFileUsage(
     if (!isRecord(entry)) continue;
     if (first) {
       session = sessionHeader(entry);
+      summary.parentSessionId = session ? parentSessionId(entry) : null;
       continue;
     }
     if (!session) continue;
+    summarize(summary, entry);
     const record = assistantRecord(entry, session);
     if (record) records.push(record);
   }
@@ -222,8 +368,9 @@ export async function readPiNativeUsage(
 ): Promise<HarnessNativeUsageBatch> {
   const { directory } = piSessionImportDirectory(environment);
   const previous = parseCursor(cursor);
-  const next: PiUsageCursor = { formatVersion: 1, files: {} };
+  const next: PiUsageCursor = { formatVersion: 2, files: {} };
   const records: HarnessNativeUsageRecord[] = [];
+  const sessions: HarnessNativeSessionSummary[] = [];
   const files = await sessionFiles(directory, signal);
   onProgress?.({ processed: 0, total: files.length });
   for (const [index, file] of files.entries()) {
@@ -236,17 +383,22 @@ export async function readPiNativeUsage(
       const known = previous.files[relative];
       // A replaced or truncated file is read again; Host drops facts it already counted.
       const resume = known && known.ino === ino && known.offset <= size ? known : null;
+      const summary = resume ? structuredClone(resume.summary) : emptySummary();
       const { offset, session } = await readFileUsage(
         file,
-        { start: resume?.offset ?? 0, end: size, session: resume?.session ?? null },
+        { start: resume?.offset ?? 0, end: size, session: resume?.session ?? null, summary },
         records,
       );
-      next.files[relative] = { ino, offset, session };
+      next.files[relative] = { ino, offset, session, summary };
+      if (!resume || offset > resume.offset) {
+        const changed = sessionSummary(relative, session, summary);
+        if (changed) sessions.push(changed);
+      }
     } catch (error) {
       // Pi may delete a session file while it is being listed.
       if (!missing(error)) throw error;
     }
     onProgress?.({ processed: index + 1, total: files.length });
   }
-  return { records, cursor: next };
+  return { records, sessions, cursor: next };
 }

@@ -150,7 +150,8 @@ describe("Pi native usage", () => {
         reportedCostUsd: 0.25,
       },
     ]);
-    expect(JSON.stringify(batch)).not.toContain(SECRET);
+    // Usage never carries message text; an unnamed Session's title is its first message.
+    expect(JSON.stringify(batch.records)).not.toContain(SECRET);
   });
 
   it("counts every assistant message as a conversation, even without tokens", async () => {
@@ -317,5 +318,72 @@ describe("Pi native usage", () => {
       ),
     );
     expect((await f.read()).records).toEqual([]);
+  });
+  it("summarizes each session with its name, turns, edits and parent, continuing from the cursor", async () => {
+    const f = await fixture();
+    const editing = assistant("a-1", "u-1", { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 });
+    editing.message.content = [
+      { type: "toolCall", id: "t-1", name: "edit", arguments: { path: SECRET } } as never,
+    ];
+    await writeFile(
+      f.file,
+      lines(header(), user("u-1", null), editing, {
+        ...user("u-2", "a-1"),
+        timestamp: "2026-03-02T10:10:00.000Z",
+      }),
+    );
+    const subagents = path.join(f.project, SESSION, "tasks");
+    await mkdir(subagents, { recursive: true });
+    await writeFile(
+      path.join(subagents, `${FORK}.jsonl`),
+      lines({ ...header(FORK), parentSession: SESSION }, user("u-3", null)),
+    );
+    const forkFile = path.join(f.project, "2026-03-02T11-00-00-000Z_fork-id.jsonl");
+    await writeFile(
+      forkFile,
+      lines({ ...header("fork-id"), parentSession: f.file.replace(SESSION, `2026_${SESSION}`) }),
+    );
+    const first = await f.read();
+    expect(first.sessions).toEqual(
+      expect.arrayContaining([
+        {
+          key: path.relative(path.join(f.agent, "sessions"), f.file),
+          nativeSessionId: SESSION,
+          // Unnamed sessions are titled by their first message, as Session import does.
+          title: SECRET,
+          cwd: "/work/project",
+          model: "gpt-synthetic-1",
+          firstActivityAt: Date.parse("2026-03-02T09:59:00.000Z"),
+          lastActivityAt: Date.parse("2026-03-02T10:10:00.000Z"),
+          activeMs: 11 * 60_000,
+          turns: 2,
+          edits: 1,
+        },
+        expect.objectContaining({ nativeSessionId: FORK, parentSessionId: SESSION, turns: 1 }),
+        expect.objectContaining({ nativeSessionId: "fork-id", parentSessionId: SESSION }),
+      ]),
+    );
+    expect(first.sessions).toHaveLength(3);
+    expect((await f.read(first.cursor)).sessions).toEqual([]);
+
+    await appendFile(
+      f.file,
+      lines({
+        type: "session_info",
+        id: "i-1",
+        parentId: "u-2",
+        timestamp: "2026-03-02T10:11:00.000Z",
+        name: " Named ",
+      }),
+    );
+    expect((await f.read(first.cursor)).sessions).toEqual([
+      expect.objectContaining({
+        nativeSessionId: SESSION,
+        title: "Named",
+        turns: 2,
+        edits: 1,
+        activeMs: 12 * 60_000,
+      }),
+    ]);
   });
 });

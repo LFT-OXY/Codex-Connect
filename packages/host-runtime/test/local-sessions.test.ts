@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { ClaudeCodeAdapter } from "@codexhost/adapter-claude-code";
+import { PiAdapter } from "@codexhost/adapter-pi";
 import type { HarnessAdapter } from "@codexhost/harness-adapter";
 import { MappingStore } from "@codexhost/mapping-store";
 import {
@@ -311,6 +312,72 @@ describe("Local Sessions query", () => {
     ]);
     expect(view.harnesses).toEqual(expect.arrayContaining([{ harnessId: "codex", name: "Codex" }]));
     expect(view.foldedSubagents).toBe(2);
+  });
+
+  it("lists Pi Sessions and resumes one through Pi's Session import", async () => {
+    const f = await fixture();
+    const sessionsDir = path.join(f.root, "pi-sessions");
+    await mkdir(sessionsDir);
+    const PI = "019fae1c-5b8a-7a9f-9071-16ff0f108bc2";
+    await writeFile(
+      path.join(sessionsDir, `2026-03-04T10-00-00-000Z_${PI}.jsonl`),
+      lines(
+        { type: "session", version: 3, id: PI, timestamp: "2026-03-04T10:00:00.000Z", cwd: f.cwd },
+        {
+          type: "message",
+          id: "u-1",
+          parentId: null,
+          timestamp: "2026-03-04T10:00:01.000Z",
+          message: { role: "user", content: "Pi title", timestamp: 1 },
+        },
+        {
+          type: "message",
+          id: "a-1",
+          parentId: "u-1",
+          timestamp: "2026-03-04T10:00:02.000Z",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: SECRET }],
+            provider: "p",
+            model: "claude-synthetic-1",
+            usage: { input: 3, output: 4, cacheRead: 0, cacheWrite: 0 },
+            timestamp: 2,
+          },
+        },
+      ),
+    );
+    const pi = new PiAdapter({ environment: { PI_CODING_AGENT_SESSION_DIR: sessionsDir } });
+    cleanup.push(() => pi.close());
+    const service = f.service([["pi", pi]]);
+    const listed = (await sessions(service)).view.sessions.find(
+      ({ harnessId }) => harnessId === "pi",
+    );
+    expect(listed).toMatchObject({
+      nativeSessionId: PI,
+      title: "Pi title",
+      turns: 1,
+      usage: { totalTokens: 7 },
+      threadId: null,
+      resumable: true,
+    });
+    const imports = new SessionImportRequests({
+      adapters: new Map<string, HarnessAdapter>([["pi", pi]]),
+      descriptors: () => [],
+      repository: f.repository,
+      diagnose: () => undefined,
+    });
+    const imported = await imports.handle(
+      jsonRpcRequestSchema.parse({
+        id: 3,
+        method: "codexhost/harness/session-import/import",
+        params: { harnessId: "pi", nativeSessionId: PI },
+      }),
+    );
+    const { threadId } = imported.body.result as { threadId: string };
+    const resumed = (await sessions(service, false)).view.sessions.find(
+      ({ harnessId }) => harnessId === "pi",
+    );
+    expect(resumed?.threadId).toBe(threadId);
   });
 
   it("keeps listing other Harnesses' Sessions when one source fails", async () => {
