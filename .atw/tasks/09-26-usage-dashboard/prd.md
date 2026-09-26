@@ -65,7 +65,7 @@
 ## Implementation Decisions
 
 - **Local Usage 的统一记录**：在公共 Adapter 契约中定义一种与 Harness 无关的用量记录：发生时间、可选 Provider、Model（只计对话的记录省略）、Native Session ID、可选工作目录、Token 分项（输入〔不含缓存〕、缓存读、缓存写、输出、推理）、对话数增量、可选的 Harness 自报费用、稳定去重键。记录不含任何消息正文，也不带 Harness 字段：Host 按读取来源归属，Adapter 不能冒充其他 Harness。Adapter 只交出终值（例如流式中的回复等待最终用量），可重复交出已读记录。
-- **Adapter 可选能力**（ADR-0002）：新增一个只读的原生用量读取能力，形态与 `sessionImport` 一致为可选字段。输入为上一次返回的不透明游标（首次为空），输出为新增记录与新游标；游标由 Host 持久化，Adapter 自身无状态。实现者：Claude Code、Pi、oh-my-pi Adapter；官方 Codex 由 host-runtime 的 Codex 运行时提供同形状的读取器。各 Harness 的文件位置、字段映射、累计值差分、Fork 重放跳过、子代理文件纳入等格式细节只存在于各自实现中。
+- **Adapter 可选能力**（ADR-0002）：新增一个只读的原生用量读取能力，形态与 `sessionImport` 一致为可选字段。输入为上一次返回的不透明游标（首次为空），输出为新增记录与新游标；游标由 Host 持久化，Adapter 自身无状态。实现者：Claude Code、Pi、oh-my-pi Adapter；官方 Codex 由 host-runtime 的 Codex 运行时提供同形状的读取器，结果中以 `harnessId: "codex"` 出现（Fork 重放不设边界硬跳过，而是沿用父会话记录的去重键由 Host 只计一次，见 issue 04）。各 Harness 的文件位置、字段映射、累计值差分、Fork 重放去重、子代理文件纳入等格式细节只存在于各自实现中。
 - **Host 用量服务**（host-runtime 内新模块）：
   - 调用各来源的读取能力，按去重键去重（每个 Harness 内先到先得），把记录聚合为 UTC 半小时桶（Harness × Provider × Model × 工作目录；项目在查询时由工作目录派生，原生记录被清理后仍可按项目统计），与游标一起持久化在 codexhost 数据目录下的用量目录中（`usage/local-usage.json`）。
   - 单个来源失败只影响该来源，并在结果中带出失败状态。
@@ -84,7 +84,7 @@
 
 - 好的测试只检验外部行为：给定一组原生记录文件，用量查询返回的数字与分组是否正确；不检验游标内部结构或私有函数。
 - **主切入点：Host 用量查询请求**。在临时目录中放置四个 Harness 的伪造原生记录，用真实 Adapter（及 Codex 读取器）指向该目录，通过 Host 请求处理层发出用量查询，断言总数、费用、Harness 卡片、Provider 子项、统计块、每日明细、项目分组、时区归日、周期边界、增量读取（追加记录后只增加新部分）、去重、单来源失败隔离、首次读取进度。先例：`packages/host-runtime/test/harness-session-import.test.ts`（真实 PiAdapter + 临时目录 + 请求层）。
-- **Adapter 切入点：各 Harness 原生记录解析**。覆盖各自格式边角：Claude Code 重复消息去重与子代理文件；Codex 累计值差分、缓存扣除、Fork 重放跳过；Pi / oh-my-pi 的 Provider 与 cacheWrite、半行未写完的文件尾。先例：`packages/adapters/pi/test/pi-session-import.test.ts`、`packages/adapters/claude-code/test/claude-session-import.test.ts`。
+- **Adapter 切入点：各 Harness 原生记录解析**。覆盖各自格式边角：Claude Code 重复消息去重与子代理文件；Codex 累计值差分（含累计值重启）、缓存扣除、Fork 重放同键去重；Pi / oh-my-pi 的 Provider 与 cacheWrite、半行未写完的文件尾。先例：`packages/adapters/pi/test/pi-session-import.test.ts`、`packages/adapters/claude-code/test/claude-session-import.test.ts`。
 - **计价**：纯函数测试，覆盖价格来源回退顺序、手工覆盖优先、模型名匹配规则、推理不重复计、无价格记 0。
 - **契约**：shared-contracts 的 schema 测试（先例 `packages/shared-contracts/test/harness-session-import.test.ts`）。
 - **渲染**：用假 DOM 检验页面根据视图数据画出正确结构（先例 `packages/renderer-extension/test/settings/accounts-usage.test.ts`）。

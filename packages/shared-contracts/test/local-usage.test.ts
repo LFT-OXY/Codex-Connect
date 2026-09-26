@@ -104,6 +104,17 @@ describe("Local Usage query contracts", () => {
         totals: { ...result.totals, total: 11 },
       }).success,
     ).toBe(false);
+    // Official Codex is a usage source without a plugin identity.
+    const codex = { harnessId: "codex", name: "Codex", totalTokens: 10, models: 1 };
+    expect(localUsageQueryResultSchema.parse({ ...result, harnesses: [codex] }).harnesses).toEqual([
+      codex,
+    ]);
+    for (const harnessId of ["", "Codex", "not a plugin id"]) {
+      expect(
+        localUsageQueryResultSchema.safeParse({ ...result, harnesses: [{ ...codex, harnessId }] })
+          .success,
+      ).toBe(false);
+    }
     for (const estimatedCostUsd of [
       -0.01,
       Number.POSITIVE_INFINITY,

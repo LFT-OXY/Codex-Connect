@@ -17,6 +17,7 @@ import {
 } from "./delegation-mention-rewrite.js";
 import { managedDelegationSkillReference } from "./delegation-skill.js";
 import { AccountRateLimits } from "./codex-runtime/account-rate-limits.js";
+import { codexNativeUsage } from "./codex-runtime/codex-native-usage.js";
 import { NativeAccountObserver } from "./native-account-observer.js";
 import { HarnessAccountInspectionCache, listHarnessAccountSources } from "./harness-accounts.js";
 import type { spawn } from "node:child_process";
@@ -2415,6 +2416,7 @@ export class AppServerHost {
     await this.#waitForPlugins();
     this.#localUsage ??= new LocalUsageService({
       adapters: this.#externalAdapters,
+      officialCodexUsage: codexNativeUsage(this.#officialRuntimeScope.permanentHome),
       descriptors: () => this.#pluginDescriptors,
       directory: defaultLocalUsageDirectory(this.#options.environment ?? process.env),
       fetchLiteLlm: fetchLiteLlmPrices,

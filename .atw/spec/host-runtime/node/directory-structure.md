@@ -27,6 +27,7 @@
 | 插件加载与目录 | `harness-plugin-loader.ts`、`harness-plugin-registry.ts`、`plugin-files.ts`、`installed-harness-plugins.ts`，详见 [plugin-loading.md](./plugin-loading.md) |
 | 插件级设置、账号额度 | `harness-launch-settings.ts`（每个插件一个文件）、`harness-accounts.ts` |
 | 委派（Delegation） | `harness-delegation-coordinator.ts`，控制面是 `delegation-control-server.ts`（127.0.0.1 + Bearer token）和 `delegation-control-registry.ts`；CLI 是 `delegation-cli*.ts`；Skill 安装在 `delegation-skill.ts`（写到 `~/.agents` 和 `~/.claude`）；官方 Turn 的 `#` 提及改写在 `delegation-mention-rewrite.ts` |
+| 官方 Codex 原生用量（rollout 读取） | `codex-runtime/codex-native-usage.ts`：官方 Codex 没有 Adapter，按 ADR-0002 放在 Codex 运行时目录，直接读 `CODEX_HOME` 下的 rollout 文件，不经过 app-server；由 `#handleLocalUsage` 以 `officialCodexUsage` 传给 `LocalUsageService`，见 [local-usage.md](./local-usage.md) |
 | 官方 app-server 进程与连接 | `codex-runtime/`：`OfficialRuntimeScope`（每个 Host 部署一份，被多个 Desktop 会话共享）、`OfficialRuntimeOwner`（进程所有者）、`OfficialWorkGate`（准入）、`CodexRuntime`（可替换的协议连接）；根目录的 `official-*.ts` 是连接与进程生命周期的底层实现 |
 | Codex 账号与额度 | `account/`、`native-account-*.ts`、`codex-runtime/account-rate-limits.ts`、`credential-imports.ts` |
 | 远程 Host | `remote-app-server.ts`（Unix listener）、`remote-control-app-server.ts`（Windows 命名管道桥，`createRemoteControlAppServerPlan` 在非 win32 平台返回 null）、`remote-host-install.ts` / `remote-host-lifecycle.ts` / `remote-host-cli.ts`（SSH 安装与启停）、`remote-official-*.ts`、`remote-socket-lock.ts` |

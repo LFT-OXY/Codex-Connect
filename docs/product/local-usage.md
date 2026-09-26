@@ -1,6 +1,6 @@
 # 用量统计
 
-「设置 → 用量」统计本机各 Harness 原生会话记录中的 Local Usage，包括直接在终端运行 CLI 产生的用量。数据来源与解析归属见 [ADR-0001](../adr/0001-local-usage-from-native-session-records.md)、[ADR-0002](../adr/0002-native-usage-parsing-lives-in-adapters.md)。当前只接入 Claude Code；Codex、Pi、oh-my-pi、项目用量与首次读取进度尚未实现。
+「设置 → 用量」统计本机各 Harness 原生会话记录中的 Local Usage，包括直接在终端运行 CLI 产生的用量。数据来源与解析归属见 [ADR-0001](../adr/0001-local-usage-from-native-session-records.md)、[ADR-0002](../adr/0002-native-usage-parsing-lives-in-adapters.md)。当前接入 Claude Code 与官方 Codex；Pi、oh-my-pi、项目用量与首次读取进度尚未实现。
 
 ## 页面
 
@@ -23,8 +23,9 @@
 - 统计块的「对话数」是所选范围内的对话数之和，随周期切换变化。
 - 活跃天数 = 有 Token 的日期数，开始使用日期 = 最早有 Token 的日期；二者统计全部已统计的历史，不受所选周期或「总计」24 个月范围限制。只有对话、没有 Token 的日期不算活跃；日期晚于今天的记录（例如本机时钟曾经偏快）不计入任何统计块。
 - Estimated Cost = 输入 × 输入价 + 缓存读 × 缓存读价 + 缓存写 × 缓存写价 +（输出 + 推理）× 输出价。推理只在 Harness 单独记录时才有值，已包含在输出中的推理（如 Claude Code 的思考）不会再计一次。Harness 在记录中自带费用时直接用该费用（包括 0，例如订阅通道），不再按价格计算。没有价格的模型费用记 0，不报错；只有对话、没有模型的记录不计费。估算费用按公开价格折算，订阅账号下可能远高于实际支出。
-- 对话数按各 Harness 自身口径计，不可跨 Harness 比较。Claude Code 计主会话中用户输入的消息（字符串内容或含文本块），不计工具结果和子代理中的消息。
+- 对话数按各 Harness 自身口径计，不可跨 Harness 比较。Claude Code 计主会话中用户输入的消息（字符串内容或含文本块），不计工具结果和子代理中的消息；Codex 计每次 Token 有增加的用量事件（约等于每次模型回复）。
 - Claude Code：读取 `$CLAUDE_CONFIG_DIR/projects`（默认 `~/.claude/projects`）下的主会话 `*.jsonl` 与 `<session>/subagents/*.jsonl`。同一次模型回复在记录中会重复写入多行（子代理记录还会先写入未完成的用量），按 `message.id + requestId` 只计一次，取最后一行的用量。最后一行没有 `stop_reason` 的回复可能仍在生成（工具结果可能先于最终用量写入），在该文件最近 1 小时内有写入时等下次读取再计；文件闲置超过 1 小时则按最后一行计入（被中断的回复）。Claude Code 不单独记录思考 Token，推理列为 0，思考量包含在输出中。
+- Codex：读取 `$CODEX_HOME`（默认 `~/.codex`）下 `sessions/` 与 `archived_sessions/` 中的 `rollout-*.jsonl`，不经过 Codex app-server，也不依赖 Codex 插件，终端 CLI、Codex Desktop 与 Codex Connect 中的官方 Codex 会话都会计入。Codex 在每次模型回复后记录截至当时的累计用量，按相邻两次累计值之差计入；累计值没有变化的重复记录不计。累计值重新从较小值开始，或与本次回复用量相同（新 Fork 的会话、恢复后的会话）时，按本次回复用量计入。Codex 的输入包含缓存命中与缓存写入，统计时从输入中扣除，分别计入缓存读与缓存写。推理 Token 已包含在输出中，推理列为 0，费用按输出价只计一次。Model 取最近一次回合设置中的模型，Provider 取会话自身的 `model_provider`，工作目录取最近一次回合设置中的目录。Fork 出的会话开头会复制父会话的历史，这些复制的用量与父会话记录的去重键相同，只计一次；父会话记录在被读取之前就已删除时，复制的用量按 Fork 时间计入一次。会话归档（文件移到 `archived_sessions/`）后会被重新读取，已计的用量不会重复计入。
 
 ## 读取与缓存
 
@@ -36,4 +37,4 @@
 - 模型名匹配（不区分大小写）依次尝试：精确名称 → 别名 → 去掉 `[1m]`、`:high` 之类的变体后缀与 `-high`、`-thinking` 等推理强度后缀 → 去掉厂商前缀（如 `openai-codex/gpt-5.6-sol`；价格表中只有带厂商前缀的条目时，取名称排序最前的那个）→ 模型名中包含的最长已知模型名（只考虑至少 5 个字符且含字母和数字的名称，避免 `fast`、`o1` 之类的误配）。手工覆盖价格在每一步都先于 LiteLLM；手工覆盖与别名表随版本维护，当前为空（本机已见模型 LiteLLM 均能匹配）。
 - 某个 Harness 读取失败或返回不合规记录（如多出正文字段）时整批不计，保留它上次的统计与游标，不影响其他 Harness；失败状态暂未在页面显示。
 - 读取进行中切换周期时，查询等待本次读取完成后再返回，不会先显示旧数据。
-- 用量读取是 Adapter 的可选能力 `nativeUsage.read(cursor)`，未安装或未实现该能力的 Harness 不参与统计。
+- 用量读取是 Adapter 的可选能力 `nativeUsage.read(cursor)`，未安装或未实现该能力的 Harness 不参与统计。官方 Codex 没有 Adapter，由 Host 直接读取其 rollout，始终参与统计；本机没有 Codex 记录时不出现 Codex 卡片。

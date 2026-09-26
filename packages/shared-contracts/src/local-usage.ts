@@ -101,7 +101,8 @@ export const localUsageQueryResultSchema = z.strictObject({
   harnesses: z
     .array(
       z.strictObject({
-        harnessId: harnessPluginIdSchema,
+        /** Official Codex or an installed Harness plugin. */
+        harnessId: z.union([z.literal("codex"), harnessPluginIdSchema]),
         name: z.string().trim().min(1).max(128),
         totalTokens: countSchema,
         models: countSchema,

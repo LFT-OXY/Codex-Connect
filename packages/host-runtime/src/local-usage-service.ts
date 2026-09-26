@@ -1,4 +1,4 @@
-import type { HarnessAdapter } from "@codexhost/harness-adapter";
+import type { HarnessAdapter, HarnessNativeUsageCapability } from "@codexhost/harness-adapter";
 import {
   jsonValueSchema,
   localUsageQueryParamsSchema,
@@ -19,6 +19,8 @@ import { loadModelPrices } from "./local-usage-prices.js";
 import { createModelPricer, type ModelPricer } from "./local-usage-pricing.js";
 import { buildLocalUsageView } from "./local-usage-view.js";
 
+const OFFICIAL_CODEX_ID = "codex";
+
 /**
  * Local Usage from the native records of every loaded Harness that can read them. Reads are
  * incremental from persisted cursors, and concurrent requests share the read in progress.
@@ -32,6 +34,8 @@ export class LocalUsageService {
   constructor(
     private readonly input: {
       adapters: ReadonlyMap<string, HarnessAdapter>;
+      /** Official Codex has no Adapter; the Codex runtime reads its rollouts. */
+      officialCodexUsage?: HarnessNativeUsageCapability;
       descriptors: () => readonly HarnessPluginDescriptor[];
       directory: string;
       /** LiteLLM's public price table as JSON. */
@@ -60,7 +64,8 @@ export class LocalUsageService {
           timeZone: params.data.timeZone,
           now: this.#now(),
           harnessName: (harnessId) =>
-            descriptors.find(({ id }) => id === harnessId)?.name ?? harnessId,
+            descriptors.find(({ id }) => id === harnessId)?.name ??
+            (harnessId === OFFICIAL_CODEX_ID ? "Codex" : harnessId),
           price,
         }),
       );
@@ -123,9 +128,15 @@ export class LocalUsageService {
     const state =
       (await loadLocalUsageState(this.input.directory, this.input.diagnose)) ??
       emptyLocalUsageState();
-    const sources = [...this.input.adapters].flatMap(([harnessId, adapter]) =>
-      adapter.nativeUsage ? [{ harnessId, nativeUsage: adapter.nativeUsage }] : [],
-    );
+    const { officialCodexUsage } = this.input;
+    const sources = [
+      ...(officialCodexUsage
+        ? [{ harnessId: OFFICIAL_CODEX_ID, nativeUsage: officialCodexUsage }]
+        : []),
+      ...[...this.input.adapters].flatMap(([harnessId, adapter]) =>
+        adapter.nativeUsage ? [{ harnessId, nativeUsage: adapter.nativeUsage }] : [],
+      ),
+    ];
     const batches = await Promise.all(
       sources.map(async ({ harnessId, nativeUsage }) => ({
         harnessId,

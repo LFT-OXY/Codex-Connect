@@ -1,5 +1,5 @@
 import {
-  harnessPluginIdSchema,
+  harnessIdSchema,
   type LocalUsagePeriod,
   type LocalUsageQueryResult,
 } from "@codexhost/shared-contracts";
@@ -170,7 +170,7 @@ export function buildLocalUsageView(input: {
     models: models.size,
     harnesses: [...harnesses]
       .map(([harnessId, harness]) => ({
-        harnessId: harnessPluginIdSchema.parse(harnessId),
+        harnessId: harnessIdSchema.parse(harnessId),
         name: input.harnessName(harnessId),
         totalTokens: harness.totalTokens,
         models: harness.models.size,

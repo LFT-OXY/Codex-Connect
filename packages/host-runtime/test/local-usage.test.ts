@@ -13,6 +13,7 @@ import {
 } from "@codexhost/shared-contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { codexNativeUsage } from "../src/codex-runtime/codex-native-usage.js";
 import { LocalUsageService } from "../src/local-usage-service.js";
 
 const cleanup: (() => Promise<void>)[] = [];
@@ -108,6 +109,7 @@ function litellmPrices(prices: Record<string, [number, number, number, number]>)
 const PRICES = litellmPrices({
   "claude-synthetic-1": [1, 2, 0.1, 1],
   "claude-synthetic-2": [2, 4, 0.2, 2],
+  "gpt-synthetic-3": [1, 10, 0.1, 0],
 });
 // SUNDAY_NIGHT_UTC at claude-synthetic-1 plus MONDAY at claude-synthetic-2.
 const WEEK_COST = (1 + 5 * 2 + 100 * 0.1 + 10 * 1 + (2 * 2 + 7 * 4 + 200 * 0.2 + 20 * 2)) / 1e6;
@@ -136,10 +138,12 @@ async function fixture() {
     harnessId: claude.harnessId,
     nativeUsage: { read },
   } as unknown as HarnessAdapter;
+  const codexHome = path.join(root, "codex");
   const directory = path.join(root, "data", "usage");
   const service = (
     options: {
       others?: [string, HarnessAdapter][];
+      officialCodex?: boolean;
       names?: () => Record<string, string>;
       fetchLiteLlm?: () => Promise<unknown>;
       now?: () => number;
@@ -151,12 +155,13 @@ async function fixture() {
         Object.entries(options.names?.() ?? { "claude-code": "Claude Code" }).map(([id, name]) =>
           harnessPluginDescriptorSchema.parse({ id, name, version: "0.0.0" }),
         ),
+      ...(options.officialCodex ? { officialCodexUsage: codexNativeUsage(codexHome) } : {}),
       directory,
       fetchLiteLlm: options.fetchLiteLlm ?? (async () => PRICES),
       diagnose: () => undefined,
       now: options.now ?? (() => NOW),
     });
-  return { project, mainFile, read, service };
+  return { project, mainFile, codexHome, read, service };
 }
 
 async function query(service: LocalUsageService, params: unknown): Promise<JsonObject> {
@@ -342,6 +347,125 @@ describe("Local Usage query", () => {
 
     // Anthropic's published Opus 5 price: $5 / $25 per million tokens.
     expect(week.estimatedCostUsd).toBeCloseTo(30, 9);
+  });
+
+  it("adds official Codex rollouts as a Codex card without counting fork replays twice", async () => {
+    const f = await fixture();
+    const sessions = path.join(f.codexHome, "sessions", "2026", "03", "03");
+    await mkdir(sessions, { recursive: true });
+    const usage = (input: number, cached: number, output: number, reasoning: number) => ({
+      input_tokens: input,
+      cached_input_tokens: cached,
+      output_tokens: output,
+      reasoning_output_tokens: reasoning,
+      total_tokens: input + output,
+    });
+    const meta = (id: string, timestamp: string, extra: Record<string, unknown> = {}) => ({
+      timestamp,
+      type: "session_meta",
+      payload: { id, timestamp, cwd: "/work/codex", model_provider: "openai", ...extra },
+    });
+    const turnContext = (timestamp: string) => ({
+      timestamp,
+      type: "turn_context",
+      payload: { cwd: "/work/codex", model: "gpt-synthetic-3" },
+    });
+    const tokenCount = (
+      timestamp: string,
+      total: ReturnType<typeof usage>,
+      last: ReturnType<typeof usage>,
+    ) => ({
+      timestamp,
+      type: "event_msg",
+      payload: {
+        type: "token_count",
+        info: { total_token_usage: total, last_token_usage: last },
+      },
+    });
+    const parent = "44444444-4444-4444-8444-444444444444";
+    const fork = "55555555-5555-4555-8555-555555555555";
+    const parentLines = [
+      meta(parent, "2026-03-03T08:00:00.000Z"),
+      turnContext("2026-03-03T08:00:01.000Z"),
+      tokenCount(
+        "2026-03-03T08:00:05.000Z",
+        usage(1_000, 600, 100, 40),
+        usage(1_000, 600, 100, 40),
+      ),
+    ];
+    await writeFile(
+      path.join(sessions, `rollout-2026-03-03T08-00-00-${parent}.jsonl`),
+      lines(...parentLines),
+    );
+    const forkFile = path.join(sessions, `rollout-2026-03-03T09-00-00-${fork}.jsonl`);
+    await writeFile(
+      forkFile,
+      lines(
+        meta(fork, "2026-03-03T09:00:00.000Z", { forked_from_id: parent }),
+        ...parentLines.map((line) => ({ ...line, timestamp: "2026-03-03T09:00:00.001Z" })),
+      ),
+    );
+    const service = f.service({ officialCodex: true });
+
+    const first = await result(service, { kind: "week" }, "UTC", true);
+    expect(first.harnesses).toEqual([
+      { harnessId: "codex", name: "Codex", totalTokens: 1_100, models: 1 },
+      { harnessId: "claude-code", name: "Claude Code", totalTokens: 229, models: 1 },
+    ]);
+
+    await appendFile(
+      forkFile,
+      lines(
+        turnContext("2026-03-03T09:00:02.000Z"),
+        tokenCount(
+          "2026-03-03T09:00:05.000Z",
+          usage(1_500, 1_000, 150, 60),
+          usage(500, 400, 50, 20),
+        ),
+      ),
+    );
+    const week = await result(service, { kind: "week" }, "UTC", true);
+
+    expect(week.harnesses[0]).toEqual({
+      harnessId: "codex",
+      name: "Codex",
+      totalTokens: 1_100 + 550,
+      models: 1,
+    });
+    expect(week.models).toBe(2);
+    expect(week.totals).toEqual({
+      total: 229 + 1_650,
+      input: 2 + 400 + 100,
+      cacheRead: 200 + 600 + 400,
+      cacheWrite: 20,
+      output: 7 + 100 + 50,
+      // Codex reasoning is part of its output and is neither shown nor priced again.
+      reasoning: 0,
+      conversations: 1 + 2,
+    });
+    expect(week.daily).toEqual([
+      {
+        date: "2026-03-03",
+        total: 1_650,
+        input: 500,
+        output: 150,
+        cacheRead: 1_000,
+        reasoning: 0,
+        conversations: 2,
+      },
+      {
+        date: "2026-03-02",
+        total: 229,
+        input: 2,
+        output: 7,
+        cacheRead: 200,
+        reasoning: 0,
+        conversations: 1,
+      },
+    ]);
+    const codexCost = (400 * 1 + 600 * 0.1 + 100 * 10 + (100 * 1 + 400 * 0.1 + 50 * 10)) / 1e6;
+    const claudeCost = (2 * 2 + 7 * 4 + 200 * 0.2 + 20 * 2) / 1e6;
+    expect(week.estimatedCostUsd).toBeCloseTo(codexCost + claudeCost, 12);
   });
 
   it("reports rolling 7- and 30-day totals, the active-day average and usage history", async () => {
