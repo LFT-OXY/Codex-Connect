@@ -18,6 +18,7 @@ import type {
 } from "../../src/settings/core.js";
 import { rendererSettingsMessages } from "../../src/settings/localization.js";
 import type { RendererImportedThreadOpener } from "../../src/settings/session-import-page.js";
+import { filterSessions, type SessionFilter } from "../../src/settings/sessions-filters.js";
 import {
   createSessionsSettingsPage,
   type RendererSessionsClient,
@@ -48,11 +49,17 @@ class FakeElement {
   fire(name: string): void {
     this.listeners.get(name)?.({ preventDefault() {} });
   }
+  parent: FakeElement | null = null;
   append(...children: (FakeElement | string)[]): void {
+    for (const child of children) if (typeof child !== "string") child.parent = this;
     this.children.push(...children);
   }
   replaceChildren(...children: (FakeElement | string)[]): void {
-    this.children = children;
+    this.children = [];
+    this.append(...children);
+  }
+  remove(): void {
+    if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this);
   }
   setAttribute(name: string, value: string): void {
     this.attributes.set(name, value);
@@ -306,5 +313,113 @@ describe("Sessions settings page", () => {
     });
     await vi.waitFor(() => expect(rows()).toHaveLength(1));
     expect(text(content)).toContain("无法读取 Pi 的会话记录");
+  });
+  it("filters by Harness, time range, project and search, with a folded-subagents summary", async () => {
+    const now = Date.now();
+    const day = 86_400_000;
+    const sessions = [
+      session({ nativeSessionId: "a", lastActivityAt: now - day, subagents: 2 }),
+      session({
+        nativeSessionId: "b",
+        harnessId: "pi" as LocalSession["harnessId"],
+        project: "other",
+        title: "Refactor parser",
+        lastActivityAt: now - 20 * day,
+        subagents: 0,
+      }),
+      session({ nativeSessionId: "c", model: "gpt-special", lastActivityAt: now - 60 * day }),
+    ];
+    const { content, find, rows } = mount({
+      queryLocalSessions: vi.fn().mockResolvedValue({
+        ...view(sessions),
+        harnesses: [
+          { harnessId: "claude-code", name: "Claude Code" },
+          { harnessId: "pi", name: "Pi" },
+        ],
+      }),
+    });
+    const ids = () => rows().map(({ dataset }) => dataset.sessionId);
+    const summary = () =>
+      find((element) => element.dataset.sessionsSummary !== undefined).textContent;
+    await vi.waitFor(() => expect(ids()).toEqual(["a", "b", "c"]));
+    expect(summary()).toBe("3 个主线程 · 3 个子代理已折叠");
+    // Only Harnesses with Sessions get a tab.
+    expect(
+      all(content)
+        .filter(({ dataset }) => dataset.sessionsHarness !== undefined)
+        .map(({ textContent }) => textContent),
+    ).toEqual(["全部", "Claude Code", "Pi"]);
+
+    find(({ dataset }) => dataset.sessionsHarness === "pi").fire("click");
+    expect(ids()).toEqual(["b"]);
+    expect(summary()).toBe("1 个主线程 · 0 个子代理已折叠");
+    find(({ dataset }) => dataset.sessionsHarness === "all").fire("click");
+
+    find(({ dataset }) => dataset.sessionsRange === "30").fire("click");
+    expect(ids()).toEqual(["a", "b"]);
+    const project = find(({ dataset }) => dataset.sessionsProjectFilter !== undefined);
+    project.value = "other";
+    project.fire("change");
+    expect(ids()).toEqual(["b"]);
+    project.value = "";
+    project.fire("change");
+
+    const search = find(({ dataset }) => dataset.sessionsSearch !== undefined);
+    search.value = "PARSER";
+    search.fire("input");
+    expect(ids()).toEqual(["b"]);
+    search.value = "nothing";
+    search.fire("input");
+    expect(ids()).toEqual([]);
+    expect(text(content)).toContain(messages.sessions.noMatches);
+  });
+
+  it("renders thousands of Sessions a batch at a time", async () => {
+    const sessions = Array.from({ length: 450 }, (_, index) =>
+      session({ nativeSessionId: `s-${index}` }),
+    );
+    const { find, rows } = mount({
+      queryLocalSessions: vi.fn().mockResolvedValue(view(sessions)),
+    });
+    await vi.waitFor(() => expect(rows()).toHaveLength(200));
+    const more = find(({ dataset }) => dataset.sessionsAction === "show-more");
+    expect(more.textContent).toBe("显示更多（还有 250 个）");
+    more.fire("click");
+    expect(rows()).toHaveLength(400);
+    expect(more.textContent).toBe("显示更多（还有 50 个）");
+    more.fire("click");
+    expect(rows()).toHaveLength(450);
+    expect(() => find(({ dataset }) => dataset.sessionsAction === "show-more")).toThrow();
+  });
+});
+
+describe("Session filtering", () => {
+  const filter = (overrides: Partial<SessionFilter>): SessionFilter => ({
+    harnessId: null,
+    range: "all",
+    project: null,
+    query: "",
+    ...overrides,
+  });
+
+  it("searches title, project, model and ID, but not the working directory", () => {
+    const sessions = [session({ nativeSessionId: "abc-123", cwd: "/secret/place" })];
+    for (const query of ["synthetic TITLE", "owner/", "SYNTHETIC-1", "abc-1"]) {
+      expect(filterSessions(sessions, filter({ query }), 0)).toHaveLength(1);
+    }
+    expect(filterSessions(sessions, filter({ query: "secret" }), 0)).toHaveLength(0);
+  });
+
+  it("keeps Sessions active within the range, inclusive of its start", () => {
+    const now = Date.parse("2026-03-31T00:00:00.000Z");
+    const sessions = [
+      session({ nativeSessionId: "edge", lastActivityAt: now - 7 * 86_400_000 }),
+      session({ nativeSessionId: "old", lastActivityAt: now - 7 * 86_400_000 - 1 }),
+    ];
+    expect(
+      filterSessions(sessions, filter({ range: "7" }), now).map(
+        ({ nativeSessionId }) => nativeSessionId,
+      ),
+    ).toEqual(["edge"]);
   });
 });

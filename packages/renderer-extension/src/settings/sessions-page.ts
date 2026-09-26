@@ -22,6 +22,7 @@ import {
   sessionColumnsHeader,
   sessionTitle,
 } from "./sessions-list.js";
+import { createSessionFilters, filterSessions } from "./sessions-filters.js";
 import { usageBar } from "./usage-dashboard.js";
 
 export interface RendererSessionsClient {
@@ -31,6 +32,8 @@ export interface RendererSessionsClient {
 
 /** Delay before asking again while Host is still reading native records. */
 const READING_POLL_MS = 500;
+/** Rows added at a time, so thousands of Sessions do not render at once. */
+const SESSION_BATCH = 200;
 const BUTTON_CLASS = [
   "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px]",
   "border border-settings-border bg-settings-surface text-settings-text",
@@ -91,16 +94,29 @@ export function createSessionsSettingsPage(
       const body = document.createElement("section");
       body.className = "mt-4";
       body.setAttribute("aria-live", "polite");
-      context.content.append(header, description, notice, body);
+      const filters = createSessionFilters(document, messages, () => {
+        shown = SESSION_BATCH;
+        if (view) renderList(view);
+      });
+      context.content.append(header, description, notice, filters.root, body);
 
       let view: LocalSessionsView | null = null;
+      let shown = SESSION_BATCH;
+      let observer: IntersectionObserver | null = null;
       let loading = false;
       let showingProgress = false;
       let poll: ReturnType<typeof setTimeout> | undefined;
       /** The Session being resumed; one at a time. */
       let resuming: string | null = null;
       const resumeButtons = new Map<string, { button: HTMLButtonElement; session: LocalSession }>();
-      context.signal.addEventListener("abort", () => clearTimeout(poll), { once: true });
+      context.signal.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(poll);
+          observer?.disconnect();
+        },
+        { once: true },
+      );
 
       const renderControls = (): void => {
         refresh.disabled = loading || resuming !== null;
@@ -153,7 +169,14 @@ export function createSessionsSettingsPage(
       };
 
       const renderView = (current: LocalSessionsView): void => {
+        filters.update(current);
+        renderList(current);
+      };
+
+      /** The filtered Sessions, a batch at a time; more are added as the list scrolls. */
+      function renderList(current: LocalSessionsView): void {
         resumeButtons.clear();
+        observer?.disconnect();
         const root = document.createElement("div");
         root.className = "flex flex-col gap-3";
         for (const { harnessId, name } of current.failures) {
@@ -165,30 +188,86 @@ export function createSessionsSettingsPage(
           failure.textContent = messages.sourceFailed.replace("{name}", name);
           root.append(failure);
         }
-        if (current.sessions.length === 0) {
+        const status = (message: string): void => {
           const empty = document.createElement("p");
           empty.className = "m-0 text-sm text-settings-muted";
           empty.setAttribute("role", "status");
-          empty.textContent = messages.empty;
+          empty.textContent = message;
           root.append(empty);
           body.replaceChildren(root);
+        };
+        if (current.sessions.length === 0) {
+          status(messages.empty);
+          return;
+        }
+        const sessions = filterSessions(current.sessions, filters.filter(), Date.now());
+        const summary = document.createElement("p");
+        summary.className = "m-0 text-xs text-settings-muted";
+        summary.dataset.sessionsSummary = "";
+        summary.textContent = messages.summary
+          .replace("{sessions}", sessions.length.toLocaleString())
+          .replace(
+            "{subagents}",
+            sessions.reduce((sum, { subagents }) => sum + subagents, 0).toLocaleString(),
+          );
+        root.append(summary);
+        if (sessions.length === 0) {
+          status(messages.noMatches);
           return;
         }
         const list = document.createElement("div");
         list.setAttribute("role", "list");
         list.setAttribute("aria-label", messages.columnsLabel);
         list.dataset.sessionsList = "";
-        for (const session of current.sessions) {
-          const resume = resumeButton(document, messages);
-          resume.addEventListener("click", () => void resumeSession(session));
-          resumeButtons.set(sessionKey(session), { button: resume, session });
-          const row = renderSessionRow(document, session, settingsMessages, [resume]);
-          row.setAttribute("role", "listitem");
-          list.append(row);
-        }
+        const appendRows = (from: number, to: number): void => {
+          for (const session of sessions.slice(from, to)) {
+            const resume = resumeButton(document, messages);
+            resume.addEventListener("click", () => void resumeSession(session));
+            resumeButtons.set(sessionKey(session), { button: resume, session });
+            const row = renderSessionRow(document, session, settingsMessages, [resume]);
+            row.setAttribute("role", "listitem");
+            list.append(row);
+          }
+        };
+        appendRows(0, shown);
         root.append(sessionColumnsHeader(document, messages), list);
+        if (sessions.length > shown) {
+          const more = document.createElement("button");
+          more.type = "button";
+          more.className = `${SESSION_ACTION_CLASS} self-center`;
+          more.dataset.sessionsAction = "show-more";
+          const label = (): void => {
+            more.textContent = messages.showMore.replace(
+              "{count}",
+              (sessions.length - shown).toLocaleString(),
+            );
+          };
+          label();
+          // Rows are appended, not re-rendered, so the list keeps its scroll position.
+          more.addEventListener("click", () => {
+            appendRows(shown, shown + SESSION_BATCH);
+            shown += SESSION_BATCH;
+            renderControls();
+            if (shown < sessions.length) {
+              label();
+              return;
+            }
+            observer?.disconnect();
+            more.remove();
+          });
+          root.append(more);
+          // Reaching the end of the list shows the next batch without a click.
+          const Observer = document.defaultView?.IntersectionObserver;
+          if (Observer) {
+            observer = new Observer((entries) => {
+              if (entries.some(({ isIntersecting }) => isIntersecting)) more.click();
+            });
+            observer.observe(more);
+          }
+        }
         body.replaceChildren(root);
-      };
+        renderControls();
+      }
 
       const copyButton = (text: string): HTMLButtonElement => {
         const button = document.createElement("button");
