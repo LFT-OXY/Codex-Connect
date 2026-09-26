@@ -8,7 +8,7 @@
 
 七个既有 Adapter 通过同样的 `manifest.json` 和 `createHarnessAdapter` 工厂加载；`adapter-composition.ts` 已删除，Host 源码、包依赖和 TypeScript references 不再直接引用具体 Adapter 包。预装集合仅由发行清单 [`scripts/release/harness-plugins.json`](../../scripts/release/harness-plugins.json) 决定。原生构造参数、预取和 Claude Code 的直接/Broker 选择仍由相应插件负责。
 
-本地会话导入已使用公共 `sessionImport` 契约、Host 映射事务与动态设置页；Claude Code、Pi、Hermes 和 DSH 已提供实际实现。DSH 通过本机托管 Web 接入；`0.1.2-rc.1` / `0.1.5-rc.1` / `0.1.5-rc.2` / `0.1.5-rc.3` / `0.1.7-rc.1` 已通过对应验证，其他 SemVer 版本可尝试连接，但仍须通过原生协议校验。Legacy 协议已移除。完整原生引用只在 Adapter 与 Host 间流转，详见[会话导入](harness-session-import.md)。这不代表普通 Agent Picker 已完成动态接入。
+本地会话导入已使用公共 `sessionImport` 契约、Host 映射事务与设置 →「会话」页的恢复入口；Claude Code、Pi、oh-my-pi、Hermes 和 DSH 已提供实际实现。DSH 通过本机托管 Web 接入；`0.1.2-rc.1` / `0.1.5-rc.1` / `0.1.5-rc.2` / `0.1.5-rc.3` / `0.1.7-rc.1` 已通过对应验证，其他 SemVer 版本可尝试连接，但仍须通过原生协议校验。Legacy 协议已移除。完整原生引用只在 Adapter 与 Host 间流转，详见[会话导入](harness-session-import.md)。这不代表普通 Agent Picker 已完成动态接入。
 
 尚未实现的目标包括：
 
@@ -166,6 +166,10 @@ Renderer 的 `listHarnessPlugins()` 使用绑定的 RequestManager 发送此固�
 可选 `HarnessAdapter.inspectAccount()` 主动返回当前原生认证的 `HarnessAccountSnapshot`，无真实额度时返回 `null`；不得把会话花费当成账号额度、返回旧认证缓存或为查询发起模型 Turn。原生 SDK、认证和额度解析属于插件；实现负责限制查询耗时及关闭检查资源。该可选扩展兼容未实现能力的插件。
 
 `codexhost/harness/accounts/sources` 先返回当前连接中实现该能力的 Harness ID 与 Manifest 名称，Renderer 再为每个来源并行调用 `codexhost/harness/accounts/inspect`。Host 分别校验快照并隔离失败和超时，不透传原生错误或凭据；任一有效结果可立即显示，不等待其他 Harness。未实现、无数据或返回非法快照的插件不产生账号行。`codexhost/harness/accounts/list` 保留为旧 Renderer 的聚合兼容接口，新 Renderer 连接旧 Host 时也回退使用它。Renderer 在账号设置页只读展示，不注册 Codex 账号或参与多账号路由。Claude Code 的 Aqua Broker 转发 `adapter.inspectAccount`；旧 Broker 不支持时无数据。产品说明见[账号设置](../product/codex-accounts.md)。
+
+### 原生用量读取
+
+可选 `HarnessAdapter.nativeUsage.read(cursor, onProgress?)` 从原生会话记录中读取上次游标之后新增的用量事实（`onProgress` 报告已处理 / 总文件数，供首次读取显示进度）：发生时间、Native Session ID、可选 Provider / Model / 工作目录、Token 分项（输入不含缓存）、对话数增量与稳定去重键，不含消息正文。游标对 Host 不透明，由 Host 持久化，Adapter 不保存读取状态；无法识别的游标按从头读取处理，重复返回已读事实是允许的，Host 按去重键只计一次。Host 校验每批记录，某个 Harness 失败时保留它上次的游标与统计，并在查询结果中标出该 Harness。记录格式、文件位置与去重细节只存在于各 Adapter；目前 Claude Code、Pi 与 oh-my-pi 实现，Aqua Broker 不转发此能力。官方 Codex 没有 Adapter，由 host-runtime 的 Codex 运行时（`codex-runtime/codex-native-usage.ts`）以同一形状读取 `$CODEX_HOME` 下的 rollout，在结果中以 `harnessId: "codex"` 出现。产品说明见[用量统计](../product/local-usage.md)。
 
 ## 运行中切换 Model / Thinking
 

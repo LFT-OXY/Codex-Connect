@@ -1,6 +1,8 @@
 import {
   HARNESS_LAUNCH_SETTINGS_GET_METHOD,
   HARNESS_LAUNCH_SETTINGS_SET_METHOD,
+  LOCAL_SESSIONS_QUERY_METHOD,
+  LOCAL_USAGE_QUERY_METHOD,
   harnessIdSchema,
   harnessModelRefSchema,
   harnessPermissionModeIdSchema,
@@ -99,6 +101,86 @@ describe("Renderer fixed Model request client", () => {
     sendRequest.mockResolvedValueOnce({ path: 42 });
     await expect(client.getHarnessLaunchSettings?.({ harnessId })).rejects.toThrow();
   });
+  it("queries Local Usage with validated params and rejects results carrying extra fields", async () => {
+    const result = {
+      status: "ready",
+      range: { from: "2026-03-02", to: "2026-03-08" },
+      totals: {
+        total: 3,
+        input: 1,
+        cacheRead: 1,
+        cacheWrite: 0,
+        output: 1,
+        reasoning: 0,
+        conversations: 1,
+      },
+      estimatedCostUsd: 0,
+      models: 1,
+      harnesses: [
+        { harnessId: "claude-code", name: "Claude Code", totalTokens: 3, models: 1, providers: [] },
+      ],
+      daily: [],
+      projects: [{ project: "acme/widget", totalTokens: 3, harnessIds: ["claude-code"] }],
+      failures: [],
+      stats: {
+        last7Days: 3,
+        last30Days: 3,
+        dailyAverage: 3,
+        activeDays: 1,
+        firstActiveDate: "2026-03-02",
+      },
+    };
+    const sendRequest = vi.fn().mockResolvedValue(result);
+    const client = createRendererModelClient([{ sendRequest }]);
+    if (!client?.queryLocalUsage) throw new Error("Expected a Local Usage client");
+    const params = { period: { kind: "week" as const }, timeZone: "Asia/Shanghai", refresh: true };
+    expect(await client.queryLocalUsage(params)).toEqual(result);
+    expect(sendRequest).toHaveBeenLastCalledWith(LOCAL_USAGE_QUERY_METHOD, params);
+    await expect(client.queryLocalUsage({ ...params, timeZone: "Mars/Olympus" })).rejects.toThrow();
+    expect(sendRequest).toHaveBeenCalledOnce();
+    sendRequest.mockResolvedValueOnce({ ...result, records: [] });
+    await expect(client.queryLocalUsage(params)).rejects.toThrow();
+    const reading = { status: "reading", progress: { processed: 1, total: 4 } };
+    sendRequest.mockResolvedValueOnce(reading);
+    expect(await client.queryLocalUsage(params)).toEqual(reading);
+  });
+
+  it("queries Local Sessions with validated params and a validated result", async () => {
+    const result = {
+      status: "ready",
+      sessions: [
+        {
+          harnessId: "claude-code",
+          nativeSessionId: "native-1",
+          title: null,
+          cwd: "/work/project",
+          project: "project",
+          model: "claude-synthetic-1",
+          startedAt: 1,
+          lastActivityAt: 2,
+          activeMs: 1,
+          usage: { totalTokens: 3, estimatedCostUsd: 0 },
+          turns: 1,
+          edits: 0,
+          subagents: 0,
+          threadId: null,
+          resumable: true,
+          running: null,
+          resumeCommand: null,
+        },
+      ],
+      harnesses: [{ harnessId: "claude-code", name: "Claude Code" }],
+      failures: [],
+    };
+    const sendRequest = vi.fn().mockResolvedValue(result);
+    const client = createRendererModelClient([{ sendRequest }]);
+    if (!client?.queryLocalSessions) throw new Error("Expected a Local Sessions client");
+    expect(await client.queryLocalSessions({ refresh: true })).toEqual(result);
+    expect(sendRequest).toHaveBeenLastCalledWith(LOCAL_SESSIONS_QUERY_METHOD, { refresh: true });
+    sendRequest.mockResolvedValueOnce({ ...result, transcript: [] });
+    await expect(client.queryLocalSessions({ refresh: false })).rejects.toThrow();
+  });
+
   it("reads draft quota for the selected Account without activating it", async () => {
     const result = {
       accountId: "account-b",
@@ -342,11 +424,11 @@ describe("Renderer fixed Model request client", () => {
       "listHarnessAccountSources",
       "listHarnessAccounts",
       "listHarnessPlugins",
-      "listHarnessSessions",
       "listLoadedSessions",
-      "listSessionImportSources",
       "listThreadOwnership",
       "openHarnessWebUi",
+      "queryLocalSessions",
+      "queryLocalUsage",
       "readUpdateStatus",
       "refreshCodexAccounts",
       "selectThreadModel",
@@ -478,42 +560,14 @@ describe("Renderer fixed Model request client", () => {
     expect(sendRequest).toHaveBeenNthCalledWith(12, UPDATE_STATUS_METHOD, {});
   });
 
-  it("uses fixed generic Session import methods and never accepts a browser-supplied locator", async () => {
-    const sendRequest = vi
-      .fn()
-      .mockResolvedValueOnce({ harnesses: [{ harnessId: "pi", name: "Pi" }] })
-      .mockResolvedValueOnce({
-        total: 1,
-        candidates: [
-          {
-            nativeSessionId: "native-1",
-            title: null,
-            updatedAt: 1_000,
-            cwd: "C:\\work",
-            running: null,
-          },
-        ],
-      })
-      .mockResolvedValueOnce({ threadId: "thread-1" });
+  it("imports through the fixed generic method and never accepts a browser-supplied locator", async () => {
+    const sendRequest = vi.fn().mockResolvedValueOnce({ threadId: "thread-1" });
     const client = createRendererModelClient([{ sendRequest }]);
-    if (
-      !client?.listSessionImportSources ||
-      !client.listHarnessSessions ||
-      !client.importHarnessSession
-    )
-      throw new Error("Session import client missing");
-    expect(await client.listSessionImportSources()).toEqual({
-      harnesses: [{ harnessId: "pi", name: "Pi" }],
-    });
-    expect(await client.listHarnessSessions({ harnessId: piHarnessId })).toMatchObject({
-      candidates: [{ nativeSessionId: "native-1", running: null }],
-    });
+    if (!client?.importHarnessSession) throw new Error("Session import client missing");
     expect(
       await client.importHarnessSession({ harnessId: piHarnessId, nativeSessionId: "native-1" }),
     ).toEqual({ threadId: "thread-1" });
     expect(sendRequest.mock.calls).toEqual([
-      ["codexhost/harness/session-import/sources", {}],
-      ["codexhost/harness/session-import/list", { harnessId: "pi" }],
       ["codexhost/harness/session-import/import", { harnessId: "pi", nativeSessionId: "native-1" }],
     ]);
     for (const extra of [{ cwd: "C:\\injected" }, { locator: { sessionFile: "/injected" } }]) {
@@ -525,7 +579,7 @@ describe("Renderer fixed Model request client", () => {
         }),
       ).rejects.toThrow();
     }
-    expect(sendRequest).toHaveBeenCalledTimes(3);
+    expect(sendRequest).toHaveBeenCalledTimes(1);
   });
 
   it("coalesces per Harness and native ID across remounts without colliding with other Harnesses", async () => {
@@ -557,51 +611,22 @@ describe("Renderer fixed Model request client", () => {
       throw Object.assign(new Error("private detail"), { code });
     });
     const client = createRendererModelClient([{ sendRequest }]);
-    if (
-      !client?.listSessionImportSources ||
-      !client.listHarnessSessions ||
-      !client.importHarnessSession
-    )
-      throw new Error("Session import client missing");
-    await expect(client.listSessionImportSources()).rejects.toBeInstanceOf(
-      RendererSessionImportUnavailableError,
-    );
-    await expect(client.listHarnessSessions({ harnessId: piHarnessId })).rejects.toBeInstanceOf(
-      RendererSessionImportUnavailableError,
-    );
+    if (!client?.importHarnessSession) throw new Error("Session import client missing");
     await expect(
       client.importHarnessSession({ harnessId: piHarnessId, nativeSessionId: "native-1" }),
     ).rejects.toBeInstanceOf(RendererSessionImportUnavailableError);
   });
 
-  it("keeps storage failures distinct from unsupported import and validates paging/search requests", async () => {
+  it("keeps storage failures distinct from unsupported import", async () => {
     const failure = Object.assign(new Error("private storage detail"), { code: -32077 });
     const sendRequest = vi.fn(async () => {
       throw failure;
     });
     const client = createRendererModelClient([{ sendRequest }]);
-    if (!client?.listHarnessSessions) throw new Error("Import client missing");
+    if (!client?.importHarnessSession) throw new Error("Import client missing");
     await expect(
-      client.listHarnessSessions({
-        harnessId: piHarnessId,
-        query: "needle",
-        offset: 40,
-        limit: 20,
-      }),
+      client.importHarnessSession({ harnessId: piHarnessId, nativeSessionId: "native-1" }),
     ).rejects.toBe(failure);
-    expect(sendRequest).toHaveBeenCalledWith("codexhost/harness/session-import/list", {
-      harnessId: "pi",
-      query: "needle",
-      offset: 40,
-      limit: 20,
-    });
-    await expect(
-      client.listHarnessSessions({ harnessId: piHarnessId, offset: -1 }),
-    ).rejects.toThrow();
-    await expect(
-      client.listHarnessSessions({ harnessId: piHarnessId, limit: 0 }),
-    ).rejects.toThrow();
-    expect(sendRequest).toHaveBeenCalledOnce();
   });
 
   it("opens Harness Web through the pathless Host action", async () => {

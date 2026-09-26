@@ -771,3 +771,18 @@ describe("HermesSession live configuration errors", () => {
     await session.close();
   });
 });
+
+describe("Hermes Session import availability", () => {
+  it("reports a missing Hermes CLI as not installed, as opening a Session does", async () => {
+    const { HermesAdapter } = await import("../src/hermes-adapter.js");
+    const adapter = new HermesAdapter({ command: "/nonexistent/codexhost-test/hermes" });
+    try {
+      expect(await adapter.sessionImport.listCandidates()).toMatchObject({
+        ok: false,
+        error: { code: "notInstalled" },
+      });
+    } finally {
+      await adapter.close();
+    }
+  });
+});

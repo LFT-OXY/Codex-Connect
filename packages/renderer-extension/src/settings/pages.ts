@@ -21,15 +21,16 @@ import {
   createConnectionsSettingsPage,
   type RendererConnectionDiagnostics,
 } from "./connections-page.js";
-import {
-  createSessionImportSettingsPage,
-  type RendererSessionImportClient,
-  type RendererImportedThreadOpener,
-} from "./session-import-page.js";
 import { createAppearanceSettingsPage } from "./appearance-page.js";
 import type { LoadedSessionsClient } from "./loaded-sessions-table.js";
 import { createReleaseNotesElement } from "./release-notes.js";
 import { createAccountsSettingsPage, type RendererCodexAccountClient } from "./accounts-page.js";
+import { createUsageSettingsPage, type RendererUsageClient } from "./usage-page.js";
+import {
+  createSessionsSettingsPage,
+  type RendererImportedThreadOpener,
+  type RendererSessionsClient,
+} from "./sessions-page.js";
 
 export type {
   RendererConnectionAgentSnapshot,
@@ -37,6 +38,7 @@ export type {
   RendererConnectionHostSnapshot,
   RendererConnectionSnapshot,
 } from "./connections-page.js";
+import { isWindowsRenderer, rendererUserAgentData } from "./renderer-platform.js";
 import {
   RendererUpdateRequestTimeoutError,
   runBoundedRendererUpdateRequest,
@@ -45,23 +47,6 @@ import {
 export const CODEXHOST_GITHUB_REPOSITORY_URL = "https://github.com/LFT-OXY/Codex-Connect";
 export const CODEXHOST_RELEASES_LATEST_URL = `${CODEXHOST_GITHUB_REPOSITORY_URL}/releases/latest`;
 export const CODEXHOST_NPM_MANUAL_UPDATE_COMMAND = "npm install -g @chinhae/codex-connect@latest";
-
-interface RendererUserAgentData {
-  readonly platform?: string;
-  readonly architecture?: string;
-  readonly bitness?: string;
-}
-
-function rendererUserAgentData(navigator: Navigator): RendererUserAgentData | undefined {
-  return (navigator as Navigator & { userAgentData?: RendererUserAgentData }).userAgentData;
-}
-
-function isWindowsRenderer(window: Window | null | undefined): boolean {
-  const navigator = window?.navigator;
-  if (!navigator) return false;
-  const identity = `${rendererUserAgentData(navigator)?.platform ?? ""} ${navigator.platform ?? ""} ${navigator.userAgent}`;
-  return /windows|win32|win64/iu.test(identity);
-}
 
 function windowsInstallerDownloadUrl(window: Window | null | undefined, version: string): string {
   const navigator = window?.navigator;
@@ -74,7 +59,8 @@ function windowsInstallerDownloadUrl(window: Window | null | undefined, version:
 export const DEFAULT_RENDERER_SETTINGS_PAGE_IDS = [
   "connections",
   "accounts",
-  "session-import",
+  "usage",
+  "sessions",
   "appearance",
   "updates",
 ] as const;
@@ -563,15 +549,17 @@ export function createDefaultRendererSettingsPages(
   getUpdateClient: () => RendererUpdateClient | null = () => null,
   getDiagnostics: () => RendererConnectionDiagnostics | null = () => null,
   getAccountClient: () => RendererCodexAccountClient | null = () => null,
-  getSessionImportClient: () => RendererSessionImportClient | null = () => null,
+  getSessionsClient: () => RendererSessionsClient | null = () => null,
   openImportedThread: RendererImportedThreadOpener = () =>
     Promise.reject(new Error("Imported Thread navigation is unavailable")),
   getLoadedSessionsClient: () => LoadedSessionsClient | null = () => null,
+  getUsageClient: () => RendererUsageClient | null = () => null,
 ): readonly RendererSettingsPageDefinition[] {
   return Object.freeze([
     createConnectionsSettingsPage(messages, getDiagnostics),
     createAccountsSettingsPage(messages, getAccountClient),
-    createSessionImportSettingsPage(messages, getSessionImportClient, openImportedThread),
+    createUsageSettingsPage(messages, getUsageClient),
+    createSessionsSettingsPage(messages, getSessionsClient, openImportedThread),
     createAppearanceSettingsPage(messages, getLoadedSessionsClient),
     updatesPage(messages, getUpdateClient),
   ]);
@@ -582,7 +570,7 @@ export function createDefaultRendererSettingsRegistry(
   getUpdateClient: () => RendererUpdateClient | null = () => null,
   getDiagnostics: () => RendererConnectionDiagnostics | null = () => null,
   getAccountClient: () => RendererCodexAccountClient | null = () => null,
-  getSessionImportClient: () => RendererSessionImportClient | null = () => null,
+  getSessionsClient: () => RendererSessionsClient | null = () => null,
   openImportedThread?: RendererImportedThreadOpener,
 ): RendererSettingsPageRegistry {
   return createRendererSettingsPageRegistry(
@@ -591,10 +579,12 @@ export function createDefaultRendererSettingsRegistry(
       getUpdateClient,
       getDiagnostics,
       getAccountClient,
-      getSessionImportClient,
+      getSessionsClient,
       openImportedThread,
     ),
   );
 }
 
 export type { RendererCodexAccountClient } from "./accounts-page.js";
+export type { RendererUsageClient } from "./usage-page.js";
+export type { RendererImportedThreadOpener, RendererSessionsClient } from "./sessions-page.js";

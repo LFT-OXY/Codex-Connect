@@ -60,6 +60,7 @@ describe("Account quota cache", () => {
             {
               id: "soon",
               status: "available",
+              grantedAt: 1_200,
               expiresAt: 2_400,
             },
           ],
@@ -71,6 +72,7 @@ describe("Account quota cache", () => {
       availableCount: 2,
       nextExpiresAtUnix: 2_400,
       expiresAtUnix: [2_400],
+      credits: [{ expiresAtUnix: 2_400, grantedAtUnix: 1_200 }],
     });
     cache.reset("a");
     expect(cache.getResetCredits("a")).toBeNull();

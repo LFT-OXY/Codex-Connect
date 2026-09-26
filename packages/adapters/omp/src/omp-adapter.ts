@@ -15,6 +15,11 @@ import {
   type HarnessError,
   type HarnessInspection,
   type HarnessModelRef,
+  type HarnessNativeUsageBatch,
+  type HarnessNativeUsageProgress,
+  type HarnessNativeUsageCapability,
+  type HarnessSessionImportCapability,
+  type HarnessSessionImportSource,
   type HarnessOutput,
   type HarnessResult,
   type HarnessSession,
@@ -84,6 +89,8 @@ import {
 } from "./omp-slash-commands.js";
 import { mapOmpSnapshot, resolveOmpForkBoundary, type OmpSessionHistory } from "./omp-history.js";
 import { rollbackOmpLastTurn } from "./omp-last-turn-rollback.js";
+import { readOmpNativeUsage } from "./omp-native-usage.js";
+import { OmpSessionImportIndex } from "./omp-session-import.js";
 import {
   OmpRpcFaultError,
   OmpRpcSession,
@@ -196,6 +203,8 @@ interface BackgroundSubagentDelegation {
 type SessionPhase = "open" | "closing" | "closed" | "faulted";
 
 const ompHarnessId = harnessIdSchema.parse("omp");
+const IMPORT_FAILURE =
+  "Omp Session discovery failed; check storage access and duplicate Session identities, then retry after closing native clients";
 const ompCommandCatalog = harnessCommandCatalogSchema.parse({
   commands: [
     {
@@ -2198,8 +2207,54 @@ export class OmpAdapter implements HarnessAdapter {
       }
     },
   };
+  readonly sessionImport = Object.freeze({
+    listCandidates: async () => {
+      const result = await this.#readNative(
+        (signal) => this.#importIndex.list(signal),
+        IMPORT_FAILURE,
+      );
+      return result.ok
+        ? { ok: true as const, value: result.value.map(({ candidate }) => candidate) }
+        : result;
+    },
+    resolveCandidate: async (
+      nativeSessionId: string,
+    ): Promise<HarnessResult<HarnessSessionImportSource>> => {
+      const result = await this.#readNative(
+        (signal) => this.#importIndex.resolve(nativeSessionId, signal),
+        IMPORT_FAILURE,
+      );
+      if (!result.ok) return result;
+      return result.value
+        ? { ok: true, value: result.value }
+        : {
+            ok: false,
+            error: {
+              code: "sessionNotFound",
+              message: "Omp Session is no longer importable",
+              retryable: false,
+            },
+          };
+    },
+  } satisfies HarnessSessionImportCapability);
+  readonly nativeUsage = Object.freeze({
+    read: (
+      cursor: JsonValue | null,
+      onProgress?: (progress: HarnessNativeUsageProgress) => void,
+    ): Promise<HarnessResult<HarnessNativeUsageBatch>> =>
+      this.#readNative(
+        (signal) => readOmpNativeUsage(this.#environment, cursor, signal, onProgress),
+        "Omp usage records could not be read; check storage access and retry",
+      ),
+    resumeCommand: (nativeSessionId: string) => `omp --resume ${nativeSessionId}`,
+  } satisfies HarnessNativeUsageCapability);
   readonly #closeTimeoutMs: number;
   readonly #createTransport: OmpAdapterDependencies["createTransport"];
+  readonly #environment: NodeJS.ProcessEnv;
+  readonly #importIndex: OmpSessionImportIndex;
+  /** Aborts reads of native session files when the Adapter closes. */
+  readonly #readAbort = new AbortController();
+  readonly #readRequests = new Set<Promise<unknown>>();
   readonly #inspectionCache = new Map<string, Extract<HarnessInspection, { status: "ready" }>>();
   readonly #inspectionInFlight = new Map<string, Promise<HarnessInspection>>();
   readonly #inspections = new Set<OmpTurnTransport>();
@@ -2215,8 +2270,29 @@ export class OmpAdapter implements HarnessAdapter {
     },
   ) {
     this.#createTransport = dependencies.createTransport;
+    this.#environment = { ...process.env, ...options.environment };
+    this.#importIndex = new OmpSessionImportIndex(this.#environment);
     this.#closeTimeoutMs = options.closeTimeoutMs ?? 2_000;
     this.#toolOutputLimit = options.toolOutputLimit ?? DEFAULT_TOOL_OUTPUT_LIMIT;
+  }
+
+  /** Reads native session files; the Adapter's close aborts and waits for it. */
+  #readNative<T>(
+    operation: (signal: AbortSignal) => Promise<T>,
+    failureMessage: string,
+  ): Promise<HarnessResult<T>> {
+    if (this.#closePromise) {
+      return Promise.resolve({ ok: false, error: invalidState("Omp Adapter is closed") });
+    }
+    const request = operation(this.#readAbort.signal)
+      .then((value): HarnessResult<T> => ({ ok: true, value }))
+      .catch((): HarnessResult<T> => ({
+        ok: false,
+        error: { code: "unavailable", message: failureMessage, retryable: true },
+      }))
+      .finally(() => this.#readRequests.delete(request));
+    this.#readRequests.add(request);
+    return request;
   }
 
   async inspect(input: InspectHarnessInput = {}): Promise<HarnessInspection> {
@@ -2535,7 +2611,9 @@ export class OmpAdapter implements HarnessAdapter {
 
   close(): Promise<void> {
     if (!this.#closePromise) {
+      this.#readAbort.abort();
       this.#closePromise = Promise.all([
+        ...this.#readRequests,
         ...[...this.#inspections].map((transport) => transport.close()),
         ...[...this.#sessions].map((session) => session.close()),
       ]).then(() => undefined);

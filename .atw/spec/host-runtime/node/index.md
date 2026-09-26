@@ -16,6 +16,8 @@
 | [directory-structure.md](./directory-structure.md) | 需要定位某类改动应放在哪个文件时；准备往 `app-server-host.ts` 加代码之前 |
 | [plugin-loading.md](./plugin-loading.md) | 涉及插件加载、预装清单、发行 Bundle 审计、Harness 名称分支时 |
 | [error-handling.md](./error-handling.md) | 新增或修改 JSON-RPC 错误码、处理 Harness 错误、Approval/Question 失败路径时 |
+| [local-usage.md](./local-usage.md) | 修改 `codexhost/usage/query`、`local-usage-*.ts`、Adapter 的 `nativeUsage` 或 Renderer 用量页时（跨层契约） |
+| [local-sessions.md](./local-sessions.md) | 修改 `codexhost/sessions/query`、会话摘要、`resumeCommand`、`local-sessions-view.ts`、`local-session-candidates.ts` 或 Renderer 会话页时（跨层契约） |
 | [testing.md](./testing.md) | 写或拆分测试，使用 `app-server-host-fixture.ts`，或运行 `*.real.test.ts` 时 |
 
 ## 改动前检查清单

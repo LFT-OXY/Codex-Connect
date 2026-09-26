@@ -2,10 +2,10 @@
 
 ## 当前范围
 
-设置 → 会话导入可登记 **Claude Code、Pi、Hermes** 和 **DSH** 的原生 Session（已验证 `0.1.2-rc.1` / `0.1.5-rc.1` / `0.1.5-rc.2` / `0.1.5-rc.3` / `0.1.7-rc.1`；命令和限制见 [DSH 验证记录](../harnesses/deepseek/dsh-015rc1-validation.md)）。导入只建立 Host Thread 与原生 Session 的映射，不复制 Transcript、不转换 Harness、不发送用户 Turn；打开后仍通过对应 Adapter 的 `open({ kind: "resume" })` 恢复历史并继续会话。
+**Claude Code、Pi、oh-my-pi、Hermes** 和 **DSH** 的原生 Session 可以登记为 Thread（已验证 `0.1.2-rc.1` / `0.1.5-rc.1` / `0.1.5-rc.2` / `0.1.5-rc.3` / `0.1.7-rc.1`；命令和限制见 [DSH 验证记录](../harnesses/deepseek/dsh-015rc1-validation.md)）。导入只建立 Host Thread 与原生 Session 的映射，不复制 Transcript、不转换 Harness、不发送用户 Turn；打开后仍通过对应 Adapter 的 `open({ kind: "resume" })` 恢复历史并继续会话。
 
-- 设置页始终使用本地 Host，即使 Composer 当前连接远程工作区。
-- 可选 Harness 来自该 Host 已加载、同时提供发现和解析能力的 Adapter，不使用 Renderer 内置 Harness 名单。
+- 入口是设置 → [会话](../product/sessions.md) 页的「恢复」：未映射的会话先经本页的导入事务登记，再打开 Thread；已映射的直接打开。该页取代了原来的「会话导入」页，并列出没有原生用量的 Harness（Hermes、DSH）的导入候选。设置页始终使用本地 Host，即使 Composer 当前连接远程工作区。
+- 可导入的 Harness 来自该 Host 已加载、同时提供发现和解析能力的 Adapter，不使用 Renderer 内置 Harness 名单。
 - 目录表示“实现了导入接口”，不保证当前原生运行时可用。不兼容的 DSH 原生协议、旧 Host、缺失插件或不可用存储会明确失败，不伪装成无候选。
 - DSH 仅允许本机、codexhost 托管的 Web；`0.1.2-rc.1`、`0.1.5-rc.1`、`0.1.5-rc.2`、`0.1.5-rc.3` 和 `0.1.7-rc.1` 已验证。其他 SemVer 版本可尝试连接及导入，须通过原生 Web 与历史协议校验；Legacy 协议已移除。不把版本号当作兼容保证。
 - 本次没有增加远程扫描、Claude Code Broker 导入，也没有完成整个 Agent Picker 的动态插件化。
@@ -46,9 +46,9 @@ interface HarnessSessionImportSource {
 | `codexhost/harness/session-import/list` | `{ harnessId, query?, offset?, limit? }` | `{ candidates, total }` |
 | `codexhost/harness/session-import/import` | `{ harnessId, nativeSessionId }` | `{ threadId }` |
 
-列表默认每页 20 条；页面可选 20 / 50 / 100 条，显示总数和上一页/下一页。搜索按标题、会话 ID、项目路径进行不区分大小写的子串匹配，覆盖所有候选而非仅当前页；提交搜索或切换 Harness/每页数量后回到第一页。Host 先过滤已映射会话、搜索、按活动时间与稳定 ID 排序，再分页；`total` 是过滤后的总数。单次响应最多 1,000 条只是 wire page 保护，不限制存储总量或总候选数。
+当前 Renderer 只调用 `import`；`sources` 与 `list` 保留为 Host 公共 RPC（「会话」页由 Host 会话查询直接合并各 Harness 的候选，见[会话](../product/sessions.md)）。`list` 默认每页 20 条，搜索按标题、会话 ID、项目路径进行不区分大小写的子串匹配，覆盖所有候选；Host 先过滤已映射会话、搜索、按活动时间与稳定 ID 排序，再分页；`total` 是过滤后的总数。单次响应最多 1,000 条只是 wire page 保护，不限制存储总量或总候选数。
 
-旧 `codexhost/deepseek/modern-session/list` / `import` 作为兼容别名保留在 Host，复用同一个 DSH importer 和通知去重集合；旧 list 仍返回 `{ candidates }`，沿用同一 SemVer 探测与原生协议校验策略，不另设版本白名单。这些 Host RPC 别名不属于已移除的 DSH Legacy 协议。新 Renderer 只使用公共 RPC。旧 Host 未实现公共入口时显示不可用，不改走未经验证的原生桥接。存储读取失败显示“无法读取本地会话”，不再误报“不支持导入”。
+旧 `codexhost/deepseek/modern-session/list` / `import` 作为兼容别名保留在 Host，复用同一个 DSH importer 和通知去重集合；旧 list 仍返回 `{ candidates }`，沿用同一 SemVer 探测与原生协议校验策略，不另设版本白名单。这些 Host RPC 别名不属于已移除的 DSH Legacy 协议。新 Renderer 只使用公共 RPC。旧 Host 未实现公共入口时「恢复」显示不支持，不改走未经验证的原生桥接；存储读取失败显示可重试的失败原因，不误报“不支持导入”。
 
 `HarnessSessionImporter` 负责：
 
@@ -77,6 +77,17 @@ Host 不承诺在 resolver 与 resume 之间锁住外部客户端；当前没有
 
 这些检查服务于正确性、流式读取和可取消性，不是对恶意本机文件替换的安全沙箱。
 
+## oh-my-pi 原生规则
+
+实现位于 `packages/adapters/omp/src/omp-session-import.ts`，行为与 Pi 对齐，差异如下：
+
+- 会话目录与用量读取相同：`PI_CODING_AGENT_SESSION_DIR`，否则 `$PI_CODING_AGENT_DIR/sessions`，默认 `~/.omp/agent/sessions`（`PI_CONFIG_DIR` 可替换 `.omp`；使用默认目录且 `$XDG_DATA_HOME/omp` 存在时改用 `$XDG_DATA_HOME/omp/sessions`）。扫描会话目录本身与其下一层（按项目分组）中的 `*.jsonl`；与某个会话文件同名的文件夹保存该会话的子代理，不作为候选。
+- 会话文件开头可以有 OMP 原地改写的定宽标题槽（`type: "title"`），其后第一条必须是 v3 会话头；Entry 树与活动分支规则同 Pi。用户调用技能时 OMP 把提示写成 `custom_message`（`attribution: "user"`、`display: true`），不写 `role: "user"` 消息；这类消息也算活动分支上的用户消息，否则以技能开始的会话无法导入。
+- 标题依次取标题槽、会话头的 `title`、首条用户消息的文本；更新时间取消息活动时间，缺失时回退文件修改时间。
+- 原生引用包含 `locator: { sessionFile }`，oh-my-pi Adapter 已有的 `resume` 用该文件恢复并核对 Session ID。
+- oh-my-pi 没有可靠的跨进程运行标记，候选为 `running: null`；导入前应先在 `omp` 中关闭该会话。
+- 读取前后检查文件指纹，按 Adapter 实例缓存元数据，重复 Session ID 明确失败；Adapter 关闭时中止并等待正在进行的发现。
+
 ## Claude Code 原生规则
 
 - 默认扫描 `~/.claude/projects/<encoded-cwd>/*.jsonl`；`CLAUDE_CONFIG_DIR` 可替换 `.claude` 根目录。只展开一层项目目录，不进入 Session 子目录或 Subagent Transcript，也不跟随枚举到的符号链接。
@@ -99,7 +110,7 @@ Host 不承诺在 resolver 与 resume 之间锁住外部客户端；当前没有
 
 ## 验证
 
-定向测试覆盖 Claude Code 的 CLI/SDK entrypoint、目录与标题规则、坏文件、Subagent 排除、消失/歧义、只读发现、缓存和提交前复查；Pi 目录规则、活动分支、坏文件、消失/歧义、取消、只读发现，以及超过旧 64 MiB/256 MiB 和 100,000 Entry 限制的有效数据、缓存失效和按选中项复查；Host locator 持久化与重启、跨 Harness 相同 ID、旧 DSH RPC、幂等/竞争/忙碌/失败清理、过滤后分页与跨页搜索；Renderer 动态来源、分页大小/边界、搜索旧响应失效、导入期间控件锁定、未知状态、导入去重和导航失败恢复。
+定向测试覆盖 Claude Code 的 CLI/SDK entrypoint、目录与标题规则、坏文件、Subagent 排除、消失/歧义、只读发现、缓存和提交前复查；Pi 目录规则、活动分支、坏文件、消失/歧义、取消、只读发现，以及超过旧 64 MiB/256 MiB 和 100,000 Entry 限制的有效数据、缓存失效和按选中项复查；Host locator 持久化与重启、跨 Harness 相同 ID、旧 DSH RPC、幂等/竞争/忙碌/失败清理、过滤后分页与跨页搜索；Renderer（「会话」页）恢复时的映射复用、导入去重、失败原因与导航失败后的重试打开。
 
 还使用 Pi **0.85.0** 的真实 `SessionManager` 创建隔离临时会话，经公共 Host importer 登记，再用真实 `pi --mode rpc --session ...` 恢复历史并继续一轮，验证同一 Session ID 与同一 JSONL 文件。该检查使用回环地址上的模拟 Provider，不调用付费 Model 服务，也不读取/修改用户原有会话。
 

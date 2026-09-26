@@ -556,6 +556,99 @@ export interface HarnessSessionImportCapability {
   resolveCandidate?(nativeSessionId: string): Promise<HarnessResult<HarnessSessionImportSource>>;
 }
 
+/** Token counts of one native usage fact. `input` excludes cache reads and writes. */
+export interface HarnessNativeUsageTokens {
+  input: number;
+  cacheRead: number;
+  cacheWrite: number;
+  /** Part of `cacheWrite` written to a one-hour cache; omitted when the Harness does not say. */
+  cacheWrite1h?: number;
+  output: number;
+  /** Reported separately by the Harness; zero when it is only part of `output`. */
+  reasoning: number;
+}
+
+/** One usage fact read from native Session records. It never carries message text. */
+export interface HarnessNativeUsageRecord {
+  /** Stable across re-reads and copied records; Host counts each key once per Harness. */
+  dedupeKey: string;
+  /** Epoch milliseconds. */
+  occurredAt: number;
+  nativeSessionId: string;
+  provider?: string;
+  /** Omitted when the fact only counts a conversation. */
+  model?: string;
+  cwd?: string;
+  tokens: HarnessNativeUsageTokens;
+  /** Conversation Count increment, in this Harness's own semantics. */
+  conversations: number;
+  /** Cost the Harness itself recorded, in USD. */
+  reportedCostUsd?: number;
+}
+
+/**
+ * What the native records of one Session say about it so far. It never carries message text;
+ * `title` is the Harness's own name for the Session or the text the Adapter already offers as one.
+ */
+export interface HarnessNativeSessionSummary {
+  /**
+   * Identifies the summarized records, for example one file. A later summary with the same key
+   * replaces this one, so each summary covers everything its records say, not only new records.
+   */
+  key: string;
+  nativeSessionId: string;
+  /** Set on subagent and child Sessions; their usage and count fold into this Session. */
+  parentSessionId?: string;
+  title?: string;
+  cwd?: string;
+  /** The model used last. */
+  model?: string;
+  /** Epoch milliseconds of the first and last timestamped record. */
+  firstActivityAt: number;
+  lastActivityAt: number;
+  /** Time between consecutive records, leaving out gaps longer than 30 minutes. */
+  activeMs: number;
+  /** User turns, in this Harness's own semantics. */
+  turns: number;
+  /** Turns with at least one file-editing tool call. */
+  edits: number;
+}
+
+export interface HarnessNativeUsageBatch {
+  /** Facts added since the input cursor. Repeats of earlier facts are allowed. */
+  records: readonly HarnessNativeUsageRecord[];
+  /** Summaries whose records changed since the input cursor; omitted when not supported. */
+  sessions?: readonly HarnessNativeSessionSummary[];
+  cursor: JsonValue;
+}
+
+/** Native record files handled so far by one read, out of all it will handle. */
+export interface HarnessNativeUsageProgress {
+  processed: number;
+  total: number;
+}
+
+/**
+ * Optional read-only access to usage in native Session records, including sessions run outside
+ * codexhost. The cursor is opaque to Host, which persists it; the Adapter keeps no read state.
+ */
+export interface HarnessNativeUsageCapability {
+  /**
+   * `null` reads all history. An unrecognized cursor also restarts from the beginning.
+   * `onProgress` may be called while reading, for example after each file.
+   */
+  read(
+    cursor: JsonValue | null,
+    onProgress?: (progress: HarnessNativeUsageProgress) => void,
+  ): Promise<HarnessResult<HarnessNativeUsageBatch>>;
+  /**
+   * The command line that resumes a Native Session in this Harness's own CLI when run from the
+   * Session's working directory, such as `claude --resume <id>`. Host offers it to copy only for
+   * shell-safe IDs and commands; the working directory is added by Renderer.
+   */
+  resumeCommand?(nativeSessionId: string): string;
+}
+
 export interface HarnessAdapter {
   readonly credentialExport?: HarnessCredentialExport;
   readonly credentialImports?: HarnessCredentialImports;
@@ -568,6 +661,7 @@ export interface HarnessAdapter {
    * without them that they load after its first message.
    */
   readonly liveCommandCatalog?: boolean;
+  readonly nativeUsage?: HarnessNativeUsageCapability;
   readonly sessionImport?: HarnessSessionImportCapability;
   readonly subagents?: HarnessSubagentCapability;
   readonly webUi?: HarnessWebUiAction;

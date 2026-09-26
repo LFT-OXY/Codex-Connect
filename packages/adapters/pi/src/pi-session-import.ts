@@ -91,6 +91,23 @@ async function sessionFiles(
   return files;
 }
 
+/** A user message's text as a Session title, for Sessions Pi has not named. */
+export function piUserMessageTitle(message: Record<string, unknown>): string | null {
+  const content = message.content;
+  const text =
+    typeof content === "string"
+      ? content
+      : Array.isArray(content)
+        ? content
+            .filter(
+              (block) => isRecord(block) && block.type === "text" && typeof block.text === "string",
+            )
+            .map((block) => block.text)
+            .join(" ")
+        : "";
+  return text.replaceAll("\0", "").trim().slice(0, HARNESS_SESSION_IMPORT_TITLE_MAX_LENGTH) || null;
+}
+
 async function readCandidate(
   file: string,
   signal: AbortSignal,
@@ -140,22 +157,7 @@ async function readCandidate(
         return null;
       const message = isRecord(entry.message) ? entry.message : null;
       if (!firstMessage && entry.type === "message" && message?.role === "user") {
-        const content = message.content;
-        const text =
-          typeof content === "string"
-            ? content
-            : Array.isArray(content)
-              ? content
-                  .filter(
-                    (block) =>
-                      isRecord(block) && block.type === "text" && typeof block.text === "string",
-                  )
-                  .map((block) => block.text)
-                  .join(" ")
-              : "";
-        firstMessage =
-          text.replaceAll("\0", "").trim().slice(0, HARNESS_SESSION_IMPORT_TITLE_MAX_LENGTH) ||
-          null;
+        firstMessage = piUserMessageTitle(message);
       }
       hasUser =
         (entry.type === "message" && message?.role === "user") ||

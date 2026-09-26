@@ -83,11 +83,29 @@ export const accountCreditsProductUsageSchema = z
   })
   .strict();
 
+export const ACCOUNT_RESET_CREDITS_MAX_LENGTH = 32;
+export const ACCOUNT_RESET_CREDIT_TIME_MAX_LENGTH = 64;
+
+const resetCreditTimeSchema = z.string().min(1).max(ACCOUNT_RESET_CREDIT_TIME_MAX_LENGTH);
+
+/** 一张可用重置卡；来源没有可用的发放时间时省略 `grantedAt`。 */
+export const accountResetCreditSchema = z
+  .object({
+    expiresAt: resetCreditTimeSchema,
+    grantedAt: resetCreditTimeSchema.optional(),
+  })
+  .strict();
+
 export const accountResetCreditsSchema = z
   .object({
     availableCount: z.number().int().safe().positive(),
     nextExpiresAt: z.string().min(1).optional(),
-    expiresAt: z.array(z.string().min(1)).min(1).max(32).optional(),
+    expiresAt: z.array(z.string().min(1)).min(1).max(ACCOUNT_RESET_CREDITS_MAX_LENGTH).optional(),
+    credits: z
+      .array(accountResetCreditSchema)
+      .min(1)
+      .max(ACCOUNT_RESET_CREDITS_MAX_LENGTH)
+      .optional(),
   })
   .strict();
 
@@ -103,6 +121,7 @@ export const accountCreditsSnapshotSchema = z
   })
   .strict();
 
+export type AccountResetCredit = z.infer<typeof accountResetCreditSchema>;
 export type AccountResetCredits = z.infer<typeof accountResetCreditsSchema>;
 export type AccountCreditsSnapshot = z.infer<typeof accountCreditsSnapshotSchema>;
 

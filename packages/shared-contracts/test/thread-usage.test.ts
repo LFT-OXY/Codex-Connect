@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  accountCreditsSnapshotSchema,
+  accountResetCreditsSchema,
   threadUsageInspectionParamsSchema,
   threadUsageInspectionSchema,
   threadUsageSnapshotSchema,
@@ -57,6 +59,39 @@ describe("Thread Usage contracts", () => {
         },
       },
     });
+  });
+
+  it("carries per-card reset details beside the legacy expiry list", () => {
+    const resetCredits = {
+      availableCount: 2,
+      nextExpiresAt: "2026-09-12T12:00:00.000Z",
+      expiresAt: ["2026-09-12T12:00:00.000Z", "2026-09-18T08:00:00.000Z"],
+      credits: [
+        { expiresAt: "2026-09-12T12:00:00.000Z", grantedAt: "2026-09-05T12:00:00.000Z" },
+        { expiresAt: "2026-09-18T08:00:00.000Z" },
+      ],
+    };
+    expect(
+      accountCreditsSnapshotSchema.parse({ usedPercent: 10, periodType: "five_hour", resetCredits })
+        .resetCredits,
+    ).toEqual(resetCredits);
+    for (const credits of [
+      [],
+      [{ grantedAt: "2026-09-05T12:00:00.000Z" }],
+      [{ expiresAt: "" }],
+      [{ expiresAt: "x".repeat(65) }],
+      Array.from({ length: 33 }, () => ({ expiresAt: "2026-09-12T12:00:00.000Z" })),
+    ]) {
+      expect(accountResetCreditsSchema.safeParse({ availableCount: 1, credits }).success).toBe(
+        false,
+      );
+    }
+    expect(
+      accountResetCreditsSchema.safeParse({
+        availableCount: 1,
+        credits: [{ expiresAt: "2026-09-12T12:00:00.000Z", id: "native" }],
+      }).success,
+    ).toBe(false);
   });
 
   it.each([

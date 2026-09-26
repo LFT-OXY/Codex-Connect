@@ -9,12 +9,11 @@ import {
   createDefaultRendererSettingsPages,
   type RendererConnectionDiagnostics,
   type RendererCodexAccountClient,
+  type RendererImportedThreadOpener,
   type RendererUpdateClient,
+  type RendererSessionsClient,
+  type RendererUsageClient,
 } from "./settings/pages.js";
-import type {
-  RendererSessionImportClient,
-  RendererImportedThreadOpener,
-} from "./settings/session-import-page.js";
 import { installRendererSettingsShell, type RendererSettingsShell } from "./settings/shell.js";
 import {
   installRendererSettingsHeaderTrigger,
@@ -28,8 +27,11 @@ export interface RendererSettingsLifecycleOptions {
   getUpdateClient?(): RendererUpdateClient | null;
   getConnectionDiagnostics?(): RendererConnectionDiagnostics | null;
   getAccountClient?(): RendererCodexAccountClient | null;
-  getSessionImportClient?(): RendererSessionImportClient | null;
   getLoadedSessionsClient?(): LoadedSessionsClient | null;
+  /** Always the local Host: usage is read from native records on this computer. */
+  getUsageClient?(): RendererUsageClient | null;
+  /** Always the local Host: Sessions are read from native records on this computer. */
+  getSessionsClient?(): RendererSessionsClient | null;
   openImportedThread?: RendererImportedThreadOpener;
   onLocaleChange?(locale: RendererSettingsLocale): void;
 }
@@ -68,7 +70,7 @@ export function installRendererSettingsLifecycle(
       options.getUpdateClient ?? (() => null),
       options.getConnectionDiagnostics ?? (() => null),
       options.getAccountClient ?? (() => null),
-      options.getSessionImportClient ?? (() => null),
+      options.getSessionsClient ?? (() => null),
       async (threadId, signal) => {
         if (!options.openImportedThread) {
           throw new Error("Imported Thread navigation is unavailable");
@@ -77,6 +79,7 @@ export function installRendererSettingsLifecycle(
         if (!disposed && !signal.aborted) shell?.close();
       },
       options.getLoadedSessionsClient ?? (() => null),
+      options.getUsageClient ?? (() => null),
     );
     const nextShell = installRendererSettingsShell(definitions, messages, ownerWindow.document);
     const nextTrigger = installRendererSettingsHeaderTrigger({

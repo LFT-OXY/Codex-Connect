@@ -6,7 +6,7 @@
 
 | 域 | 位置 | 做法 |
 |---|---|---|
-| 设置页 | `src/settings/`，挂在 `settings/shell.ts` 的 `attachShadow({ mode: "open" })` 内 | Tailwind 工具类，以及遗留的 `shell.css` / `accounts.css` |
+| 设置页 | `src/settings/`，挂在 `settings/shell.ts` 的 `attachShadow({ mode: "open" })` 内 | Tailwind 工具类，以及遗留的 `shell.css` / `accounts.css`（账号页额度横条已迁到 Tailwind，见下文） |
 | 注入 Desktop 文档的控件 | Composer 尾部 chip、Model 菜单、`@` 提及菜单等 | 自带小样式表 + 内联尺寸，**禁止**使用本项目的 Tailwind 类 |
 
 - Desktop 自身也用 Tailwind v4，类名、`--tw-*` 变量和 layer 名都会冲突，所以 Tailwind 编译结果只能进入设置页的 Shadow DOM。
@@ -23,7 +23,46 @@
 - 类名必须在源码里完整出现，不能写 `bg-settings-${state}` 这种拼接；状态切换用 `data-[state=…]:` 变体或对象映射。
 - 同一个元素不要同时使用旧 CSS 类和 Tailwind 类（旧 CSS 不在 layer 里，优先级更高）。
 - 可复用控件（分组卡片、`role="switch"` 开关、带单位的数字输入、`role="tooltip"` 问号浮窗）放在 `settings/preference-ui.ts`，页面里不要复制长串类名。
+- Tailwind 页面共用的按钮与分段控件类串在 `settings/control-classes.ts`（`SETTINGS_BUTTON_CLASS`、`SETTINGS_SEGMENT_CLASS`，`aria-pressed` 标记选中），用量页、会话页都从这里取；`usage-dashboard.ts#element(document, tag, className, text?)` 是共用的建元素辅助函数。
 - `shell.css` / `accounts.css` 暂不整体迁移；大改某个页面时顺带把它迁到 Tailwind，并删掉对应的旧样式。
+
+## 账号页额度横条（`settings/accounts-*.ts`）
+
+「设置 → 账号」的额度是按账号分组的横条（2026-09 `quota-limits-restyle`），替代原来的 `settings-account-table`。
+
+| 模块 | 职责 |
+|---|---|
+| `accounts-usage-windows.ts` | 纯函数：`accountUsageWindowRows(credits, messages, filter?)` → `AccountUsageWindowRow[]`（`label`、`usedPercent`、可选 `resetsAt`、可选 `windowMs`）；`accountUsagePace(window, display, now?)` → `{ position, ahead } \| null`；重置卡的 `accountResetCreditLife(credit, now?)` → 0～100 或 `null`（缺发放时间、时间无效、发放不早于到期），`accountResetCreditTone(expiresAtMs, now?)` → 距到期 ≤8h `hot`、≤24h `warn`，否则 `ok`。不依赖 DOM。 |
+| `accounts-usage.ts` | `renderAccountUsage(...)` 返回一个元素：一行一个窗口，或加载/失败/空状态消息；`renderAccountResetCredits(document, credits, messages, now?)` 返回重置卡区域或 `null`（无 `resetCredits` 时），窗口行与重置卡行共用 `renderMeter` 与行/横条类名 |
+| `accounts-reset-time.ts` | 倒计时 `<time data-resets-at>`、节奏标记，以及 `mountAccountResetCountdowns` 页面本地时钟（每分钟和 `focus` 时刷新倒计时与节奏标记，不重建列表） |
+| `accounts-list.ts` | `renderAccountGroup` / `renderHarnessAccountGroup`：组头（旧 CSS 的身份块 + Pi 入口）加窗口列表；Codex 组在窗口列表后直接追加重置卡区域（不再有展开入口和页面级展开状态） |
+
+DOM 标记是测试、焦点恢复和 forced-colors 样式共同依赖的契约，改名时要同时改这三处：
+
+- 分组：`[data-account-group][role="group"][aria-label=<账号名>]`，再加 `data-account-id` 或 `data-harness-id`。`accountListFocusRestorer` 按它恢复焦点。
+- 窗口行：`[data-usage-window][data-tone="ok|warn|hot"]`，子元素依次是：窗口名、`[role="meter"]`（首个子元素是填充）、百分比、倒计时（没有重置时间时是空 `span`，用来占位对齐）。
+- 重置卡：区域 `[data-reset-credits][role="group"][aria-label="重置卡"]`，首个子元素是「图标 + 重置卡 + N 张」小标题；之后每张卡一行 `[data-reset-credit][data-tone="ok|warn|hot"]`，子元素依次是：`重置 N`、可选的 `[role="meter"]`（寿命横条，只有 `accountResetCreditLife` 非 `null` 时才有，**不留占位**）、`<time>` 到期时间（`col-start-3 col-span-2`，窄布局 `col-start-2`，所以缺横条时也能对齐；到期时间无效时省略）。行按 `credits`，旧 Host 只给 `expiresAt[]` 时按它回退、全部不画横条。寿命横条不随「已用/剩余」切换镜像，也不挂页面时钟。
+- 节奏：meter 上带 `data-pace-window-ms/-resets-at/-used/-display`，子元素 `[data-pace-marker][data-state="even|ahead"]`。只有在 `windowMs` 和 `resetsAt` 都存在时才生成；已用低于 5% 时 `hidden`。
+
+规则：
+
+- 风险色按已用比例（`rendererCreditsTone`）写到行上的 `data-tone`，子元素用 `group-data-[tone=…]:` 切换颜色，不要拼接类名。
+- 窄布局用容器查询 `@max-[28rem]:`（容器是 `.settings-account-list`，它自带 `container-type`）：横条换到下一行，占满整行。
+- forced-colors 下横条和标记的颜色**不写成 Tailwind 任意值**（`bg-[Highlight]` 违反「颜色只用 `settings-*`」），而是写在 `accounts.css` 的 `@media (forced-colors: active)`，用上面的 data 属性选择器（`[data-usage-window]` 与 `[data-reset-credit]` 两组 meter 并列）。
+- 窗口长度只来自来源显式给出的周期：产品名的英文后缀（`5-hour window`、`7-day window`、`Weekly window`、`<组> · 5-hour` 等），或主窗口的 `periodType`。月额度、`unknown` 和识别不出的产品名都没有长度，因此不画节奏标记。
+- Codex `planType === "pro"` 传 `filter: "weekly-only"`，只保留 7 天/周窗口；其他账号不过滤。
+
+测试：纯函数在 `test/settings/accounts-usage-windows.test.ts`，渲染在 `accounts-usage.test.ts`（本地 FakeElement；重置卡的寿命比例、缺发放时间、旧字段回退、越界夹取、到期警示都经 `renderAccountResetCredits` 断言），整页分组在 `pages.test.ts`，布局与窄窗口在 `tests/e2e/renderer-settings-accounts.spec.ts`。
+
+## 「用量」页（`settings/usage-*.ts`）
+
+- 与其他设置页同尺寸（曾有按页面放大的 `size: "expanded"`，用户决定取消：Codex Desktop 的 `env(titlebar-area-height)` 为 0，放大后会盖住 macOS 红绿灯，且与其他页不一致）。不要再为单页加尺寸变体。
+- 分类色：`--settings-series-1..6`（`shell.css` 的 `:host`，`light-dark()`）映射为 Tailwind `bg-settings-series-N`。类名写成完整字面量数组（`usage-dashboard.ts#SERIES_BACKGROUNDS`）按下标取，不拼接。
+- `usage-dashboard.ts#renderLocalUsage(document, view: LocalUsageView, messages, tab?: { selected, select(tab) })` 只依赖 `createElement/append/setAttribute/addEventListener/dataset/style/focus`，可用假 DOM 测试；`tab` 由页面持有，切换周期或刷新后仍打开同一明细标签（缺省 `"daily"`）。`reading` 结果不交给它，由 `usage-page.ts#renderProgress` 显示。横条统一用导出的 `usageBar(document, percent, sizeClass)`（轨道 `bg-settings-surface-hover`、填充 `bg-settings-series-1`，`sizeClass` 只给高宽/外边距），项目横条与读取进度条都用它，不要再复制轨道/填充类串。`usage-page.ts` 负责周期按钮、自定义表单、刷新与请求。DOM 标记（测试与 e2e 依赖）：`[data-usage-total]`（title 为完整数）、`[data-usage-segment=<harnessId>]`（style.width 百分比）、`[data-usage-harness-card="all"|<harnessId>]`（占比用 `formatUsageShare`，横条 segment 的 title 同）、卡片内 Provider 展开 `details[data-usage-providers=<harnessId>]`（仅 `providers` 非空；首子元素 `summary`「Provider（N）」，默认收起，重渲染后重新收起）与其中 `li[data-usage-provider=<provider>]`（名称可截断、title 为全名，占比为该 Harness 内占比）、`tr[data-usage-day=<date>]`、统计块卡片 `[data-usage-stat="last7Days"|"last30Days"|"dailyAverage"|"conversations"]`（按此顺序，位于 Harness 卡片与每日明细之间，首个子元素 title 为完整数；范围为空时仍显示，`stats.firstActiveDate === null` 时整块省略）、开始使用与活跃天数行 `[data-usage-history]`、`[data-usage-period=<kind>]`（`aria-pressed`）、`form[data-usage-custom]`、`[data-usage-custom-from/to]`、`[data-usage-action="refresh"]`；明细标签 `[role="tablist"]` 内 `button[data-usage-tab="daily"|"projects"]`（`role="tab"`、`aria-selected`、roving `tabIndex`、`aria-controls` → 面板 `id` `codexhost-settings-usage-<tab>`，左右方向键切换并聚焦，照 `connections-page.ts` 的 Host 标签）与面板 `[data-usage-tab-panel]`（`role="tabpanel"`，未选中 `hidden`）；项目行 `li[data-usage-project=<project>]`（名称 title 为全名，`owner/` 为 `text-settings-muted` 前缀，末段 `font-medium`，下行 Harness 名以 ` · ` 连接，右侧 Token 数 title 为完整数与相对最多项目的 `usageBar`）；读取失败提示 `p[data-usage-failure=<harnessId>]`（`role="alert"`，`text-settings-danger`，位于结果根的最前面，每个失败 Harness 一条）；读取进度 `[role="progressbar"]`（`aria-valuemin/max/now` 为文件数，仅 `progress.total > 0` 时出现）。
+- 会话页（`sessions-page.ts` 页面与请求/恢复、`sessions-list.ts` 行、`sessions-filters.ts` 筛选与 `filterSessions` 纯函数、`session-resume-command.ts` 复制指令、`sessions-messages.ts` 文案）：契约见 `.atw/spec/host-runtime/node/local-sessions.md`。DOM 标记：行 `article[data-session-id][data-session-harness]`（`role="listitem"`，在 `[data-sessions-list]` 内）、`[data-session-details]`（项目 · 模型 · 时间 · 活跃时长 · 子代理数）、`[data-session-stats]`（Token、费用、轮数、编辑四格，`usage`/`turns`/`edits` 为 null 时为空串而不是 0）、动作 `[data-session-action="resume"|"copy-command"|"copy-project-path"|"retry-open"|"dismiss"]`、`[data-sessions-action="refresh"|"show-more"]`、`[data-sessions-summary]`、`[data-sessions-failure=<harnessId>]`、`[data-sessions-recovery]`、筛选 `[data-sessions-harness=all|<id>]`、`[data-sessions-range]`、`select[data-sessions-project-filter]`、`input[data-sessions-search]`。每批渲染 200 行，「显示更多」追加到同一列表（不重绘、保持滚动），有 `IntersectionObserver` 时自动追加。
+- `formatUsageShare(percent)`：两位小数加 `%`；`0 < percent < 0.005` 显示 `<0.01%`，0 显示 `0.00%`。
+- `formatUsageTokens`：<1000 原样；否则 K/M/B 两位小数去尾零，舍入到 1000 时进位（`999_999` → `1M`）。
+- 测试：`test/settings/usage-dashboard.test.ts`、`usage-page.test.ts`；布局与深色/窄窗口在 `tests/e2e/renderer-settings-usage.spec.ts`（设置 `CODEXHOST_USAGE_SCREENSHOT_DIR` 可输出截图）。
 
 ## 构建插件
 

@@ -48,6 +48,18 @@
 - `observeCodexRateLimits` 只采用账号级别的 `codex` bucket，忽略 `rateLimitsByLimitId` 中按模型区分的 bucket（例如 GPT-5.3-Codex-Spark），也忽略按模型区分的滚动通知。
 - 无法识别的通知返回 `null`，不抛出异常。观测类函数属于尽力而为的读取。
 
+### Scenario: Codex 重置卡明细（`observeCodexRateLimitResetCredits` → `projectCodexRateLimitsToCredits`）
+
+1. **Scope / Trigger**：官方 `account/rateLimits/read` 响应（或 `params`）里的 `rateLimitResetCredits` 投影到跨层契约 `AccountCreditsSnapshot.resetCredits`，Renderer 据此画逐张寿命横条。
+2. **Signatures**：`observeCodexRateLimitResetCredits(value: unknown): CodexRateLimitResetCredits | null`；`CodexRateLimitResetCredits = { availableCount; nextExpiresAtUnix?; expiresAtUnix?: number[]; credits?: { expiresAtUnix: number; grantedAtUnix?: number }[] }`。`projectCodexRateLimitsToCredits(usage, resetCredits?)` 把 Unix 秒转 ISO。
+3. **Contracts**：官方（codex-cli 0.156.1 `generate-ts`）`RateLimitResetCredit = { id, resetType, status, grantedAt: number /*秒*/, expiresAt: number | null, title, description }`，`credits` 可为 `null`（只知张数）且可能被后端截断。输出契约 `accountResetCreditsSchema`：`availableCount`（正整数）、`nextExpiresAt?`、`expiresAt?: string[]`（旧字段，保留兼容）、`credits?: { expiresAt: string; grantedAt?: string }[]`，两个数组上限 `ACCOUNT_RESET_CREDITS_MAX_LENGTH = 32`，时间字符串上限 `ACCOUNT_RESET_CREDIT_TIME_MAX_LENGTH = 64`。
+4. **Validation & Error Matrix**：`availableCount` 缺失/非法/0 → 返回 `null`（Renderer 不显示区域）；`status` 存在且不是 `"available"` → 跳过；`expiresAt` 非非负安全整数（含 `null` 永不过期）→ 跳过该卡（只计入张数）；`grantedAt` 非非负安全整数或 ≥ `expiresAt` → 保留卡、省略 `grantedAtUnix`；超过 32 张 → 按到期升序保留前 32 张，`availableCount` 不变。
+5. **Good/Base/Bad**：Good — 两张可用卡都带 `grantedAt`，按到期升序输出 `credits` 与同序 `expiresAtUnix`；Base — `credits: null`，只输出 `availableCount`；Bad — `grantedAt: "1000"` / `-1` / 等于到期，卡照常输出但没有 `grantedAtUnix`。
+6. **Tests Required**：`protocol-core/test/codex-native-usage.test.ts`（排序、过滤已兑换卡、异常发放时间、32 张截断、ISO 投影）；`host-runtime/test/account-rate-limits.test.ts`（缓存保留 `credits`）；`shared-contracts/test/thread-usage.test.ts`（新字段通过、空数组/缺到期/未知字段/超长/超 32 张被拒）。
+7. **Wrong vs Correct**：
+   - Wrong：`grantedAt` 缺失时用 `now` 或 `expiresAt - 30 天` 补齐，Renderer 会画出编造的比例。
+   - Correct：只在 `0 ≤ grantedAt < expiresAt` 时带 `grantedAtUnix`，否则省略，由 Renderer 只显示到期时间。
+
 ## JSONL（`jsonl.ts`）
 
 - `readLfFrames` 只在新收到的数据块中查找换行，跨块帧合并一次，复杂度保持线性。`maxFrameBytes` 按单帧计算，默认不设上限，原因是官方历史响应可能超过 128 MiB（`docs/architecture/app-server-transport.md`）。**不要给 Desktop 与官方之间的转发加帧大小上限，也不要截断内容。**

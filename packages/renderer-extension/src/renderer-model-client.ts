@@ -11,6 +11,16 @@ import {
   LOADED_SESSIONS_METHOD,
   loadedSessionsSchema,
   type LoadedSession,
+  LOCAL_SESSIONS_QUERY_METHOD,
+  LOCAL_USAGE_QUERY_METHOD,
+  localSessionsQueryParamsSchema,
+  localSessionsQueryResultSchema,
+  localUsageQueryParamsSchema,
+  localUsageQueryResultSchema,
+  type LocalSessionsQueryParams,
+  type LocalSessionsQueryResult,
+  type LocalUsageQueryParams,
+  type LocalUsageQueryResult,
   idleReleaseSettingsSchema,
   type IdleReleaseSettings,
   harnessAccountInspectParamsSchema,
@@ -177,6 +187,8 @@ export interface RendererModelClient extends Partial<RendererSessionImportClient
   setHarnessLaunchSettings?(input: HarnessLaunchSettingsSet): Promise<HarnessLaunchSettings>;
   setIdleReleaseSettings?(settings: IdleReleaseSettings): Promise<IdleReleaseSettings>;
   listLoadedSessions?(): Promise<LoadedSession[]>;
+  queryLocalUsage?(input: LocalUsageQueryParams): Promise<LocalUsageQueryResult>;
+  queryLocalSessions?(input: LocalSessionsQueryParams): Promise<LocalSessionsQueryResult>;
   currentHostId?(): string | null;
   listHarnessPlugins?(): Promise<HarnessPluginListResult>;
   clientForHost?(hostId: string): RendererModelClient | null;
@@ -362,6 +374,22 @@ export function createRendererModelClient(
     },
     async listLoadedSessions(): Promise<LoadedSession[]> {
       return loadedSessionsSchema.parse(await manager.sendRequest(LOADED_SESSIONS_METHOD, {}));
+    },
+    async queryLocalUsage(input: LocalUsageQueryParams): Promise<LocalUsageQueryResult> {
+      return localUsageQueryResultSchema.parse(
+        await manager.sendRequest(
+          LOCAL_USAGE_QUERY_METHOD,
+          localUsageQueryParamsSchema.parse(input),
+        ),
+      );
+    },
+    async queryLocalSessions(input: LocalSessionsQueryParams): Promise<LocalSessionsQueryResult> {
+      return localSessionsQueryResultSchema.parse(
+        await manager.sendRequest(
+          LOCAL_SESSIONS_QUERY_METHOD,
+          localSessionsQueryParamsSchema.parse(input),
+        ),
+      );
     },
     async setIdleReleaseSettings(settings: IdleReleaseSettings): Promise<IdleReleaseSettings> {
       const params = idleReleaseSettingsSchema.parse(settings);

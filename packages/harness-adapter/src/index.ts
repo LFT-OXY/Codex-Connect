@@ -11,6 +11,15 @@ export { HarnessOutputChannel } from "./output-channel.js";
 export { sanitizeDiagnosticTail, filterAmbientNodeWarnings } from "./diagnostics.js";
 export { validateHostQuestionResponse } from "./question.js";
 export { parseHostUsage } from "./usage.js";
+export {
+  emptyNativeSessionActivity,
+  nativeSessionEdits,
+  parseNativeSessionActivity,
+  recordNativeSessionActivity,
+  recordNativeSessionEdit,
+  startNativeSessionTurn,
+} from "./native-session-summary.js";
+export type { NativeSessionActivity } from "./native-session-summary.js";
 export type { HostUsage } from "./usage.js";
 export type {
   AutonomousTurnStartedEvent,
@@ -27,6 +36,12 @@ export type {
   HarnessModel,
   HarnessModelCatalog,
   HarnessModelRef,
+  HarnessNativeSessionSummary,
+  HarnessNativeUsageBatch,
+  HarnessNativeUsageCapability,
+  HarnessNativeUsageProgress,
+  HarnessNativeUsageRecord,
+  HarnessNativeUsageTokens,
   HarnessPermissionMode,
   HarnessPermissionModeCatalog,
   HarnessPermissionModeId,

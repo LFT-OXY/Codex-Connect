@@ -3,6 +3,8 @@ import {
   credentialImportChinese,
   type CredentialImportMessages,
 } from "./credential-import-messages.js";
+import { sessionsChinese, sessionsEnglish, type SessionsMessages } from "./sessions-messages.js";
+import { usageChinese, usageEnglish, type UsageMessages } from "./usage-messages.js";
 import type { DefaultRendererSettingsPageId } from "./pages.js";
 
 export const RENDERER_SETTINGS_LOCALES = ["en", "zh-CN"] as const;
@@ -24,6 +26,8 @@ export interface RendererSettingsLanguageControl {
 
 export interface RendererSettingsMessages {
   readonly credentialImports: CredentialImportMessages;
+  readonly usage: UsageMessages;
+  readonly sessions: SessionsMessages;
   readonly locale: RendererSettingsLocale;
   readonly title: string;
   readonly close: string;
@@ -71,38 +75,7 @@ export interface RendererSettingsMessages {
   readonly inDevelopment: string;
   readonly notAvailable: string;
   readonly runtimeCapabilityNotInstalled: string;
-  readonly sessionImportHarness: string;
-  readonly sessionImportDescription: string;
-  readonly sessionImportAvailabilityNote: string;
-  readonly sessionImportRefresh: string;
-  readonly sessionImportRefreshing: string;
-  readonly sessionImportUnavailable: string;
-  readonly sessionImportEmpty: string;
-  readonly sessionImportSearch: string;
-  readonly sessionImportSearchPlaceholder: string;
-  readonly sessionImportNoMatches: string;
-  readonly sessionImportPageSize: string;
-  readonly sessionImportPrevious: string;
-  readonly sessionImportNext: string;
-  readonly sessionImportPageSummary: string;
-  readonly sessionImportLoadFailed: string;
-  readonly sessionImportFailed: string;
-  readonly sessionImportUntitled: string;
-  readonly sessionImportUpdatedAt: string;
-  readonly sessionImportSessionId: string;
-  readonly sessionImportRunning: string;
-  readonly sessionImportRunningHint: string;
-  readonly sessionImportAction: string;
-  readonly sessionImportImporting: string;
-  readonly sessionImportImported: string;
-  readonly sessionImportOpenFailed: string;
-  readonly sessionImportCopyProjectPath: string;
-  readonly sessionImportPathCopied: string;
-  readonly sessionImportPathCopyFailed: string;
-  readonly sessionImportRetryOpen: string;
-  readonly sessionImportRetrying: string;
   readonly connectionsDescription: string;
-  readonly accountColumnAccount: string;
   readonly accountConnected: string;
   readonly accountDefaultBadge: string;
   readonly accountSearch: string;
@@ -122,6 +95,9 @@ export interface RendererSettingsMessages {
   readonly accountCreditsResetIn: string;
   readonly accountCreditsResetPending: string;
   readonly accountCreditsResetPendingHint: string;
+  readonly accountCreditsPaceUsed: string;
+  readonly accountCreditsPaceRemaining: string;
+  readonly accountCreditsPaceAhead: string;
   readonly accountCreditsPeriodWeekly: string;
   readonly accountCreditsPeriodMonthly: string;
   readonly accountCreditsPeriodFiveHour: string;
@@ -129,7 +105,8 @@ export interface RendererSettingsMessages {
   readonly accountCreditsPeriodUnknown: string;
   readonly accountCreditsBuild: string;
   readonly accountResetCredits: string;
-  readonly accountResetCreditsDetails: string;
+  readonly accountResetCreditLabel: string;
+  readonly accountResetCreditLife: string;
   readonly accountResetCreditsCardExpiry: string;
   readonly connectionAdapter: string;
   readonly connectionHosts: string;
@@ -239,6 +216,8 @@ export interface RendererSettingsMessages {
 
 const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
   credentialImports: credentialImportEnglish,
+  usage: usageEnglish,
+  sessions: sessionsEnglish,
   locale: "en",
   title: "Settings",
   close: "Close settings",
@@ -297,47 +276,10 @@ const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
   inDevelopment: "In development",
   notAvailable: "Not available",
   runtimeCapabilityNotInstalled: "This runtime capability is not installed yet.",
-  sessionImportHarness: "Harness",
-  sessionImportDescription:
-    "Sessions keep their original project path. If a folder is not in the Codex sidebar, add it as a project first. Original history remains managed by the Harness.",
-  sessionImportAvailabilityNote:
-    "Available Harnesses come from the local Host. If activity is unknown, close the session in its native client before importing to avoid concurrent writes.",
-  sessionImportRefresh: "Refresh",
-  sessionImportRefreshing: "Loading local sessions...",
-  sessionImportUnavailable:
-    "Session import is unavailable for this local Harness or its current protocol. Update the Host/plugin or choose another Harness.",
-  sessionImportEmpty: "No local sessions are available to import.",
-  sessionImportSearch: "Search",
-  sessionImportSearchPlaceholder: "Search titles, session IDs or project paths",
-  sessionImportNoMatches: "No sessions match your search.",
-  sessionImportPageSize: "Per page",
-  sessionImportPrevious: "Previous",
-  sessionImportNext: "Next",
-  sessionImportPageSummary: "Page {page} of {pages} · {total} sessions",
-  sessionImportLoadFailed:
-    "Local sessions could not be loaded. Check directory access or duplicate session IDs, then retry.",
-  sessionImportFailed: "The session could not be imported.",
-  sessionImportUntitled: "Untitled session",
-  sessionImportUpdatedAt: "Updated",
-  sessionImportSessionId: "Session ID",
-  sessionImportRunning: "Running",
-  sessionImportRunningHint:
-    "Close this session in its native client before importing, then refresh.",
-  sessionImportAction: "Import and open",
-  sessionImportImporting: "Importing...",
-  sessionImportImported: "Session imported",
-  sessionImportOpenFailed:
-    "The Codex sidebar has not shown it yet. Make sure the folder below is added as a project, then try opening it again.",
-  sessionImportCopyProjectPath: "Copy project path",
-  sessionImportPathCopied: "Copied",
-  sessionImportPathCopyFailed: "Copy failed",
-  sessionImportRetryOpen: "Try opening again",
-  sessionImportRetrying: "Opening...",
   connectionsDescription:
     "View runtime status by Host. Select an item to inspect details or complete its setup.",
   accountConnected: "Accounts",
   accountDefaultBadge: "Current",
-  accountColumnAccount: "Account",
   accountSearch: "Search accounts or Agents…",
   accountEmpty:
     "No current identities found. Sign in through Codex Desktop or your Harness's native client.",
@@ -357,6 +299,9 @@ const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
   accountCreditsResetIn: "Quota resets in {time}",
   accountCreditsResetPending: "Awaiting refresh",
   accountCreditsResetPendingHint: "The reset time has passed; refresh to check the actual quota.",
+  accountCreditsPaceUsed: "At an even pace, about {percent} would be used by now",
+  accountCreditsPaceRemaining: "At an even pace, about {percent} would remain now",
+  accountCreditsPaceAhead: "{pace}, using faster than an even pace",
   accountCreditsPeriodWeekly: "Weekly limit",
   accountCreditsPeriodMonthly: "Monthly limit",
   accountCreditsPeriodFiveHour: "5-hour",
@@ -364,7 +309,8 @@ const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
   accountCreditsPeriodUnknown: "Limit",
   accountCreditsBuild: "Build",
   accountResetCredits: "Reset cards",
-  accountResetCreditsDetails: "Reset card details",
+  accountResetCreditLabel: "Reset {index}",
+  accountResetCreditLife: "Remaining lifetime",
   accountResetCreditsCardExpiry: "Card {index} · expires {time}",
   connectionAdapter: "Renderer adapter",
   connectionHosts: "Hosts",
@@ -486,13 +432,16 @@ const ENGLISH_MESSAGES: RendererSettingsMessages = Object.freeze({
     connections: "Connections",
     appearance: "General",
     accounts: "Accounts",
-    "session-import": "Session Import",
+    usage: "Usage",
+    sessions: "Sessions",
     updates: "Updates",
   }),
 });
 
 const CHINESE_MESSAGES: RendererSettingsMessages = Object.freeze({
   credentialImports: credentialImportChinese,
+  usage: usageChinese,
+  sessions: sessionsChinese,
   locale: "zh-CN",
   title: "设置",
   close: "关闭设置",
@@ -550,43 +499,9 @@ const CHINESE_MESSAGES: RendererSettingsMessages = Object.freeze({
   inDevelopment: "开发中",
   notAvailable: "暂不可用",
   runtimeCapabilityNotInstalled: "运行时尚未安装该项能力，因此暂不可用。",
-  sessionImportHarness: "Harness",
-  sessionImportDescription:
-    "会话将保留原始项目路径；若该文件夹尚未出现在 Codex 侧栏，请先将其添加为项目。原始历史仍由 Harness 管理。",
-  sessionImportAvailabilityNote:
-    "可选 Harness 来自本地 Host。运行状态未知时，请先在原生客户端关闭该会话再导入，避免同时写入。",
-  sessionImportRefresh: "刷新",
-  sessionImportRefreshing: "正在读取本地会话……",
-  sessionImportUnavailable:
-    "本地 Harness 或当前协议暂不支持会话导入，请更新 Host/插件或选择其他 Harness。",
-  sessionImportEmpty: "没有可导入的本地会话。",
-  sessionImportSearch: "搜索",
-  sessionImportSearchPlaceholder: "搜索标题、会话 ID 或项目路径",
-  sessionImportNoMatches: "没有匹配的会话。",
-  sessionImportPageSize: "每页",
-  sessionImportPrevious: "上一页",
-  sessionImportNext: "下一页",
-  sessionImportPageSummary: "第 {page} / {pages} 页 · 共 {total} 条",
-  sessionImportLoadFailed: "无法读取本地会话，请检查目录访问权限或重复的会话 ID 后重试。",
-  sessionImportFailed: "无法导入该会话。",
-  sessionImportUntitled: "未命名会话",
-  sessionImportUpdatedAt: "更新时间",
-  sessionImportSessionId: "会话 ID",
-  sessionImportRunning: "运行中",
-  sessionImportRunningHint: "请先在原生客户端关闭该会话，再刷新并导入。",
-  sessionImportAction: "导入并打开",
-  sessionImportImporting: "正在导入……",
-  sessionImportImported: "会话已导入",
-  sessionImportOpenFailed: "Codex 侧栏尚未显示该会话。请确认以下文件夹已添加为项目，然后重试打开。",
-  sessionImportCopyProjectPath: "复制项目路径",
-  sessionImportPathCopied: "已复制",
-  sessionImportPathCopyFailed: "复制失败",
-  sessionImportRetryOpen: "重试打开",
-  sessionImportRetrying: "正在打开……",
   connectionsDescription: "按 Host 查看运行时状态。选择一项，在右侧检查详情或完成配置。",
   accountConnected: "账号",
   accountDefaultBadge: "当前",
-  accountColumnAccount: "账号",
   accountSearch: "搜索账号或 Agent…",
   accountEmpty: "尚未识别到当前身份，请在 Codex Desktop 或对应 Harness 的原生客户端登录。",
   accountNoMatches: "没有匹配的账号。",
@@ -605,6 +520,9 @@ const CHINESE_MESSAGES: RendererSettingsMessages = Object.freeze({
   accountCreditsResetIn: "距重置还有 {time}",
   accountCreditsResetPending: "待刷新",
   accountCreditsResetPendingHint: "重置时间已到，请刷新以确认实际额度。",
+  accountCreditsPaceUsed: "匀速使用时，此刻约应已用 {percent}",
+  accountCreditsPaceRemaining: "匀速使用时，此刻约应剩余 {percent}",
+  accountCreditsPaceAhead: "{pace}，当前用得比匀速快",
   accountCreditsPeriodWeekly: "周额度",
   accountCreditsPeriodMonthly: "月额度",
   accountCreditsPeriodFiveHour: "5 小时",
@@ -612,7 +530,8 @@ const CHINESE_MESSAGES: RendererSettingsMessages = Object.freeze({
   accountCreditsPeriodUnknown: "额度",
   accountCreditsBuild: "Build",
   accountResetCredits: "重置卡",
-  accountResetCreditsDetails: "重置卡详情",
+  accountResetCreditLabel: "重置 {index}",
+  accountResetCreditLife: "剩余有效期",
   accountResetCreditsCardExpiry: "第 {index} 张 · {time}到期",
   connectionAdapter: "Renderer 适配器",
   connectionHosts: "Host 列表",
@@ -727,7 +646,8 @@ const CHINESE_MESSAGES: RendererSettingsMessages = Object.freeze({
     connections: "连接",
     appearance: "通用",
     accounts: "账号",
-    "session-import": "会话导入",
+    usage: "用量",
+    sessions: "会话",
     updates: "更新",
   }),
 });

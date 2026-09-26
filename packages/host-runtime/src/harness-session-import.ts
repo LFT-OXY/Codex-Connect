@@ -33,6 +33,13 @@ function fixedError(code: number, message: string): ExternalThreadRpcError {
   return { code, message };
 }
 
+/** The Native Session a ready main Thread is mapped to; Subagent mappings do not own theirs. */
+export function ownedNativeSessionRef(
+  record: StoredThreadRecordV1,
+): StoredThreadRecordV1["nativeSessionRef"] | null {
+  return !record.subagent && record.state === "ready" ? (record.nativeSessionRef ?? null) : null;
+}
+
 function importedThread(
   record: StoredThreadRecordV1,
 ): Extract<HarnessSessionImportOutcome, { ok: true }> {
@@ -74,13 +81,10 @@ export class HarnessSessionImporter {
     records: readonly StoredThreadRecordV1[],
     nativeSessionId: string,
   ): StoredThreadRecordV1 | undefined {
-    return records.find(
-      (record) =>
-        !record.subagent &&
-        record.state === "ready" &&
-        record.nativeSessionRef?.harnessId === this.#harnessId &&
-        record.nativeSessionRef.nativeSessionId === nativeSessionId,
-    );
+    return records.find((record) => {
+      const ref = ownedNativeSessionRef(record);
+      return ref?.harnessId === this.#harnessId && ref.nativeSessionId === nativeSessionId;
+    });
   }
 
   #unavailable(): ExternalThreadRpcError {
@@ -108,13 +112,10 @@ export class HarnessSessionImporter {
         return { ok: false, error: fixedError(-32082, "Harness Session list is invalid") };
       }
       const mapped = new Set(
-        (await this.#repository.list()).flatMap((record) =>
-          !record.subagent &&
-          record.state === "ready" &&
-          record.nativeSessionRef?.harnessId === this.#harnessId
-            ? [record.nativeSessionRef.nativeSessionId]
-            : [],
-        ),
+        (await this.#repository.list()).flatMap((record) => {
+          const ref = ownedNativeSessionRef(record);
+          return ref?.harnessId === this.#harnessId ? [ref.nativeSessionId] : [];
+        }),
       );
       const query = input.query?.trim().toLowerCase() ?? "";
       const candidates = parsed.data

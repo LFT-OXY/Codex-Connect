@@ -26,4 +26,10 @@
   --color-settings-warning: var(--settings-warning);
   --color-settings-danger: var(--settings-danger);
   --color-settings-success: var(--settings-success);
+  --color-settings-series-1: var(--settings-series-1);
+  --color-settings-series-2: var(--settings-series-2);
+  --color-settings-series-3: var(--settings-series-3);
+  --color-settings-series-4: var(--settings-series-4);
+  --color-settings-series-5: var(--settings-series-5);
+  --color-settings-series-6: var(--settings-series-6);
 }

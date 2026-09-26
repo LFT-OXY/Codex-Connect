@@ -1,6 +1,7 @@
 import type { IconNode } from "lucide";
 import createElement from "lucide/dist/esm/createElement.mjs";
 import Boxes from "lucide/dist/esm/icons/boxes.mjs";
+import ChartColumn from "lucide/dist/esm/icons/chart-column.mjs";
 import Check from "lucide/dist/esm/icons/circle-check.mjs";
 import ChevronDown from "lucide/dist/esm/icons/chevron-down.mjs";
 import ChevronLeft from "lucide/dist/esm/icons/chevron-left.mjs";
@@ -12,8 +13,8 @@ import Copy from "lucide/dist/esm/icons/copy.mjs";
 import Download from "lucide/dist/esm/icons/download.mjs";
 import ExternalLink from "lucide/dist/esm/icons/external-link.mjs";
 import Ellipsis from "lucide/dist/esm/icons/ellipsis.mjs";
-import FolderInput from "lucide/dist/esm/icons/folder-input.mjs";
 import GripVertical from "lucide/dist/esm/icons/grip-vertical.mjs";
+import MessagesSquare from "lucide/dist/esm/icons/messages-square.mjs";
 import Info from "lucide/dist/esm/icons/info.mjs";
 import Languages from "lucide/dist/esm/icons/languages.mjs";
 import Network from "lucide/dist/esm/icons/network.mjs";
@@ -43,7 +44,8 @@ export const RENDERER_SETTINGS_ICON_NAMES = [
   "language",
   "connections",
   "accounts",
-  "session-import",
+  "usage",
+  "sessions",
   "add",
   "model-pool",
   "routes",
@@ -91,7 +93,8 @@ const iconNodes = {
   language: Languages,
   connections: PlugZap,
   accounts: Users,
-  "session-import": FolderInput,
+  usage: ChartColumn,
+  sessions: MessagesSquare,
   add: Plus,
   "model-pool": Boxes,
   routes: Route,

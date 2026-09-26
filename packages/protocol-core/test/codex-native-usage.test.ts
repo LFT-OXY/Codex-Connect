@@ -195,7 +195,45 @@ describe("Codex native Usage observations", () => {
       availableCount: 2,
       nextExpiresAtUnix: 2_400,
       expiresAtUnix: [2_400, 4_000],
+      credits: [
+        { expiresAtUnix: 2_400, grantedAtUnix: 1_100 },
+        { expiresAtUnix: 4_000, grantedAtUnix: 1_000 },
+      ],
     });
+  });
+
+  it("keeps a card without a usable grant time instead of inventing one", () => {
+    const credit = (grantedAt: unknown) => ({ status: "available", grantedAt, expiresAt: 4_000 });
+    expect(
+      observeCodexRateLimitResetCredits({
+        result: {
+          rateLimitResetCredits: {
+            availableCount: 5,
+            credits: [
+              { status: "available", expiresAt: 4_000 },
+              credit(-1),
+              credit("1000"),
+              credit(4_000),
+              credit(5_000),
+            ],
+          },
+        },
+      })?.credits,
+    ).toEqual(Array.from({ length: 5 }, () => ({ expiresAtUnix: 4_000 })));
+  });
+
+  it("keeps the soonest cards within the contract limit while reporting the full count", () => {
+    const credits = Array.from({ length: 40 }, (_, index) => ({
+      status: "available",
+      expiresAt: 10_000 - index,
+    }));
+    const observed = observeCodexRateLimitResetCredits({
+      result: { rateLimitResetCredits: { availableCount: 40, credits } },
+    });
+    expect(observed?.availableCount).toBe(40);
+    expect(observed?.credits).toHaveLength(32);
+    expect(observed?.expiresAtUnix?.[0]).toBe(9_961);
+    expect(observed?.expiresAtUnix?.at(-1)).toBe(9_992);
   });
 
   it("omits reset cards when none are available", () => {
@@ -213,7 +251,12 @@ describe("Codex native Usage observations", () => {
           planFiveHourUsedPercent: 15,
           planFiveHourResetsAtUnix: 1_800,
         },
-        { availableCount: 2, nextExpiresAtUnix: 2_400, expiresAtUnix: [2_400, 4_000] },
+        {
+          availableCount: 2,
+          nextExpiresAtUnix: 2_400,
+          expiresAtUnix: [2_400, 4_000],
+          credits: [{ expiresAtUnix: 2_400, grantedAtUnix: 1_100 }, { expiresAtUnix: 4_000 }],
+        },
       ),
     ).toEqual({
       usedPercent: 15,
@@ -223,6 +266,13 @@ describe("Codex native Usage observations", () => {
         availableCount: 2,
         nextExpiresAt: new Date(2_400 * 1000).toISOString(),
         expiresAt: [new Date(2_400 * 1000).toISOString(), new Date(4_000 * 1000).toISOString()],
+        credits: [
+          {
+            expiresAt: new Date(2_400 * 1000).toISOString(),
+            grantedAt: new Date(1_100 * 1000).toISOString(),
+          },
+          { expiresAt: new Date(4_000 * 1000).toISOString() },
+        ],
       },
     });
   });

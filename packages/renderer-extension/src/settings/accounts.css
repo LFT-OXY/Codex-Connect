@@ -119,47 +119,10 @@
 
 .settings-account-list {
   --account-border: light-dark(#e2e2e8, #36363b);
-  --account-muted: light-dark(#676773, #a5a5af);
   border: 1px solid var(--account-border);
   border-radius: 11px;
   overflow: hidden;
   container-type: inline-size;
-}
-.settings-account-table {
-  width: 100%;
-  table-layout: fixed;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-.settings-account-table th {
-  padding: 12px 16px;
-  color: var(--account-muted);
-  background: light-dark(#f8f8fa, #202024);
-  font-size: 11px;
-  font-weight: 500;
-  text-align: left;
-}
-.settings-account-table th:nth-child(1) {
-  width: 32%;
-}
-.settings-account-table th:nth-child(2),
-.settings-account-table th:nth-child(3) {
-  width: 24%;
-}
-.settings-account-table th:nth-child(4) {
-  width: 20%;
-  text-align: right;
-}
-.settings-account-table td {
-  padding: 17px 16px;
-  vertical-align: middle;
-  border-top: 1px solid var(--settings-divider);
-}
-.settings-account-row {
-  background: light-dark(#ffffff, #232326);
-}
-.settings-account-row:hover {
-  background: light-dark(#f7f7fa, #26262a);
 }
 .settings-account-row__person {
   display: grid;
@@ -214,124 +177,6 @@
   white-space: nowrap;
 }
 
-.settings-account-usage {
-  display: grid;
-  gap: 10px;
-}
-.settings-account-usage__meter {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: 20px 4px 17px;
-  align-items: center;
-  gap: 6px 0;
-  min-width: 0;
-  font-variant-numeric: tabular-nums;
-}
-.settings-account-usage__title {
-  display: none;
-  min-width: 0;
-  color: var(--settings-muted);
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.settings-account-extra-usage {
-  display: grid;
-  gap: 12px;
-  margin-top: 14px;
-}
-.settings-account-extra-usage .settings-account-usage__meter,
-.settings-account-usage__meter--scoped {
-  grid-template-rows: auto 20px 4px 17px;
-}
-.settings-account-extra-usage .settings-account-usage__title,
-.settings-account-usage__meter--scoped .settings-account-usage__title {
-  display: block;
-  grid-column: 1 / -1;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-.settings-account-usage__percent {
-  grid-column: 1 / -1;
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 7px;
-  font-size: 14px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.settings-account-usage__countdown {
-  min-width: 0;
-  color: var(--settings-muted);
-  font-size: 10px;
-  font-weight: 400;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.settings-account-usage__percent > :last-child {
-  flex: none;
-}
-.settings-account-usage__percent--warn {
-  color: var(--settings-warning);
-}
-.settings-account-usage__percent--hot {
-  color: var(--settings-danger);
-}
-.settings-account-usage__bar {
-  grid-column: 1 / -1;
-  height: 4px;
-  overflow: hidden;
-  background: light-dark(#e3e1e8, #3c3c43);
-  border-radius: 4px;
-}
-.settings-account-usage__bar > span {
-  display: block;
-  height: 100%;
-  background: light-dark(#81769e, #9993b8);
-  border-radius: inherit;
-}
-.settings-account-usage__bar--warn > span {
-  background: var(--settings-warning);
-}
-.settings-account-usage__bar--hot > span {
-  background: var(--settings-danger);
-}
-.settings-account-usage__sub {
-  grid-column: 1 / -1;
-  color: var(--account-muted);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  white-space: nowrap;
-}
-.settings-account-usage__message {
-  color: var(--settings-muted);
-}
-.settings-account-usage__missing {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-content: center;
-  gap: 6px;
-  min-height: 53px;
-  color: var(--settings-muted);
-}
-.settings-account-usage__missing > span:not(.settings-account-usage__title) {
-  grid-column: 1 / -1;
-  font-size: 14px;
-}
-.settings-account-table .settings-account-spanning-cell {
-  vertical-align: top;
-}
-.settings-account-quota-continuation-row > .settings-account-usage-cell {
-  background: inherit;
-}
-.settings-account-usage > button {
-  justify-self: start;
-}
 .settings-account-action {
   padding: 4px 5px;
   min-height: 30px;
@@ -349,64 +194,6 @@
 .settings-account-action:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-}
-.settings-account-reset-summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 24px;
-  padding: 3px 0;
-  font-size: 10px;
-  white-space: nowrap;
-  color: var(--settings-muted);
-  background: transparent;
-  border: 0;
-  border-radius: 5px;
-  cursor: pointer;
-}
-.settings-account-reset-summary:hover {
-  background: var(--settings-hover);
-}
-.settings-account-reset-summary[aria-expanded="true"] > svg:last-child {
-  transform: rotate(90deg);
-}
-.settings-account-details-row > td {
-  background: var(--settings-inset);
-}
-.settings-account-reset-details {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.settings-account-reset-details strong {
-  font-size: 12px;
-}
-.settings-account-reset-expiry {
-  margin: 6px 0;
-  color: var(--settings-muted);
-  font-size: 11px;
-}
-.settings-account-reset-expiry.is-warn {
-  color: var(--settings-warning);
-}
-.settings-account-reset-expiry.is-hot {
-  color: var(--settings-danger);
-}
-.settings-account-reset-list {
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-  color: var(--settings-muted);
-  font-size: 11px;
-}
-.settings-account-reset-list li + li {
-  margin-top: 4px;
-}
-.settings-account-empty {
-  text-align: center;
-  color: var(--settings-muted);
 }
 .settings-account-list :focus-visible,
 .settings-account-toolbar :focus-visible {
@@ -441,75 +228,8 @@
 }
 
 @container (max-width: 680px) {
-  .settings-account-table,
-  .settings-account-table tbody {
-    display: block;
-  }
-  .settings-account-table thead {
-    display: none;
-  }
-  .settings-account-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    padding: 18px;
-    gap: 18px 22px;
-    border-top: 1px solid var(--settings-divider);
-  }
-  .settings-account-row:first-child {
-    border-top: 0;
-  }
-  .settings-account-table .settings-account-row > td {
-    display: block;
-    min-width: 0;
-    padding: 0;
-    border: 0;
-  }
-  .settings-account-person-cell,
-  .settings-account-management-cell,
-  .settings-account-usage-cell--message {
-    grid-column: 1 / -1;
-  }
-  .settings-account-table .settings-account-row > td.settings-account-management-cell--empty {
-    display: none;
-  }
-  .settings-account-row--targets {
-    position: relative;
-  }
-  .settings-account-row--targets .settings-account-person-cell {
-    padding-right: 32px;
-  }
-  .settings-account-table .settings-account-row--targets > td.settings-account-management-cell {
-    position: absolute;
-    top: 14px;
-    right: 12px;
-    width: auto;
-  }
   .settings-account-email {
     font-size: 13px;
-  }
-  .settings-account-usage__title {
-    display: block;
-    grid-column: 1;
-  }
-  .settings-account-usage__percent,
-  .settings-account-usage__missing > span:not(.settings-account-usage__title) {
-    grid-column: 2;
-    text-align: right;
-  }
-  .settings-account-extra-usage .settings-account-usage__percent {
-    grid-column: 1 / -1;
-  }
-  .settings-account-table tr:not(.settings-account-row, [hidden]),
-  .settings-account-table tr:not(.settings-account-row, [hidden]) > td {
-    display: block;
-  }
-}
-
-@container (max-width: 360px) {
-  .settings-account-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
-    padding: 16px;
   }
 }
 
@@ -746,10 +466,15 @@
   .settings-account-harness-target[data-state]::after {
     background: Highlight;
   }
-  .settings-account-usage__bar {
+  [data-usage-window] > [role="meter"],
+  [data-reset-credit] > [role="meter"] {
     border: 1px solid CanvasText;
   }
-  .settings-account-usage__bar > span {
+  [data-usage-window] > [role="meter"] > :first-child,
+  [data-reset-credit] > [role="meter"] > :first-child {
     background: Highlight;
+  }
+  [data-pace-marker] {
+    background: CanvasText;
   }
 }

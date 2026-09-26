@@ -3,6 +3,8 @@ import {
   IDLE_RELEASE_SETTINGS_METHOD,
   restoreHarnessCommandMentions,
   LOADED_SESSIONS_METHOD,
+  LOCAL_SESSIONS_QUERY_METHOD,
+  LOCAL_USAGE_QUERY_METHOD,
   idleReleaseSettingsSchema,
 } from "@codexhost/shared-contracts";
 import {
@@ -16,6 +18,7 @@ import {
 } from "./delegation-mention-rewrite.js";
 import { managedDelegationSkillReference } from "./delegation-skill.js";
 import { AccountRateLimits } from "./codex-runtime/account-rate-limits.js";
+import { codexNativeUsage } from "./codex-runtime/codex-native-usage.js";
 import { NativeAccountObserver } from "./native-account-observer.js";
 import { HarnessAccountInspectionCache, listHarnessAccountSources } from "./harness-accounts.js";
 import type { spawn } from "node:child_process";
@@ -93,6 +96,9 @@ import {
 } from "@codexhost/shared-contracts";
 import { executeExternalThreadFork } from "./external-thread-fork.js";
 import { isSessionImportRequest, SessionImportRequests } from "./session-import-requests.js";
+import { fetchLiteLlmPrices } from "./local-usage-prices.js";
+import { defaultLocalUsageDirectory } from "./local-usage-store.js";
+import { LocalUsageService, localSessionMappings } from "./local-usage-service.js";
 import {
   ExternalHistoryRequestError,
   listExternalItems,
@@ -537,6 +543,7 @@ export class AppServerHost {
   #nextQuestionRequestId = HOST_QUESTION_REQUEST_ID_MAX;
   #delegationCoordinator: HarnessDelegationCoordinator;
   #sessionImportRequests: SessionImportRequests | undefined;
+  #localUsage: LocalUsageService | undefined;
   #unregisterDelegationApi: (() => void) | undefined;
   #unsubscribeAccountState: (() => void) | undefined;
   #activeOfficialTurns = new Map<string, string>();
@@ -1158,6 +1165,14 @@ export class AppServerHost {
     }
     if (isSessionImportRequest(request.method)) {
       this.#dispatchDesktopRequest(() => this.#handleSessionImport(request));
+      return;
+    }
+    if (request.method === LOCAL_USAGE_QUERY_METHOD) {
+      this.#dispatchDesktopRequest(() => this.#handleLocalUsage(request));
+      return;
+    }
+    if (request.method === LOCAL_SESSIONS_QUERY_METHOD) {
+      this.#dispatchDesktopRequest(() => this.#handleLocalSessions(request));
       return;
     }
     if (request.method === "codexhost/thread/fork") {
@@ -2400,6 +2415,30 @@ export class AppServerHost {
     const response = await this.#sessionImportRequests.handle(request);
     await this.#writer.json(rpcEnvelope(request, response.body));
     if (response.importedThread) await this.#notifyExternalThreadStarted(response.importedThread);
+  }
+
+  async #localUsageService(): Promise<LocalUsageService> {
+    await this.#waitForPlugins();
+    this.#localUsage ??= new LocalUsageService({
+      adapters: this.#externalAdapters,
+      officialCodexUsage: codexNativeUsage(this.#officialRuntimeScope.permanentHome),
+      descriptors: () => this.#pluginDescriptors,
+      mappings: async () => localSessionMappings(await this.#repository.list()),
+      directory: defaultLocalUsageDirectory(this.#options.environment ?? process.env),
+      fetchLiteLlm: fetchLiteLlmPrices,
+      diagnose: (error) => this.#diagnose(error),
+    });
+    return this.#localUsage;
+  }
+
+  async #handleLocalUsage(request: JsonRpcRequest): Promise<void> {
+    const service = await this.#localUsageService();
+    await this.#writer.json(rpcEnvelope(request, await service.handle(request)));
+  }
+
+  async #handleLocalSessions(request: JsonRpcRequest): Promise<void> {
+    const service = await this.#localUsageService();
+    await this.#writer.json(rpcEnvelope(request, await service.handleSessions(request)));
   }
 
   async #inspectThread(request: JsonRpcRequest): Promise<void> {
