@@ -26,7 +26,8 @@
 | 子代理 | `pi-subagents` 插件协议 | 原生 `subagent_lifecycle/progress/event` 帧 + `get_subagent_messages` |
 | 工具项 | `toolExecution` | 投影成 `commandExecution`（`omp-tool-presentation.ts`） |
 | 实时命令 | `get_commands` 拉取 | `available_commands_update` 推送，过滤掉 `builtin` |
-| 自主 Turn / 会话导入 / 凭据导入 / 空会话落盘 | 有 | 无 |
+| 自主 Turn / 凭据导入 / 空会话落盘 | 有 | 无 |
+| 会话导入 | `pi-session-import.ts` | `omp-session-import.ts`（同构；见下文「会话导入」） |
 
 修复两边共有的缺陷（进程清理、命令超时、交互关闭、Fork 校验）时，要同时检查另一侧；但不要抽共享层，协议细节必须留在各自的 Adapter 内。
 
@@ -51,13 +52,18 @@
 
 ## 原生用量（`omp-native-usage.ts`）
 
-跨层契约见 `.atw/spec/host-runtime/node/local-usage.md`。规则与 Pi（`.atw/spec/adapter-pi/node/index.md`「原生用量」）相同的部分：递归列出 `*.jsonl`、不跟随符号链接；游标 `{ formatVersion: 1, files: { [相对路径]: { ino, offset, session: {id, cwd?} | null } } }`，任一项不合法整个作废；inode 变化或文件变短从头读；只读到最后一个 `\n`；`dedupeKey = message:<entry.id>:<entry.timestamp>`；每条带 `usage` 的 assistant 消息计 1 次对话（含 Token 全 0 的失败/中止回复，这类省略 `model` 与费用）；Provider、Model 取消息自身字段；`reportedCostUsd` 只在 `usage.cost.total > 0` 且有 Token 时填写。进度报告同 Pi（先 `0/N`，每个文件后 `i/N`）。`completeLines` 等辅助函数自带一份，不 import `adapter-pi`。OMP 特有（`test/omp-native-usage.test.ts` 固化；本机 501 个文件、14,087 条去重记录与独立脚本逐项一致）：
+跨层契约见 `.atw/spec/host-runtime/node/local-usage.md`。规则与 Pi（`.atw/spec/adapter-pi/node/index.md`「原生用量」）相同的部分：递归列出 `*.jsonl`、不跟随符号链接；游标 `{ formatVersion: 2, files: { [相对路径]: { ino, mtimeMs, offset, session: {id, cwd?} | null, summary } } }`，任一项不合法整个作废；inode 变化或文件变短从头读；只读到最后一个 `\n`；`dedupeKey = message:<entry.id>:<entry.timestamp>`；每条带 `usage` 的 assistant 消息计 1 次对话（含 Token 全 0 的失败/中止回复，这类省略 `model` 与费用）；Provider、Model 取消息自身字段；`reportedCostUsd` 只在 `usage.cost.total > 0` 且有 Token 时填写。进度报告同 Pi（先 `0/N`，每个文件后 `i/N`）。`completeLines` 等辅助函数自带一份，不 import `adapter-pi`。OMP 特有（`test/omp-native-usage.test.ts` 固化；本机 501 个文件、14,087 条去重记录与独立脚本逐项一致）：
 
 - 目录（`ompSessionsDirectory`，对照 omp 二进制内的 `agentSubdir(…, "sessions", "data")`）：`PI_CODING_AGENT_SESSION_DIR` → `path.resolve(PI_CODING_AGENT_DIR)/sessions` → 默认 `~/${PI_CONFIG_DIR || ".omp"}/agent/sessions`；agent 目录等于默认值且 `$XDG_DATA_HOME/omp` 是目录时改为 `$XDG_DATA_HOME/omp/sessions`。omp 对 `PI_CODING_AGENT_DIR` 只做 `path.resolve`、不展开 `~`，这里对两个变量都同样处理。**不支持**配置档 `OMP_PROFILE`/`PI_PROFILE`（`~/.omp/profiles/<名>/agent`）。
 - 文件头：第一行通常是固定宽度、原地改写的标题行 `{type:"title", …, pad}`（偏移不变，游标仍有效），会话头 `type:"session"` 在其后；旧文件可能没有标题行。读取时跳过开头的 `title` 行，第一条非标题行不是带 `id` 的会话头 → `session: null`，整个文件不计。**会话头尚未完整写入时返回 `offset: 0`**（下次从头再判断），不要把「只读到标题行」记成非会话文件。
 - 子代理：保存在以父会话文件名（不含 `.jsonl`）命名的目录里，`<会话文件名>/<代理名>.jsonl`，可再嵌套 `<代理名>/<子代理名>.jsonl`；会话头带自己的 `id`，少数带 `parentSession`。本机约占 oh-my-pi Token 的 31%。
 - 推理字段是 `usage.reasoningTokens`（不是 Pi 的 `reasoning`），同样是 `output` 的子集（本机所有记录 `totalTokens = input + output + cacheRead + cacheWrite`）→ `reasoning = min(reasoningTokens, output)`，`output − reasoning`。不要像 TokenTracker 测试那样把它另加到总量上。
-- `nativeUsage.read` 在 `OmpAdapter` 内经 `#usageAbort` / `#usageRequests` 收口：关闭后返回 `invalidState`，`close()` 先 abort 再等待进行中的读取；读取抛错映射为 `{ code: "unavailable", retryable: true }`。读取用 `{ ...process.env, ...options.environment }`，与会话启动的环境一致。
+- 会话摘要：key = 相对路径；标题 = 标题槽（原地改写，`mtimeMs` 变化时重读首行）→ 会话头 `title` → 首条用户消息（截到 120 字）；轮数、编辑工具（`edit`/`write`）同 Pi；子代理的父会话 = 所在文件夹对应的 `<文件夹>.jsonl` 的会话 ID（全部文件读完后再产出摘要，保证父文件已读）；Fork（`parentSession` 是文件路径）不作父会话，单独成行。`nativeUsage.resumeCommand(id)` = `omp --resume <id>`。
+- `nativeUsage.read` 与 `sessionImport` 在 `OmpAdapter` 内经 `#readNative`（`#readAbort` / `#readRequests`）收口：关闭后返回 `invalidState`，`close()` 先 abort 再等待进行中的读取；读取抛错映射为 `{ code: "unavailable", retryable: true }`。读取用 `{ ...process.env, ...options.environment }`，与会话启动的环境一致。
+
+## 会话导入（`omp-session-import.ts`）
+
+与 Pi 的 `PiSessionImportIndex` 同构（指纹缓存、只读重新校验、重复 ID 明确失败、变化中的文件跳过）；`ompSessionsDirectory` 也在此文件，用量读取器从这里引用。差异：扫描会话目录本身与下一层，与会话文件同名的文件夹是子代理，跳过；会话头之前可有标题槽；标题 = 标题槽 → 会话头 `title` → 首条用户消息；`nativeRef.locator.sessionFile` = 真实路径，已有 `resume` 用它恢复。`test/omp-session-import.test.ts` 固化。
 
 ## 技术债
 

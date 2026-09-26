@@ -17,9 +17,11 @@ interface HarnessNativeUsageCapability {
     cursor: JsonValue | null,
     onProgress?: (progress: HarnessNativeUsageProgress) => void,   // 旧插件不调用也有效
   ): Promise<HarnessResult<HarnessNativeUsageBatch>>;
+  resumeCommand?(nativeSessionId: string): string;   // 会话页「复制指令」，见 local-sessions.md
 }
 interface HarnessNativeUsageProgress { processed: number; total: number }   // 本次 read 已处理 / 总文件数
-interface HarnessNativeUsageBatch { records: readonly HarnessNativeUsageRecord[]; cursor: JsonValue }
+interface HarnessNativeUsageBatch { records: readonly HarnessNativeUsageRecord[];
+  sessions?: readonly HarnessNativeSessionSummary[] /* 见 local-sessions.md */; cursor: JsonValue }
 interface HarnessNativeUsageRecord {
   dedupeKey: string; occurredAt: number /* epoch ms */; nativeSessionId: string;
   provider?: string; model?: string /* 只计对话时省略 */; cwd?: string;
@@ -92,20 +94,24 @@ readCodexNativeUsage(codexHome, cursor): Promise<HarnessNativeUsageBatch>
   - Service 内：只有进程内第一次加载价格时 `handle` 等待（与读取并行，`Promise.all`）；之后价格过期时先用旧价格回答，同时在后台加载，下一次查询起生效；同一时刻只有一次加载。
   - 快照 `local-usage-price-snapshot.ts` 由 `node tools/update-model-price-snapshot.mjs`（先 `npm run build:typescript`）从 LiteLLM 生成，与远程使用同一个 `parseLiteLlmPrices`；已加入 `.prettierignore`，不要手改。
 - 周期：周一为周首；`month` 为整月；`total` = 23 个月前当月 1 日到今天；日期由 Host 用请求的 `timeZone` 计算（`now` 为 Host 时钟）。
-- 持久化：`<directory>/local-usage.json`，`{ formatVersion: 2, sources: {[harnessId]: {cursor, counted: string[]}}, buckets: [...] }`，`counted` 是 `sha256(dedupeKey)` 的 base64url 前 16 位；桶 = UTC 半小时起点 × harnessId × provider × model × cwd × 是否自带费用。带 `reportedCostUsd` 的记录进入另一桶，桶上的 `reportedCostUsd` 累加其费用；不带的桶没有该字段（按价格计）。桶的计数字段为 `input、cacheRead、cacheWrite、cacheWrite1h、output、reasoning、conversations`。版本 1（桶没有 `cacheWrite1h`）不迁移：按损坏处理，`diagnose` 后从原生记录重建——已被 Harness 清理的原生记录中的用量会丢失，这是改版时接受的代价（功能未发布）。临时文件 + rename 原子写入，目录 0700、文件 0600。
+- 持久化：`<directory>/local-usage.json`，`{ formatVersion: 3, sources: {[harnessId]: {cursor, counted: string[], sessionCounted?: string[]}}, buckets: [...], sessions: [...], sessionUsage: [...] }`，`counted` 是 `sha256(dedupeKey)` 的 base64url 前 16 位；桶 = UTC 半小时起点 × harnessId × provider × model × cwd × 是否自带费用。带 `reportedCostUsd` 的记录进入另一桶，桶上的 `reportedCostUsd` 累加其费用；不带的桶没有该字段（按价格计）。桶的计数字段为 `input、cacheRead、cacheWrite、cacheWrite1h、output、reasoning、conversations`。`sessions`、`sessionUsage` 与 `sessionCounted` 的语义见 [local-sessions.md](./local-sessions.md)。
+  - 版本 1（桶没有 `cacheWrite1h`）不迁移：按损坏处理，`diagnose` 后从原生记录重建（功能未发布时接受的代价）。
+  - 版本 2（会话页之前）**迁移**（`withoutSessions`）：保留 `buckets` 与各来源 `counted`，`cursor` 置 `null`（从头重读以补建会话摘要），`sessionCounted: []`。之后同一条记录：`counted` 里已有 → 不再进桶；`sessionCounted` 里没有 → 计入会话用量。保存时 `sessionCounted` 与 `counted` 相同就省略该字段（没有 `sessionCounted` 的来源两者共用一个集合）。这样原生记录已被清理的历史用量仍留在用量页。
+  - 临时文件 + rename 原子写入，目录 0700、文件 0600。临时文件 + rename 原子写入，目录 0700、文件 0600。
 - `refresh:true` 读取新增记录；`refresh:false` 若有进行中的读取则等待它，否则用内存状态，再否则用磁盘状态，都没有才读取。等待最多 `PROGRESS_AFTER_MS`（`#awaitBriefly`，`Promise.race` + `setTimeout`，结束时 `clearTimeout`），超时返回 `reading`，读取继续在后台完成并保存。并发读取共享同一个 Promise；每次读取先从磁盘加载，采纳其他 Host 进程的进度。价格加载与读取并行开始，返回 `reading` 时不等价格。
 - 进度 Map 在 `#read()` 中**同步**替换为新 Map 再开始 `#readSources(progress)`，保证读取开始后任何超时都不会报出上一次读取的 `N/N`。
 - 没有查询在等的读取失败（整次读取抛错，例如保存状态文件失败）：`#read` 附加的 `catch` 把错误存入 `#unreportedFailure`；下一次 `refresh:false`、且没有进行中读取的查询直接抛出它（→ `-32082`），而不是重新读取（否则首次读取反复失败时页面永远只看到进度）。任何返回错误的查询都清空它；新的读取开始时也清空。
 - Renderer 用量页始终用本地 Host（`modelClientForHost("local")`），打开时 `refresh:true`，切换周期/应用自定义 `refresh:false`，刷新按钮 `refresh:true`。收到 `reading` 时显示进度（`total > 0` 时「已读取 N / M 个文件」+ `role="progressbar"`），`READING_POLL_MS`（500 ms）后以 `refresh:false` 重查（只等待同一次读取），期间刷新按钮保持禁用；每次 `load` 先 `clearTimeout`，页面 `context.signal` abort（关闭设置/切页）时清除定时器且不再排定。
 
 - 官方 Codex rollout（`codex-native-usage.ts`，格式细节只在此文件）：
-  - 文件：`<codexHome>/sessions/**/rollout-*.jsonl` 与 `<codexHome>/archived_sessions/**/rollout-*.jsonl`，按**文件名**排序处理（文件名以创建时间开头，父会话先于 Fork）。游标 `{ formatVersion: 1, files: { [相对 codexHome 的路径]: { ino, offset, state } } }`，`state` = `{ sessionId, historyId, provider, model, cwd, total }` 保存读到 offset 为止的上下文；inode 变化、文件变短或路径变化（归档移动）从头重读，靠 `dedupeKey` 不重复计。只读完整行。
+  - 文件：`<codexHome>/sessions/**/rollout-*.jsonl` 与 `<codexHome>/archived_sessions/**/rollout-*.jsonl`，按**文件名**排序处理（文件名以创建时间开头，父会话先于 Fork）。游标 `{ formatVersion: 2, index: {ino, offset} | null, titles: {[threadId]: name}, files: { [相对 codexHome 的路径]: { ino, offset, state } } }`，`state` = `{ sessionId, historyId, provider, model, cwd, total, parentSessionId, activity, turnContexts, turnId }` 保存读到 offset 为止的上下文与会话摘要累积；inode 变化、文件变短或路径变化（归档移动）从头重读，靠 `dedupeKey` 不重复计。只读完整行。
   - 上下文：第一条 `session_meta` 是本文件自身（`sessionId` = `payload.id`、`provider` = `model_provider`、`cwd`）；**每条** `session_meta` 更新 `historyId`（Fork 在自身元数据后重放父会话的 rollout，第一行就是父会话的 `session_meta`）；`turn_context` 更新 `model`、`cwd`（模型取最近一次 turn_context）。
   - 用量：只看 `event_msg` 中 `payload.type === "token_count"` 且有 `info.total_token_usage` 的事件（`info: null` 的限额事件跳过）。delta：累计值与上次相同 → 0；有上次累计值、本次累计值 ≠ 本次 `last_token_usage` 且五项都不小于上次 → 差分；否则（文件内首次、累计值变小、或重启后恰好 total == last）→ `last_token_usage`（缺省用 total）。每次都把 `total` 记为新的基线。
   - 映射：Codex 的 `input_tokens` 含 `cached_input_tokens` 与 `cache_write_input_tokens`（`total_tokens = input + output`），`reasoning_output_tokens` 含在 `output_tokens` 中 → `cacheRead = cached`、`cacheWrite = cacheWrite`、`input = input − cached − cacheWrite`、`output = output`、`reasoning = 0`。delta 全 0 不产生记录；每条非零记录 `conversations: 1`（对话数 = 非零 token_count 事件数）。不填 `reportedCostUsd`。
   - `dedupeKey = token_count:<historyId>:<total 签名>:<last 签名>`，签名为五项以 `.` 连接。同一历史内累计值只增不减，因此 Fork 重放的副本与父会话记录同键，由 Host 去重只计一次（Fork 的 Fork 同理）。
   - `nativeSessionId` 始终是本文件自身的会话 ID；`occurredAt` 是行的 `timestamp`。
   - 进度：`readCodexNativeUsage(codexHome, cursor, onProgress?)`，按文件名排序后先报 `0/N`，每个 rollout 后报 `i/N`。
+  - 会话摘要（口径见 `docs/product/sessions.md`）：key = 自身 Session ID（归档移动后仍替换同一份）；标题取 `session_index.jsonl` 该 ID 最新 `thread_name`（游标记住索引位置与已读名字，重命名时该会话即使 rollout 没变也重新产出；索引被重写时对之前所有名字重新产出）；活跃时间取行首 `{"timestamp":"…"`，不解析整行；轮数按 `turn_context`（同 `turn_id` 只算一次），没有 turn_context 的 rollout 按 `user_message`；编辑 = `function_call`/`custom_tool_call` 名为 `apply_patch`，或 `exec` 脚本里的 `tools.apply_patch(`；父会话 = `forked_from_id` → `parent_thread_id` → `source.subagent.thread_spawn.parent_thread_id`。`resumeCommand(id)` = `codex resume <id>`。
 
 ## 4. Validation & Error Matrix
 
@@ -154,7 +160,7 @@ readCodexNativeUsage(codexHome, cursor): Promise<HarnessNativeUsageBatch>
 ## 6. Tests Required
 
 - `host-runtime/test/local-usage.test.ts`（主切入点，真实 `ClaudeCodeAdapter` + 临时目录 + `handle()`）：各周期 `range`、时区归日、totals 精确值、`harnesses` 与 `daily`；`stats` 的 7/30 天本地日边界、日均分母、只有对话的日期与未来日期不计、`firstActiveDate` 早于「总计」范围、`stats` 不随周期变化，以及无数据与仅一天两个边界；增量 + 复制去重 + 重启一致；并发共享一次 `read`；读取中 `refresh:false` 得到刷新后的值；不合规批次被隔离；view 失败返回 `-32082`；非法 params `-32602` 且未读取。
-- 计价（主切入点内）：Claude Code 记录 `cache_creation` 分档时 `estimatedCostUsd` = 5 分钟部分×缓存写价 + 1 小时部分×1 小时价，`totals.cacheWrite` 不变；`formatVersion: 1` 的状态文件被 `diagnose`（消息含 rebuilding）并重建；`estimatedCostUsd` 精确值（各周期、跨桶）、价格更新后历史费用变化且不重读、LiteLLM 挂起时不等待且只有一次加载、无价格模型记 0、自报费用优先（含 0）、离线用内置快照。
+- 计价（主切入点内）：Claude Code 记录 `cache_creation` 分档时 `estimatedCostUsd` = 5 分钟部分×缓存写价 + 1 小时部分×1 小时价，`totals.cacheWrite` 不变；`formatVersion: 1` 的状态文件被 `diagnose`（消息含 rebuilding）并重建（v2 迁移见 `local-sessions.test.ts`）；`estimatedCostUsd` 精确值（各周期、跨桶）、价格更新后历史费用变化且不重读、LiteLLM 挂起时不等待且只有一次加载、无价格模型记 0、自报费用优先（含 0）、离线用内置快照。
 - `host-runtime/test/local-usage-pricing.test.ts`（纯函数；另含 1 小时缓存写按其价格、省略 `cacheWrite1h` 时全部按 5 分钟价）：精确/大小写、装饰后缀、双向厂商前缀与确定性选择、最长包含名、拒绝 `fast`/`o1`/空名等泛名、别名、覆盖在每一步优先、费用公式与推理按输出价、无价格 0。
 - `host-runtime/test/local-usage-prices.test.ts`（另含：解析 `cache_creation_input_token_cost_above_1hr`、缺失时等于 5 分钟价；24 h 内的 `formatVersion: 1` 缓存被忽略并重新拉取）：解析过滤、24 h 内缓存不联网、过期缓存联网并写缓存、联网失败用过期缓存、无缓存无网用快照、无价格响应视为失败、损坏缓存被忽略，以及各情形的 `refreshAfter`。
 - 各 Adapter 的解析测试（例如 `claude-native-usage.test.ts`、`pi-native-usage.test.ts`、`omp-native-usage.test.ts`）：重复行去重、增量只读完整行、流式等待、记录不含正文。
@@ -256,4 +262,5 @@ if (harness.providers.length > 0) card.append(providerBreakdown(document, harnes
 3. 只交出终值；`dedupeKey` 要在复制、重读时稳定。
    列出文件后调用 `onProgress?.({processed:0,total})`，每个文件后 `processed + 1`，让首次读取显示进度；不调用也可以，该来源只是不计入进度。
 4. 对话数按该 Harness 的口径（领域术语表 Conversation Count），在产品文档写明。
-5. 原生记录区分缓存写时长时填 `cacheWrite1h`（1 小时部分，≤ `cacheWrite`），否则省略。推理只在单独上报时填 `reasoning`，已含在 `output` 中的不要再填；`reportedCostUsd` 只在 Harness 真正算出费用时填写（订阅通道记 0 可以，未知不能记 0）。模型名保持原样，计价匹配由 Host 负责；匹配不到时优先加 `MODEL_ALIASES`，只有 LiteLLM 没有该模型时才加 `MODEL_PRICE_OVERRIDES`。
+5. 同时产出会话摘要与 `resumeCommand` 的做法见 [local-sessions.md](./local-sessions.md)「新增一个 Harness 的会话」。
+6. 原生记录区分缓存写时长时填 `cacheWrite1h`（1 小时部分，≤ `cacheWrite`），否则省略。推理只在单独上报时填 `reasoning`，已含在 `output` 中的不要再填；`reportedCostUsd` 只在 Harness 真正算出费用时填写（订阅通道记 0 可以，未知不能记 0）。模型名保持原样，计价匹配由 Host 负责；匹配不到时优先加 `MODEL_ALIASES`，只有 LiteLLM 没有该模型时才加 `MODEL_PRICE_OVERRIDES`。

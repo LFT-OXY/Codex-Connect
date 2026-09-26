@@ -47,10 +47,11 @@
 跨层契约见 `.atw/spec/host-runtime/node/local-usage.md`。Claude 特有规则（`test/claude-native-usage.test.ts` 固化）：
 
 - 进度：列出文件后 `onProgress?.({ processed: 0, total: files.length })`，每个文件处理完（包括读取中被删除而跳过的）后报 `index + 1`；Adapter 的 `nativeUsage.read(cursor, onProgress)` 原样传给读取函数（`read…NativeUsage(environment, cursor, signal, onProgress)`）。
-- 文件：`claudeProjectsDirectory(env)` 下 `<project>/*.jsonl`（主会话）与 `<project>/<session>/subagents/*.jsonl`（子代理）。游标 `{formatVersion:1, files:{[相对路径]:{ino(字符串，bigint stat), offset}}}`；ino 变化或 offset 超过文件大小从 0 重读。
+- 文件：`claudeProjectsDirectory(env)` 下 `<project>/*.jsonl`（主会话）与 `<project>/<session>/subagents/*.jsonl`（子代理）。游标 `{formatVersion:2, files:{[相对路径]:{ino(字符串，bigint stat), offset, summarized, summary}}}`；ino 变化或 `summarized` 超过文件大小从 0 重读（摘要一并重置）。
 - 只读到最后一个 `\n`，未写完的尾行下次再读。只解析含 `"usage"` 或 `"type":"user"` 的行（大段附件行不 parse）。
 - 缓存写时长：`message.usage.cache_creation.ephemeral_1h_input_tokens` → `tokens.cacheWrite1h`（夹到 ≤ `cache_creation_input_tokens`，为 0 时省略）；`ephemeral_5m_input_tokens` 不单独上报，`cacheWrite` 仍是 `cache_creation_input_tokens` 总数。本机 Claude Code 约三分之一的缓存写是 1 小时档（Opus 5.5：$8 vs $5 每百万）。
 - 用量：`type:"assistant"` 且有 `message.usage`；去重键 `message:<message.id>:<requestId>`（无 requestId 时省略）。同一回复会写多行：主会话每个内容块一行、用量相同；子代理先写 `stop_reason:null` 的部分用量，**工具结果可能先于最终用量行写入**。取同键的最后一行。
 - 流式等待：最后一行 `stop_reason` 为空且文件 1 小时内有写入（`STREAMING_WINDOW_MS`）时不交出，游标退回到该回复第一行；闲置超过 1 小时按最后一行交出（中断的回复）。不要用“其后是否有新消息”判断完成，这会在工具结果先写入时少计。
+- 会话摘要（`test/claude-native-usage.test.ts` 与 host `local-sessions.test.ts` 固化）：每个文件一份，key = 相对路径；主会话 `nativeSessionId` = 文件名（与会话导入一致），子代理 = `<sessionId>/<agent 文件名>`、父会话取 `<session>` 目录名。`summarized` 记录已计入摘要的偏移：流式等待时 `offset` 会退回，但 `start < summarized` 的行只再算用量、不再算摘要。标题 = 最新 `custom-title`，否则最新 `ai-title`；轮数 = 非 `isMeta`、非全 `tool_result`、有文本且不以 `[Request interrupted by user`、`<task-notification>` 开头的用户消息；编辑工具 `Edit`/`Write`/`MultiEdit`/`NotebookEdit`（不区分大小写）；模型忽略 `<synthetic>`。摘要阶段会解析所有行（用量阶段仍只 parse 含 usage/user 的行）。`nativeUsage.resumeCommand(id)` = `claude --resume <id>`。
 - `reasoning` 恒为 0：Claude transcript 的思考量只包含在 `output_tokens` 中。全零用量（如 `<synthetic>` 错误回复）不交出。
 - 对话：只在主会话文件，`type:"user"`、非 `isSidechain`、content 为字符串或含 text 块（不计 tool_result），去重键 `prompt:<uuid>`，不带 model。与 TokenTracker 口径一致，`isMeta` 等命令回显也会计入。

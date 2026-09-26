@@ -21,3 +21,4 @@
 - 摘要以 Session ID 为 key（不以文件路径），归档移动后替换同一份摘要；标题来自 `session_index.jsonl`，游标记录其读取位置与已读名字，重命名时即使 rollout 未变也重新产出摘要。
 - 父子关系：`forked_from_id` → `parent_thread_id` → `source.subagent.thread_spawn.parent_thread_id`。
 - Host 会话视图中官方 Codex 行的 `threadId` 即 Native Session ID、`resumable` 恒为 true。
+- 审查后调整（提交 b036cfb4）：`codex resume <id>` 由 Codex 运行时的 `resumeCommand` 提供；Renderer 不再按 `codex` 分支，打开失败统一提示「侧栏只加载最近的 Thread」。

@@ -39,11 +39,12 @@
 
 - 进度：列出文件后 `onProgress?.({ processed: 0, total: files.length })`，每个文件处理完（包括读取中被删除而跳过的）后报 `index + 1`；Adapter 的 `nativeUsage.read(cursor, onProgress)` 原样传给读取函数（`read…NativeUsage(environment, cursor, signal, onProgress)`）。
 - 目录：复用 `piSessionImportDirectory`（`PI_CODING_AGENT_SESSION_DIR`，否则 `$PI_CODING_AGENT_DIR/sessions`，默认 `~/.pi/agent/sessions`），但**递归**列出所有 `*.jsonl`，不跟随符号链接。子代理扩展把子会话放在父会话目录内（`<project>/<session>/tasks/*.jsonl`、`<project>/<hash>/run-N/*.jsonl`，头部带 `parentSession`），本机约占 Pi 用量两成。会话导入的 `sessionFiles` 只扫一层是为了不把子会话当可导入会话，不要为用量改它。
-- 游标 `{ formatVersion: 1, files: { [相对 sessions 目录的路径]: { ino, offset, session: {id, cwd?} | null } } }`。`session` 是第一行会话头（`type:"session"` 且有 `id`），用于解析 offset 之后的行；第一行不是会话头 → `session: null`，整个文件不计。Adapter 没有 zod 依赖，`parseCursor` 手写校验，**任一项不合法整个游标作废**（等同 `null`，从头读），不要逐项丢弃。inode 变化或文件变短从头读。只读到最后一个 `\n`。
+- 游标 `{ formatVersion: 2, files: { [相对 sessions 目录的路径]: { ino, offset, session: {id, cwd?} | null, summary } } }`（`summary` = `{ parentSessionId, name, firstMessage, model, activity }`）。`session` 是第一行会话头（`type:"session"` 且有 `id`），用于解析 offset 之后的行；第一行不是会话头 → `session: null`，整个文件不计。Adapter 没有 zod 依赖，`parseCursor` 手写校验，**任一项不合法整个游标作废**（等同 `null`，从头读），不要逐项丢弃。inode 变化或文件变短从头读。只读到最后一个 `\n`。
 - 用量：`type:"message"`、`message.role === "assistant"` 且有 `message.usage` 的行（先用 `'"usage"'` 字符串预过滤）。`@earendil-works/pi-ai` 的 `Usage.reasoning` 是 `output` 的子集 → `reasoning = min(reasoning, output)`，`output = output − reasoning`（契约允许的「从 output 中扣除」；Token 总数与费用不变，推理列有值）。`input`、`cacheRead`、`cacheWrite` 原样（Pi 的 `input` 本就不含缓存）。
 - 身份：`dedupeKey = message:<entry.id>:<entry.timestamp>`。Fork/恢复把 entry 连 id 与时间戳原样复制（本机 146 例全部相同）；entry id 只有 8 位十六进制，加时间戳避免无关会话撞键。`occurredAt` = `entry.timestamp`；`nativeSessionId`、`cwd` 取本文件会话头。
 - `provider`、`model` 取消息自身字段。对话数：每条 assistant 消息 `conversations: 1`，包括失败/中止、Token 全 0 的回复（本机约 300 条）；这类记录省略 `model`（契约：只计对话的记录）与费用，保留 `provider`。
 - `reportedCostUsd`：只在 `usage.cost.total > 0` 且有 Token 时填写。Pi 对订阅通道和未配置价格的自定义 Provider 都写 0，无法区分免费与未知（本机几乎全部为 0，只有 `xai` 有正值），按契约「未知不能记 0」交给 Host 按 LiteLLM 估价。
+- 会话摘要：key = 相对路径；标题 = 最新 `session_info.name`，否则首条用户消息（复用会话导入的 `piUserMessageTitle`，再折叠空白、截到 120 字，避免长提示词进游标与状态）；轮数 = 用户消息数；编辑工具 `edit`/`write`（`toolCall` 块）；活跃时间取每行第一个 `"timestamp":"…"`（entry 自身的时间戳写在嵌套字段之前）。`parentSession` 为会话 ID 时是子代理（折叠）；为 `.jsonl` 路径时是 Fork，**不**作父会话（Fork 单独成行、可单独恢复，2026-09-26 用户决定）。`nativeUsage.resumeCommand(id)` = `pi --session <id>`。
 - Pi 只在 `message_end` 后整条追加，不存在流式部分用量，不需要 Claude 那样的等待窗口。
 - `completeLines` 等辅助函数与 Claude、Codex 读取器各有一份：Adapter 之间、Adapter 与 host-runtime 之间不能共享（ADR-0002、边界规则），oh-my-pi 的读取器（`packages/adapters/omp/src/omp-native-usage.ts`）同样自带一份。
 

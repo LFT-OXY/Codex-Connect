@@ -20,3 +20,4 @@
 - 候选在 `refresh: true` 查询时重新列举，进度轮询沿用上次结果；列举失败或返回不合规数据的 Harness 进入 `failures`。
 - 移除：旧页面 `session-import-page.ts`、`session-import-list-controls.ts`、对应 CSS、`sessionImport*` 文案与页面标签/图标、Renderer 客户端中只被旧页使用的 `listSessionImportSources` / `listHarnessSessions`，以及设置生命周期与绑定探针的 `getSessionImportClient`。Host 的 `sources` / `list` RPC 属于公开 Host 协议（并有 DSH 兼容别名），保留。
 - 旧页能力在新页的对应：搜索 → 筛选与搜索；导入并打开 → 恢复；打开失败的项目路径与重试打开 → 恢复失败面板；运行中提示 → 「运行中」并禁用恢复；「先在原生客户端关闭会话」的说明并入页面描述；分页 → 分批渲染。
+- 审查后调整（提交 b036cfb4）：候选列举移入 `local-session-candidates.ts`，每个 Harness 最多等 5 秒，重复 ID 视为失败（与导入器一致）；零 Token 会话不列出经用户确认。

@@ -18,3 +18,4 @@
 - 标题复用 `piUserMessageTitle`（从会话导入中提取，两处共用）；摘要中的标题折叠空白并截到 120 字，避免把长提示词整段存进游标与 Host 状态。未命名会话的标题因此会包含首条用户消息的开头，这是 PRD 指定的口径（与会话导入页一致）。
 - 父子关系取会话头 `parentSession`：子代理为父会话 ID，Fork 为父会话文件路径（取文件名 `_` 后的 ID）；两者都折叠。
 - Pi 游标升到 formatVersion 2。
+- 审查后调整（提交 b036cfb4，用户决定）：Fork（`parentSession` 为文件路径）不再折叠，单独成行、可单独恢复；只有子代理（`parentSession` 为会话 ID）折叠。恢复命令由 Adapter 的 `nativeUsage.resumeCommand` 提供。

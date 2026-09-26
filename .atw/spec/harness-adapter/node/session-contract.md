@@ -8,6 +8,7 @@
 - `OpenSessionInput` 按 `kind` 区分为 `create` / `resume` / `fork` / `rollbackLastTurn`。`resume` 与 `rollbackLastTurn` 可以带上次保存的 `model`、`thinkingOptionId`、`permissionModeId`，供懒初始化配置的 Harness 使用。
 - `HarnessSession.execute` 是一组重载，每种 `HostCommand` 对应自己的返回类型（`turn.start` → `TurnStartAccepted`，`model.select` → `ModelSelectCompleted`）。新增命令时要同时加重载、`HostCommand` 联合成员和返回类型，**不要**改成一个返回 `unknown` 的宽签名。
 - 输出只有一条流：`outputs: AsyncIterable<HarnessOutput>`，元素是 `{ kind: "event" }` 或 `{ kind: "interaction" }`。Adapter 用 `HarnessOutputChannel` 实现它；这个通道只允许一个消费者，第二次调用 `[Symbol.asyncIterator]()` 会抛 `"Harness outputs allow only one consumer"`。
+- `nativeUsage` 可在 `read` 结果里带 `sessions?: HarnessNativeSessionSummary[]`（每个 key 整体替换，不是增量），并可实现 `resumeCommand?(nativeSessionId): string`。累积活跃时长/轮数/编辑数用 `native-session-summary.ts` 的 `NativeSessionActivity` 辅助函数（纯 JSON，放进游标续算，间隔 > 30 分钟不计）；本包**不**定义哪些工具算编辑，工具名由各 Adapter 决定。契约见 `.atw/spec/host-runtime/node/local-sessions.md`。
 - `plugin.ts` 的 `HarnessPluginModule` 导出工厂 `createHarnessAdapter(context)` 和可选的 `warmup(adapter)`。注释写明："A loaded module supplies a factory, not a global registration side effect."；`warmup` 是 best-effort 预取，Host 不等待它完成。
 
 ## 生命周期不变量（由 `test/text-session.test.ts` 通过 Fake 固化）

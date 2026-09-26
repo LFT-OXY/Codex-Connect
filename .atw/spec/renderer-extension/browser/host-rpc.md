@@ -19,7 +19,7 @@ return threadUsageInspectionSchema.parse(result);
 ## 方法名常量
 
 - 大部分 `codexhost/*` 常量定义在 `renderer-model-client.ts`（`THREAD_FORK_METHOD`、`HARNESS_INSPECT_METHOD`、`UPDATE_*` 等），Host 侧 `app-server-host.ts` 用的却是字符串字面量，两边靠人工保持一致（已知重复）。
-- 较新的方法把常量放在 shared-contracts，由 Renderer 和 Host 共用：`IDLE_RELEASE_SETTINGS_METHOD`、`CREDENTIAL_IMPORTS_METHOD`、`HARNESS_LAUNCH_SETTINGS_GET/SET_METHOD`、`LOADED_SESSIONS_METHOD`、`LOCAL_USAGE_QUERY_METHOD`（契约见 `.atw/spec/host-runtime/node/local-usage.md`；用量页与会话导入页一样固定走本地 Host）。**新方法沿用这种写法**，不要继续在 Renderer 里定义私有常量。
+- 较新的方法把常量放在 shared-contracts，由 Renderer 和 Host 共用：`IDLE_RELEASE_SETTINGS_METHOD`、`CREDENTIAL_IMPORTS_METHOD`、`HARNESS_LAUNCH_SETTINGS_GET/SET_METHOD`、`LOADED_SESSIONS_METHOD`、`LOCAL_USAGE_QUERY_METHOD`、`LOCAL_SESSIONS_QUERY_METHOD`（契约见 `.atw/spec/host-runtime/node/local-usage.md`、`local-sessions.md`；用量页与会话页固定走本地 Host，会话页恢复复用 `codexhost/harness/session-import/import`，原会话导入页已移除）。**新方法沿用这种写法**，不要继续在 Renderer 里定义私有常量。
 - 新增方法时需要同时改：shared-contracts 的常量和 schema、Host 路由、`RendererModelClient`，以及 `test/renderer-model-client.test.ts`。Host 与 Renderer 必须一起发布（`docs/architecture/external-thread-steering.md` 的“配套发布”要求）。
 
 ## 旧 Host 与不支持的方法（`renderer-request-sender.ts`）

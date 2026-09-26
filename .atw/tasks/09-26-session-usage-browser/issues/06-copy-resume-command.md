@@ -20,3 +20,4 @@
 - POSIX 引号在 zsh 中以含 `'`、`$(x)`、反引号、中文与空格的目录实测可进入；本机没有 PowerShell，Windows 写法只有单元测试覆盖。
 - Windows 用 `Set-Location -LiteralPath '…'; if ($?) { … }`：Windows PowerShell 5.1 没有 `&&`，`$?` 保证目录不存在时不在错误目录运行。平台判断复用更新页已有的 `isWindowsRenderer`（移到 `settings/renderer-platform.ts` 供两处共用）。
 - 工作目录未知或含控制字符时不提供指令。
+- 审查后调整（提交 b036cfb4，用户决定）：恢复命令改由各 Adapter（官方 Codex 由 Codex 运行时）的 `nativeUsage.resumeCommand` 提供，Host 校验会话 ID 安全字符集与命令格式后放进会话行 `resumeCommand`；Renderer 只负责进入工作目录部分的引号与平台写法。
