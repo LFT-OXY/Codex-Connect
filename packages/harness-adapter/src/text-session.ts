@@ -561,6 +561,8 @@ export interface HarnessNativeUsageTokens {
   input: number;
   cacheRead: number;
   cacheWrite: number;
+  /** Part of `cacheWrite` written to a one-hour cache; omitted when the Harness does not say. */
+  cacheWrite1h?: number;
   output: number;
   /** Reported separately by the Harness; zero when it is only part of `output`. */
   reasoning: number;

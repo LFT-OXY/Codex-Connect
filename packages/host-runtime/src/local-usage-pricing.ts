@@ -5,7 +5,9 @@ export interface ModelPrice {
   input: number;
   output: number;
   cacheRead: number;
+  /** Five-minute cache writes, and writes whose duration is unknown. */
   cacheWrite: number;
+  cacheWrite1h: number;
 }
 
 /** Lowercase model name → price. */
@@ -120,13 +122,18 @@ export function createModelPricer(
   };
 }
 
-/** Reasoning is priced as output; Adapters report it only when it is not already in output. */
+/**
+ * Reasoning is priced as output; Adapters report it only when it is not already in output.
+ * One-hour cache writes are part of `cacheWrite` and priced at their own rate.
+ */
 export function usageCostUsd(tokens: HarnessNativeUsageTokens, price: ModelPrice | null): number {
   if (!price) return 0;
+  const cacheWrite1h = tokens.cacheWrite1h ?? 0;
   return (
     tokens.input * price.input +
     tokens.cacheRead * price.cacheRead +
-    tokens.cacheWrite * price.cacheWrite +
+    (tokens.cacheWrite - cacheWrite1h) * price.cacheWrite +
+    cacheWrite1h * price.cacheWrite1h +
     (tokens.output + tokens.reasoning) * price.output
   );
 }

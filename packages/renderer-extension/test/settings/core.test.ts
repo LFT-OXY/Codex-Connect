@@ -55,10 +55,6 @@ describe("Renderer settings page registry", () => {
     { pages: [page("bad id")], error: "Invalid settings page ID" },
     { pages: [page("connections", " ")], error: "Invalid settings page label" },
     { pages: [page("connections"), page("connections")], error: "Duplicate settings page ID" },
-    {
-      pages: [{ ...page("usage"), size: "huge" } as unknown as RendererSettingsPageDefinition],
-      error: "Unknown settings page size",
-    },
   ])("rejects an invalid registry: $error", ({ pages, error }) => {
     expect(() => createRendererSettingsPageRegistry(pages)).toThrow(error);
   });

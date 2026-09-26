@@ -18,14 +18,10 @@ export interface RendererSettingsPageMountContext {
   ): Promise<void>;
 }
 
-/** "expanded" grows the settings dialog to nearly the whole window while the page is active. */
-export type RendererSettingsPageSize = "default" | "expanded";
-
 export interface RendererSettingsPageDefinition {
   readonly id: string;
   readonly label: string;
   readonly icon: RendererSettingsIconName;
-  readonly size?: RendererSettingsPageSize;
   mount(context: RendererSettingsPageMountContext): (() => void) | undefined;
 }
 
@@ -51,9 +47,6 @@ function normalizedPage(
   }
   if (!isRendererSettingsIconName(page.icon)) {
     throw new Error(`Unknown settings page icon for ${page.id}`);
-  }
-  if (page.size !== undefined && page.size !== "default" && page.size !== "expanded") {
-    throw new Error(`Unknown settings page size for ${page.id}`);
   }
   if (typeof page.mount !== "function") {
     throw new Error(`Settings page ${page.id} has no mount function`);

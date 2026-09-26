@@ -98,9 +98,14 @@ const PREVIOUS_FRIDAY = response("msg-c", "2026-02-27T10:00:00.000Z", {
 });
 
 // USD per million tokens, as LiteLLM lists them per token.
-function litellmPrices(prices: Record<string, [number, number, number, number]>) {
+function litellmPrices(
+  prices: Record<
+    string,
+    [number, number, number, number] | [number, number, number, number, number]
+  >,
+) {
   return Object.fromEntries(
-    Object.entries(prices).map(([model, [input, output, cacheRead, cacheWrite]]) => [
+    Object.entries(prices).map(([model, [input, output, cacheRead, cacheWrite, cacheWrite1h]]) => [
       model,
       {
         mode: "chat",
@@ -108,12 +113,15 @@ function litellmPrices(prices: Record<string, [number, number, number, number]>)
         output_cost_per_token: output / 1e6,
         cache_read_input_token_cost: cacheRead / 1e6,
         cache_creation_input_token_cost: cacheWrite / 1e6,
+        ...(cacheWrite1h === undefined
+          ? {}
+          : { cache_creation_input_token_cost_above_1hr: cacheWrite1h / 1e6 }),
       },
     ]),
   );
 }
 const PRICES = litellmPrices({
-  "claude-synthetic-1": [1, 2, 0.1, 1],
+  "claude-synthetic-1": [1, 2, 0.1, 1, 1.6],
   "claude-synthetic-2": [2, 4, 0.2, 2],
   "gpt-synthetic-3": [1, 10, 0.1, 0],
 });
@@ -336,6 +344,65 @@ describe("Local Usage query", () => {
     expect(week.estimatedCostUsd).toBeCloseTo(
       (2 * 2 + 7 * 4 + 200 * 0.2 + 20 * 2) / 1e6 + 0.25,
       12,
+    );
+  });
+
+  it("prices one-hour cache writes at their own rate and rebuilds totals saved without them", async () => {
+    const f = await fixture();
+    const written = (id: string, ephemeral5m: number, ephemeral1h: number) => {
+      const line = response(id, "2026-03-03T08:00:00.000Z", {
+        input: 0,
+        cacheRead: 0,
+        cacheWrite: ephemeral5m + ephemeral1h,
+        output: 0,
+      });
+      return {
+        ...line,
+        message: {
+          ...line.message,
+          usage: {
+            ...line.message.usage,
+            cache_creation: {
+              ephemeral_5m_input_tokens: ephemeral5m,
+              ephemeral_1h_input_tokens: ephemeral1h,
+            },
+          },
+        },
+      };
+    };
+    await writeFile(
+      f.mainFile,
+      lines(written("c-1", 600_000, 400_000), written("c-2", 0, 1_000_000)),
+    );
+    // Totals saved before one-hour writes were counted separately.
+    const usage = path.join(f.root, "data", "usage");
+    await mkdir(usage, { recursive: true });
+    await writeFile(
+      path.join(usage, "local-usage.json"),
+      JSON.stringify({ formatVersion: 1, sources: {}, buckets: [] }),
+    );
+    const diagnose = vi.fn();
+    const claude = new ClaudeCodeAdapter({
+      environment: { CLAUDE_CONFIG_DIR: path.join(f.root, "claude") },
+    });
+    cleanup.push(() => claude.close());
+    const service = new LocalUsageService({
+      adapters: new Map([["claude-code", claude]]),
+      descriptors: () => [],
+      directory: usage,
+      fetchLiteLlm: async () => PRICES,
+      diagnose,
+      now: () => NOW,
+    });
+
+    const week = await result(service, { kind: "week" }, "UTC", true);
+
+    // claude-synthetic-1: $1 per million five-minute writes, $1.6 per million one-hour writes.
+    expect(week.estimatedCostUsd).toBeCloseTo(0.6 * 1 + 1.4 * 1.6, 9);
+    // Cache write totals are unchanged by the split.
+    expect(week.totals.cacheWrite).toBe(2_000_000);
+    expect(diagnose).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining("rebuilding") }),
     );
   });
 

@@ -33,3 +33,8 @@
   - 项目：TokenTracker 只把约 2,275M / 2,575M 的 Claude Code 用量归到项目（只列有 Git 远程的项目），本实现把所有带工作目录的用量都归项目，因此如 `LFT-OXY/Osuna` 为 1.753B vs 1.622B。TokenTracker 未归项目的具体是哪些记录未核实。
 - 自动化：全量 TypeScript 测试中只有 `claude-code/test/command.test.ts`、`opencode/test/command.test.ts` 各 1 例失败（受本机已安装的 CLI 影响，与 06 记录相同，与本工单无关）；e2e `tests/e2e/renderer-settings-usage.spec.ts` 用本机 Chrome（`CODEXHOST_PLAYWRIGHT_EXECUTABLE_PATH`）运行通过。
 
+## 后续调整（2026-09-26，用户验收后）
+
+- 取消「用量」页放大尺寸：放大后盖住 macOS 红绿灯（Codex Desktop 的 `env(titlebar-area-height)` 为 0），且与其他设置页不一致。删除 issue 01 加入的 `RendererSettingsPageDefinition.size`/`data-size` 机制与对应 CSS，页面与其他设置页同尺寸。
+- 缓存写两档计价：用户对比 TokenTracker 时发现费用差距。差距主体是 TokenTracker 把 `claude-opus-5-5` 前缀匹配到 Opus 5 价格（官方价格页确认 Opus 5.5 为 $4/$20、5 分钟写 $5、1 小时写 $8、缓存读 $0.20，本实现正确）；同时发现本实现把 1 小时缓存写都按 5 分钟价计而偏低。记录契约新增可选 `tokens.cacheWrite1h`（`cacheWrite` 的子集），Claude Code 从 `cache_creation.ephemeral_1h_input_tokens` 上报；价格取 LiteLLM `cache_creation_input_token_cost_above_1hr`（缺失时同 5 分钟价）；用量状态与价格缓存都升到 `formatVersion: 2`，旧文件重建/重新拉取；内置价格快照已重新生成。本机 2026-09-26 的 `claude-opus-5-5`：1,915 万缓存写中 666 万为 1 小时档，费用 $399.54 → $419.52；2026-09-19～25 合计 $2,541.10 → $2,640.72。
+

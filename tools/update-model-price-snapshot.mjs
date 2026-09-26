@@ -28,7 +28,7 @@ await writeFile(
     'import type { ModelPriceRecord } from "./local-usage-prices.js";',
     "",
     "export const LITELLM_PRICE_SNAPSHOT: ModelPriceRecord = {",
-    "  formatVersion: 1,",
+    `  formatVersion: ${record.formatVersion},`,
     `  fetchedAt: ${record.fetchedAt},`,
     "  prices: {",
     ...entries,

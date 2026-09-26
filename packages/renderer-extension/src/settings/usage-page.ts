@@ -66,7 +66,6 @@ export function createUsageSettingsPage(
     id: "usage",
     label: settingsMessages.pageLabels.usage,
     icon: "usage",
-    size: "expanded",
     mount(context: RendererSettingsPageMountContext) {
       const document = context.content.ownerDocument;
       const header = document.createElement("div");

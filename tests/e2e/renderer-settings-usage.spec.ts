@@ -82,14 +82,14 @@ async function setup(page: Page, options = {}) {
   await page.evaluate((options) => Reflect.get(globalThis, "setupUsage")(options), options);
 }
 
-test("expands the settings dialog for the usage page and shows the dashboard", async ({ page }) => {
+test("shows the dashboard in the settings dialog at the size of the other pages", async ({
+  page,
+}) => {
   await setup(page);
   const dialog = page.locator("dialog.codexhost-settings-dialog");
-  const defaultWidth = (await dialog.boundingBox())?.width ?? 0;
+  const appearanceBox = await dialog.boundingBox();
   await page.evaluate(() => Reflect.get(globalThis, "usageFixture").open("usage"));
-  await expect(dialog).toHaveAttribute("data-size", "expanded");
-  await expect.poll(async () => (await dialog.boundingBox())?.width ?? 0).toBe(1600 - 32);
-  expect(defaultWidth).toBeLessThan(1600 - 32);
+  expect(await dialog.boundingBox()).toEqual(appearanceBox);
 
   await expect(page.locator("[data-usage-total]")).toHaveText("6.04B");
   await expect(page.locator("[data-usage-cost]")).toHaveText("$4,213.58");
@@ -118,9 +118,6 @@ test("expands the settings dialog for the usage page and shows the dashboard", a
       path: path.join(process.env.CODEXHOST_USAGE_SCREENSHOT_DIR, "usage-light.png"),
     });
   }
-
-  await page.evaluate(() => Reflect.get(globalThis, "usageFixture").open("appearance"));
-  await expect(dialog).toHaveAttribute("data-size", "default");
 });
 
 test("stays readable in the dark theme and at a narrow window width", async ({ page }) => {

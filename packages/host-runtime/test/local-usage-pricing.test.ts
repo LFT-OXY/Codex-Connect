@@ -3,12 +3,36 @@ import { describe, expect, it } from "vitest";
 import { createModelPricer, usageCostUsd } from "../src/local-usage-pricing.js";
 
 // USD per token.
-const OPUS = { input: 5e-6, output: 25e-6, cacheRead: 0.5e-6, cacheWrite: 6.25e-6 };
-const OPUS_FAST = { input: 10e-6, output: 50e-6, cacheRead: 1e-6, cacheWrite: 12.5e-6 };
-const SOL_AZURE = { input: 4e-6, output: 20e-6, cacheRead: 0.4e-6, cacheWrite: 0 };
-const SOL_CHATGPT = { input: 3e-6, output: 18e-6, cacheRead: 0.3e-6, cacheWrite: 0 };
-const GEMINI = { input: 0.75e-6, output: 3.75e-6, cacheRead: 0.075e-6, cacheWrite: 0 };
-const MANUAL = { input: 1e-6, output: 2e-6, cacheRead: 0, cacheWrite: 0 };
+const OPUS = {
+  input: 5e-6,
+  output: 25e-6,
+  cacheRead: 0.5e-6,
+  cacheWrite: 6.25e-6,
+  cacheWrite1h: 10e-6,
+};
+const OPUS_FAST = {
+  input: 10e-6,
+  output: 50e-6,
+  cacheRead: 1e-6,
+  cacheWrite: 12.5e-6,
+  cacheWrite1h: 20e-6,
+};
+const SOL_AZURE = { input: 4e-6, output: 20e-6, cacheRead: 0.4e-6, cacheWrite: 0, cacheWrite1h: 0 };
+const SOL_CHATGPT = {
+  input: 3e-6,
+  output: 18e-6,
+  cacheRead: 0.3e-6,
+  cacheWrite: 0,
+  cacheWrite1h: 0,
+};
+const GEMINI = {
+  input: 0.75e-6,
+  output: 3.75e-6,
+  cacheRead: 0.075e-6,
+  cacheWrite: 0,
+  cacheWrite1h: 0,
+};
+const MANUAL = { input: 1e-6, output: 2e-6, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0 };
 
 const LITELLM = new Map([
   ["claude-opus-5", OPUS],
@@ -98,6 +122,20 @@ describe("usage cost", () => {
     };
     // 5 + 1 + 0.625 + 0.25 + 0.1
     expect(usageCostUsd(tokens, OPUS)).toBeCloseTo(6.975, 10);
+  });
+
+  it("prices one-hour cache writes at their own price and the rest at the five-minute price", () => {
+    const tokens = {
+      input: 0,
+      cacheRead: 0,
+      cacheWrite: 100_000,
+      cacheWrite1h: 40_000,
+      output: 0,
+      reasoning: 0,
+    };
+    // 60,000 × $6.25/M + 40,000 × $10/M
+    expect(usageCostUsd(tokens, OPUS)).toBeCloseTo(0.375 + 0.4, 10);
+    expect(usageCostUsd({ ...tokens, cacheWrite1h: 0 }, OPUS)).toBeCloseTo(0.625, 10);
   });
 
   it("does not charge reasoning again when a Harness reports it only inside output", () => {

@@ -21,13 +21,19 @@ const nativeUsageBatchSchema = z.strictObject({
       provider: textSchema.optional(),
       model: textSchema.optional(),
       cwd: z.string().max(16_384).optional(),
-      tokens: z.strictObject({
-        input: countSchema,
-        cacheRead: countSchema,
-        cacheWrite: countSchema,
-        output: countSchema,
-        reasoning: countSchema,
-      }),
+      tokens: z
+        .strictObject({
+          input: countSchema,
+          cacheRead: countSchema,
+          cacheWrite: countSchema,
+          cacheWrite1h: countSchema.optional(),
+          output: countSchema,
+          reasoning: countSchema,
+        })
+        .refine((tokens) => (tokens.cacheWrite1h ?? 0) <= tokens.cacheWrite, {
+          path: ["cacheWrite1h"],
+          message: "One-hour cache writes are part of cache writes",
+        }),
       conversations: countSchema,
       reportedCostUsd: z.number().nonnegative().finite().optional(),
     }),
@@ -46,6 +52,8 @@ const bucketSchema = z.strictObject({
   input: countSchema,
   cacheRead: countSchema,
   cacheWrite: countSchema,
+  /** Part of `cacheWrite` written to a one-hour cache. */
+  cacheWrite1h: countSchema,
   output: countSchema,
   reasoning: countSchema,
   conversations: countSchema,
@@ -54,7 +62,8 @@ const bucketSchema = z.strictObject({
 });
 
 const localUsageStateSchema = z.strictObject({
-  formatVersion: z.literal(1),
+  // Version 1 buckets had no one-hour cache writes; such a file is rebuilt from native records.
+  formatVersion: z.literal(2),
   sources: z.record(
     textSchema,
     z.strictObject({
@@ -70,7 +79,7 @@ export type LocalUsageBucket = z.infer<typeof bucketSchema>;
 export type LocalUsageState = z.infer<typeof localUsageStateSchema>;
 
 export function emptyLocalUsageState(): LocalUsageState {
-  return { formatVersion: 1, sources: {}, buckets: [] };
+  return { formatVersion: 2, sources: {}, buckets: [] };
 }
 
 export function defaultLocalUsageDirectory(environment: NodeJS.ProcessEnv): string {
@@ -103,7 +112,9 @@ export async function loadLocalUsageState(
   try {
     return localUsageStateSchema.parse(JSON.parse(raw));
   } catch {
-    diagnose(new Error("Local usage state is unreadable; rebuilding it from native records"));
+    diagnose(
+      new Error("Local usage state is unreadable or outdated; rebuilding it from native records"),
+    );
     return null;
   }
 }
@@ -182,6 +193,7 @@ export function applyNativeUsageBatch(
         input: 0,
         cacheRead: 0,
         cacheWrite: 0,
+        cacheWrite1h: 0,
         output: 0,
         reasoning: 0,
         conversations: 0,
@@ -193,6 +205,7 @@ export function applyNativeUsageBatch(
     bucket.input += record.tokens.input;
     bucket.cacheRead += record.tokens.cacheRead;
     bucket.cacheWrite += record.tokens.cacheWrite;
+    bucket.cacheWrite1h += record.tokens.cacheWrite1h ?? 0;
     bucket.output += record.tokens.output;
     bucket.reasoning += record.tokens.reasoning;
     bucket.conversations += record.conversations;

@@ -56,7 +56,7 @@ function user(uuid: string, content: unknown, extra: Record<string, unknown> = {
 
 function assistant(
   messageId: string,
-  usage: Record<string, number>,
+  usage: Record<string, unknown>,
   extra: Record<string, unknown> = {},
   stopReason: string | null = "end_turn",
 ) {
@@ -147,6 +147,45 @@ describe("Claude Code native usage", () => {
       });
     }
     expect(new Set(batch.records.map((record) => record.dedupeKey)).size).toBe(4);
+  });
+
+  it("reports the one-hour part of cache writes when the transcript splits them by duration", async () => {
+    const f = await fixture();
+    const split = (ephemeral5m: number, ephemeral1h: number) => ({
+      ...USAGE,
+      cache_creation: {
+        ephemeral_5m_input_tokens: ephemeral5m,
+        ephemeral_1h_input_tokens: ephemeral1h,
+      },
+    });
+    await writeFile(
+      f.mainFile,
+      lines(
+        assistant("msg-1h", split(8, 12)),
+        assistant("msg-5m", split(20, 0)),
+        // An inconsistent split never reports more one-hour writes than writes.
+        assistant("msg-over", split(0, 99)),
+      ),
+    );
+
+    const { records } = await f.read();
+    const tokens = (id: string) => records.find((record) => record.dedupeKey.includes(id))?.tokens;
+    expect(tokens("msg-1h")).toEqual({
+      input: 3,
+      cacheRead: 100,
+      cacheWrite: 20,
+      cacheWrite1h: 12,
+      output: 7,
+      reasoning: 0,
+    });
+    expect(tokens("msg-5m")).toEqual({
+      input: 3,
+      cacheRead: 100,
+      cacheWrite: 20,
+      output: 7,
+      reasoning: 0,
+    });
+    expect(tokens("msg-over")?.cacheWrite1h).toBe(20);
   });
 
   it("reads only appended complete lines from the returned cursor", async () => {

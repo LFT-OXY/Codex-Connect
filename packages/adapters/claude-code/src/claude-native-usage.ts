@@ -128,10 +128,16 @@ async function* completeLines(
 }
 
 function usageTokens(usage: Record<string, unknown>): HarnessNativeUsageTokens {
+  const cacheWrite = count(usage.cache_creation_input_tokens);
+  // One-hour cache writes cost more than five-minute ones; the split is in `cache_creation`.
+  const cacheWrite1h = isRecord(usage.cache_creation)
+    ? Math.min(count(usage.cache_creation.ephemeral_1h_input_tokens), cacheWrite)
+    : 0;
   return {
     input: count(usage.input_tokens),
     cacheRead: count(usage.cache_read_input_tokens),
-    cacheWrite: count(usage.cache_creation_input_tokens),
+    cacheWrite,
+    ...(cacheWrite1h > 0 ? { cacheWrite1h } : {}),
     output: count(usage.output_tokens),
     // Claude transcripts report thinking only as part of output_tokens.
     reasoning: 0,

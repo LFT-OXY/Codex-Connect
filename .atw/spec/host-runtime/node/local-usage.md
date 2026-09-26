@@ -23,7 +23,9 @@ interface HarnessNativeUsageBatch { records: readonly HarnessNativeUsageRecord[]
 interface HarnessNativeUsageRecord {
   dedupeKey: string; occurredAt: number /* epoch ms */; nativeSessionId: string;
   provider?: string; model?: string /* 只计对话时省略 */; cwd?: string;
-  tokens: { input /* 不含缓存 */; cacheRead; cacheWrite; output; reasoning /* 单独上报才非 0 */ };
+  tokens: { input /* 不含缓存 */; cacheRead; cacheWrite;
+    cacheWrite1h?: number /* cacheWrite 中写入 1 小时缓存的部分，≤ cacheWrite；不知道时省略 */;
+    output; reasoning /* 单独上报才非 0 */ };
   conversations: number;
   reportedCostUsd?: number;  // Harness 自己算出的费用；未知就省略，不能用 0 表示未知
 }
@@ -45,7 +47,8 @@ defaultLocalUsageDirectory(env) // ${CODEXHOST_DATA_DIR:-~/.codexhost}/usage
 writeUsageFile(file, value)     // local-usage-store.ts：临时文件 + rename，目录 0700、文件 0600
 
 // local-usage-pricing.ts（纯函数）
-interface ModelPrice { input; output; cacheRead; cacheWrite }   // USD / token，LiteLLM 未列出的种类为 0
+interface ModelPrice { input; output; cacheRead; cacheWrite /* 5 分钟档与未知时长 */; cacheWrite1h }
+// USD / token，LiteLLM 未列出的种类为 0；cacheWrite1h 取 `cache_creation_input_token_cost_above_1hr`，缺失时等于 cacheWrite
 type ModelPriceTable = ReadonlyMap<string /* 小写模型名 */, ModelPrice>;
 type ModelPricer = (model: string) => ModelPrice | null;        // null = 无价格
 createModelPricer(litellm, manual = { overrides: MODEL_PRICE_OVERRIDES, aliases: MODEL_ALIASES }): ModelPricer
@@ -83,13 +86,13 @@ readCodexNativeUsage(codexHome, cursor): Promise<HarnessNativeUsageBatch>
 - `providers`（必填，可为空数组，≤ `LOCAL_USAGE_PROVIDER_MAX_LENGTH` = 128 项）：`[{provider, totalTokens, models}]`，`provider` 1..`LOCAL_USAGE_PROVIDER_NAME_MAX_LENGTH`（1024）字符，与 Host 接受的记录 `provider` 上限一致。由范围内 Token > 0 且 `provider !== null` 的桶按原样 Provider 名聚合，按用量降序；`models` 为该 Provider 下的不同 Model 数。`provider === null` 的用量不进入任何子项，因此 schema 只 refine「子项之和 ≤ Harness `totalTokens`」，不要求相等。Host 不按 Harness 判断是否给子项：记录了 Provider 的来源都有（Pi、oh-my-pi、官方 Codex 的 `model_provider`），不记录的（Claude Code）为空。Renderer 在 `providers.length > 0` 时渲染展开项，占比 = 子项 ÷ 该 Harness 总量。
 - `stats`（统计块，与所选周期无关，由 `local-usage-view.ts#usageStats` 从**全部**桶按请求时区归日后计算）：活跃日 = 当天 Token > 0 且不晚于今天（只有对话的日期、时钟偏差产生的未来日期都不算）；`last7Days`/`last30Days` = 今天往前 7/30 个日历日（含今天）的 Token 总数；`dailyAverage` = `Math.round(last30Days ÷ 其中活跃日数)`，无活跃日为 0；`activeDays`/`firstActiveDate` 覆盖全部已统计历史，不受「总计」24 个月限制，无历史时 `0`/`null`。schema `superRefine`：`firstActiveDate === null` ⇔ `activeDays === 0`；`last7Days ≤ last30Days`。统计块「对话数」不在 `stats` 中，Renderer 用 `totals.conversations`（所选范围之和）。
 - 计价（Estimated Cost，查询时计算，不写入桶，价格更新后历史范围的费用随之变化）：
-  - 每个范围内的桶：有 `reportedCostUsd` 用它（包括 0，例如订阅通道）；`model === null`（只计对话）为 0；否则 `usageCostUsd(bucket, price(model))` = `input×in + cacheRead×cacheRead + cacheWrite×cacheWrite + (output + reasoning)×out`。推理不重复计由记录契约保证：`tokens.reasoning` 只在 Harness 单独上报时非 0（`text-session.ts` 注释），已含在输出中的推理（Claude Code 思考、Codex 的 reasoning 子集）Adapter 必须报 0 或从 output 中扣除，不能两边都报。
+  - 每个范围内的桶：有 `reportedCostUsd` 用它（包括 0，例如订阅通道）；`model === null`（只计对话）为 0；否则 `usageCostUsd(bucket, price(model))` = `input×in + cacheRead×cacheRead + (cacheWrite − cacheWrite1h)×cacheWrite + cacheWrite1h×cacheWrite1h + (output + reasoning)×out`（Anthropic：5 分钟写 1.25×输入价、1 小时写 2×）。`cacheWrite1h` 是 `cacheWrite` 的子集，只影响费用，不改变 Token 总数与每日明细；只有 Claude Code 上报（Pi、oh-my-pi、Codex 的记录不区分时长，按 5 分钟价计）。推理不重复计由记录契约保证：`tokens.reasoning` 只在 Harness 单独上报时非 0（`text-session.ts` 注释），已含在输出中的推理（Claude Code 思考、Codex 的 reasoning 子集）Adapter 必须报 0 或从 output 中扣除，不能两边都报。
   - 模型名匹配（`trim().toLowerCase()`，结果按名缓存）依次：精确 → 别名（只查原名）→ 去装饰后缀（反复去掉 `[…]`、`:…`、`-minimal|low|medium|high|xhigh|max|thinking`，不去 `-fast`，它常是独立 SKU）→ 去厂商前缀（模型取最后一个 `/` 之后；价格表中只有带前缀条目时取键名排序最小者，保证确定性）→ 最长包含名兜底（只考虑长度 ≥ 5 且含字母和数字的名称）。每一步都先查 `MODEL_PRICE_OVERRIDES` 再查 LiteLLM；因此覆盖表中 `claude-opus-5` 不会压过 LiteLLM 里精确存在的 `claude-opus-5-fast`。覆盖表与别名表是随版本维护的源码常量，当前为空（本机所见模型 LiteLLM 都能匹配），不是用户可编辑文件。
-  - 价格来源（`loadModelPrices`）：`<directory>/model-prices.json` 且 `now - fetchedAt < 24h` → `fetchLiteLlm()` 解析出至少一个价格（成功写缓存，写失败只 `diagnose`）→ 过期缓存 → `LITELLM_PRICE_SNAPSHOT`。`refreshAfter` = 缓存 `fetchedAt + 24h` / 远程 `now + 24h` / 回退 `now + 1h`。只取 `mode` 为 `chat`、`responses`、`completion` 或缺省且有输入或输出价的条目，键小写、重复键先到先得，跳过 `sample_spec`。缓存格式 `{ formatVersion: 1, fetchedAt, prices: { [model]: [in, out, cacheRead, cacheWrite] } }`（USD/token），strict 校验，损坏则 `diagnose` 后视为无缓存。
+  - 价格来源（`loadModelPrices`）：`<directory>/model-prices.json` 且 `now - fetchedAt < 24h` → `fetchLiteLlm()` 解析出至少一个价格（成功写缓存，写失败只 `diagnose`）→ 过期缓存 → `LITELLM_PRICE_SNAPSHOT`。`refreshAfter` = 缓存 `fetchedAt + 24h` / 远程 `now + 24h` / 回退 `now + 1h`。只取 `mode` 为 `chat`、`responses`、`completion` 或缺省且有输入或输出价的条目，键小写、重复键先到先得，跳过 `sample_spec`。缓存格式 `{ formatVersion: 2, fetchedAt, prices: { [model]: [in, out, cacheRead, cacheWrite, cacheWrite1h] } }`（USD/token），strict 校验，损坏或旧版（`formatVersion: 1` 的四元组）则 `diagnose` 后视为无缓存、重新拉取。
   - Service 内：只有进程内第一次加载价格时 `handle` 等待（与读取并行，`Promise.all`）；之后价格过期时先用旧价格回答，同时在后台加载，下一次查询起生效；同一时刻只有一次加载。
   - 快照 `local-usage-price-snapshot.ts` 由 `node tools/update-model-price-snapshot.mjs`（先 `npm run build:typescript`）从 LiteLLM 生成，与远程使用同一个 `parseLiteLlmPrices`；已加入 `.prettierignore`，不要手改。
 - 周期：周一为周首；`month` 为整月；`total` = 23 个月前当月 1 日到今天；日期由 Host 用请求的 `timeZone` 计算（`now` 为 Host 时钟）。
-- 持久化：`<directory>/local-usage.json`，`{ formatVersion: 1, sources: {[harnessId]: {cursor, counted: string[]}}, buckets: [...] }`，`counted` 是 `sha256(dedupeKey)` 的 base64url 前 16 位；桶 = UTC 半小时起点 × harnessId × provider × model × cwd × 是否自带费用。带 `reportedCostUsd` 的记录进入另一桶，桶上的 `reportedCostUsd` 累加其费用；不带的桶没有该字段（按价格计）。临时文件 + rename 原子写入，目录 0700、文件 0600。
+- 持久化：`<directory>/local-usage.json`，`{ formatVersion: 2, sources: {[harnessId]: {cursor, counted: string[]}}, buckets: [...] }`，`counted` 是 `sha256(dedupeKey)` 的 base64url 前 16 位；桶 = UTC 半小时起点 × harnessId × provider × model × cwd × 是否自带费用。带 `reportedCostUsd` 的记录进入另一桶，桶上的 `reportedCostUsd` 累加其费用；不带的桶没有该字段（按价格计）。桶的计数字段为 `input、cacheRead、cacheWrite、cacheWrite1h、output、reasoning、conversations`。版本 1（桶没有 `cacheWrite1h`）不迁移：按损坏处理，`diagnose` 后从原生记录重建——已被 Harness 清理的原生记录中的用量会丢失，这是改版时接受的代价（功能未发布）。临时文件 + rename 原子写入，目录 0700、文件 0600。
 - `refresh:true` 读取新增记录；`refresh:false` 若有进行中的读取则等待它，否则用内存状态，再否则用磁盘状态，都没有才读取。等待最多 `PROGRESS_AFTER_MS`（`#awaitBriefly`，`Promise.race` + `setTimeout`，结束时 `clearTimeout`），超时返回 `reading`，读取继续在后台完成并保存。并发读取共享同一个 Promise；每次读取先从磁盘加载，采纳其他 Host 进程的进度。价格加载与读取并行开始，返回 `reading` 时不等价格。
 - 进度 Map 在 `#read()` 中**同步**替换为新 Map 再开始 `#readSources(progress)`，保证读取开始后任何超时都不会报出上一次读取的 `N/N`。
 - 没有查询在等的读取失败（整次读取抛错，例如保存状态文件失败）：`#read` 附加的 `catch` 把错误存入 `#unreportedFailure`；下一次 `refresh:false`、且没有进行中读取的查询直接抛出它（→ `-32082`），而不是重新读取（否则首次读取反复失败时页面永远只看到进度）。任何返回错误的查询都清空它；新的读取开始时也清空。
@@ -110,7 +113,7 @@ readCodexNativeUsage(codexHome, cursor): Promise<HarnessNativeUsageBatch>
 |---|---|
 | params 不合 schema（未知时区、非法日期、倒序或过长区间、多余字段、缺 `refresh`） | `-32602`，不触发读取 |
 | 某 Harness `read` 返回 `ok:false` 或抛出 | 该 Harness 保留旧游标与桶，`diagnose`，其余 Harness 照常 |
-| 某批记录不合 strict schema（负数、多余字段如正文） | 整批丢弃，同上 |
+| 某批记录不合 strict schema（负数、多余字段如正文、`cacheWrite1h > cacheWrite`） | 整批丢弃，同上 |
 | 状态文件不存在 | 从头读取 |
 | 状态文件损坏 | `diagnose` 后从原生记录重建 |
 | `stats` 违反不变量（有活跃日却无开始日期、7 天 > 30 天） | 结果 schema 失败，按下一行处理 |
@@ -151,9 +154,9 @@ readCodexNativeUsage(codexHome, cursor): Promise<HarnessNativeUsageBatch>
 ## 6. Tests Required
 
 - `host-runtime/test/local-usage.test.ts`（主切入点，真实 `ClaudeCodeAdapter` + 临时目录 + `handle()`）：各周期 `range`、时区归日、totals 精确值、`harnesses` 与 `daily`；`stats` 的 7/30 天本地日边界、日均分母、只有对话的日期与未来日期不计、`firstActiveDate` 早于「总计」范围、`stats` 不随周期变化，以及无数据与仅一天两个边界；增量 + 复制去重 + 重启一致；并发共享一次 `read`；读取中 `refresh:false` 得到刷新后的值；不合规批次被隔离；view 失败返回 `-32082`；非法 params `-32602` 且未读取。
-- 计价（主切入点内）：`estimatedCostUsd` 精确值（各周期、跨桶）、价格更新后历史费用变化且不重读、LiteLLM 挂起时不等待且只有一次加载、无价格模型记 0、自报费用优先（含 0）、离线用内置快照。
-- `host-runtime/test/local-usage-pricing.test.ts`（纯函数）：精确/大小写、装饰后缀、双向厂商前缀与确定性选择、最长包含名、拒绝 `fast`/`o1`/空名等泛名、别名、覆盖在每一步优先、费用公式与推理按输出价、无价格 0。
-- `host-runtime/test/local-usage-prices.test.ts`：解析过滤、24 h 内缓存不联网、过期缓存联网并写缓存、联网失败用过期缓存、无缓存无网用快照、无价格响应视为失败、损坏缓存被忽略，以及各情形的 `refreshAfter`。
+- 计价（主切入点内）：Claude Code 记录 `cache_creation` 分档时 `estimatedCostUsd` = 5 分钟部分×缓存写价 + 1 小时部分×1 小时价，`totals.cacheWrite` 不变；`formatVersion: 1` 的状态文件被 `diagnose`（消息含 rebuilding）并重建；`estimatedCostUsd` 精确值（各周期、跨桶）、价格更新后历史费用变化且不重读、LiteLLM 挂起时不等待且只有一次加载、无价格模型记 0、自报费用优先（含 0）、离线用内置快照。
+- `host-runtime/test/local-usage-pricing.test.ts`（纯函数；另含 1 小时缓存写按其价格、省略 `cacheWrite1h` 时全部按 5 分钟价）：精确/大小写、装饰后缀、双向厂商前缀与确定性选择、最长包含名、拒绝 `fast`/`o1`/空名等泛名、别名、覆盖在每一步优先、费用公式与推理按输出价、无价格 0。
+- `host-runtime/test/local-usage-prices.test.ts`（另含：解析 `cache_creation_input_token_cost_above_1hr`、缺失时等于 5 分钟价；24 h 内的 `formatVersion: 1` 缓存被忽略并重新拉取）：解析过滤、24 h 内缓存不联网、过期缓存联网并写缓存、联网失败用过期缓存、无缓存无网用快照、无价格响应视为失败、损坏缓存被忽略，以及各情形的 `refreshAfter`。
 - 各 Adapter 的解析测试（例如 `claude-native-usage.test.ts`、`pi-native-usage.test.ts`、`omp-native-usage.test.ts`）：重复行去重、增量只读完整行、流式等待、记录不含正文。
 - 主切入点内的项目、进度与失败用例：临时目录中的 Git 仓库（`.git/config` 多远程、linked worktree、无远程仓库及其 worktree、非仓库目录、HTTPS 多级分组远程）经真实 `ClaudeCodeAdapter` 与假 Pi 来源（含无 `cwd` 与 `cwd: ""` 记录）断言 `projects` 精确值与「日」周期为空；恶意记录与 `ok:false` 来源出现在 `failures`（名称来自描述符，无描述符时为 ID），其余 Harness 照常，恢复后消失；`vi.useFakeTimers({ toFake: ["setTimeout","clearTimeout"] })` 下阻塞的假来源报告 2/5（另报一次 9/5 被忽略）+ 真实 Claude 1/1 → 499 ms 时仍在等、500 ms 返回 `{status:"reading",progress:{processed:3,total:6}}`，`refresh:false` 轮询加入同一次读取，放行后得到 `ready` 且 Claude `read` 只调用一次；usage 目录只读（跳过 win32 与 root）使保存失败、第二次 `read` 永不完成 → 轮询得到 `-32082` 且来源 `read` 只调用一次。
 - 各读取器（Pi、oh-my-pi、Codex）的 `onProgress`：先报 `0/N`，每个文件（含读取中被删除的）后报 `i/N`。
@@ -162,7 +165,7 @@ readCodexNativeUsage(codexHome, cursor): Promise<HarnessNativeUsageBatch>
 - `host-runtime/test/codex-native-usage.test.ts`：累计差分、缓存扣除（含 cache write）、推理为 0、模型/工作目录取最近 turn_context、Provider 取自身 session_meta、重复累计值与 `info` 缺失不计、archived_sessions、增量与半行、未知游标重读键不变、Fork 与 Fork 的 Fork 重放同键、累计值重启（变小与 total == last）按 last、归档移动同键、无目录空批次、不含正文。
 - 主切入点内的 Codex 用例：`officialCodexUsage` 注入真实读取器，断言 Codex 卡片 `{harnessId:"codex", name:"Codex"}`、Fork 重放不翻倍、增量追加、`reasoning` 为 0、费用只按输出价、每日明细与对话数。
 - `shared-contracts/test/local-usage.test.ts`（另含：`projects` 空名、空 `harnessIds`、非法 ID、多余 `cwd` 字段、超过 1000 项被拒；`failures` 空白名、多余 `message` 字段、缺失被拒；`reading` 的 `processed > total`、负数、小数、多余字段、夹带 `totals` 被拒）：params/结果 schema 边界、`providers` 接受空数组与多项，拒绝子项之和超过 Harness 总量、空名、多余字段、缺失字段；`harnessId` 接受 `"codex"` 与插件 ID 而拒绝空串/大写/非法 ID、`total` refine、`stats` 的两条 `superRefine` 与非整数/非法日期/多余字段，`estimatedCostUsd` 负数/无穷/NaN/字符串/缺失被拒。
-- Renderer：`usage-dashboard.test.ts`（明细标签 `[data-usage-tab="daily"|"projects"]` 的 `aria-selected`、roving `tabIndex`、`aria-controls` 指向面板 `id`、点击与左右方向键切换并回调 `select`、面板 `hidden`，`selected` 决定初始标签；`li[data-usage-project]` 文本「owner/ repo Harness 名 · … Token」与相对最多项目的横条宽度；无项目时「该周期内没有项目用量。」；`p[data-usage-failure=<harnessId>]` 为 `role="alert"`、位于根的第一个子元素且该 Harness 卡片仍在；假 DOM 结构与格式化；`formatUsageShare`：`0.00%`、`<0.01%`（0 < p < 0.005）、`0.01%`；Provider 展开只出现在 `providers` 非空的卡片内，`details > summary` 文案「Provider（N）」，行文本为「名称 占比 模型数」；费用 `formatUsageCost`：`$0.00`、`<$0.01`、`$1,234.57`，位于总数与起止日期之间且没有「估算」说明；统计块顺序、卡片与明细之间的位置、范围为空时仍显示、无历史时省略）、`usage-page.test.ts`（请求参数与刷新语义；fake timers 下 `reading` 0/0 只显示文案、1200/3000 显示进度文本与 progressbar、500 ms 后 `refresh:false` 重查直到 `ready`，之后不再查询；signal abort 后不再查询）、`renderer-model-client.test.ts`（方法与结果校验）、`tests/e2e/renderer-settings-usage.spec.ts`（放大尺寸、深浅色、窄窗口无横向溢出，本地运行）。
+- Renderer：`usage-dashboard.test.ts`（明细标签 `[data-usage-tab="daily"|"projects"]` 的 `aria-selected`、roving `tabIndex`、`aria-controls` 指向面板 `id`、点击与左右方向键切换并回调 `select`、面板 `hidden`，`selected` 决定初始标签；`li[data-usage-project]` 文本「owner/ repo Harness 名 · … Token」与相对最多项目的横条宽度；无项目时「该周期内没有项目用量。」；`p[data-usage-failure=<harnessId>]` 为 `role="alert"`、位于根的第一个子元素且该 Harness 卡片仍在；假 DOM 结构与格式化；`formatUsageShare`：`0.00%`、`<0.01%`（0 < p < 0.005）、`0.01%`；Provider 展开只出现在 `providers` 非空的卡片内，`details > summary` 文案「Provider（N）」，行文本为「名称 占比 模型数」；费用 `formatUsageCost`：`$0.00`、`<$0.01`、`$1,234.57`，位于总数与起止日期之间且没有「估算」说明；统计块顺序、卡片与明细之间的位置、范围为空时仍显示、无历史时省略）、`usage-page.test.ts`（请求参数与刷新语义；fake timers 下 `reading` 0/0 只显示文案、1200/3000 显示进度文本与 progressbar、500 ms 后 `refresh:false` 重查直到 `ready`，之后不再查询；signal abort 后不再查询）、`renderer-model-client.test.ts`（方法与结果校验）、`tests/e2e/renderer-settings-usage.spec.ts`（与其他设置页同尺寸、深浅色、窄窗口无横向溢出，本地运行）。
 
 ## 7. Wrong vs Correct
 
@@ -253,4 +256,4 @@ if (harness.providers.length > 0) card.append(providerBreakdown(document, harnes
 3. 只交出终值；`dedupeKey` 要在复制、重读时稳定。
    列出文件后调用 `onProgress?.({processed:0,total})`，每个文件后 `processed + 1`，让首次读取显示进度；不调用也可以，该来源只是不计入进度。
 4. 对话数按该 Harness 的口径（领域术语表 Conversation Count），在产品文档写明。
-5. 推理只在单独上报时填 `reasoning`，已含在 `output` 中的不要再填；`reportedCostUsd` 只在 Harness 真正算出费用时填写（订阅通道记 0 可以，未知不能记 0）。模型名保持原样，计价匹配由 Host 负责；匹配不到时优先加 `MODEL_ALIASES`，只有 LiteLLM 没有该模型时才加 `MODEL_PRICE_OVERRIDES`。
+5. 原生记录区分缓存写时长时填 `cacheWrite1h`（1 小时部分，≤ `cacheWrite`），否则省略。推理只在单独上报时填 `reasoning`，已含在 `output` 中的不要再填；`reportedCostUsd` 只在 Harness 真正算出费用时填写（订阅通道记 0 可以，未知不能记 0）。模型名保持原样，计价匹配由 Host 负责；匹配不到时优先加 `MODEL_ALIASES`，只有 LiteLLM 没有该模型时才加 `MODEL_PRICE_OVERRIDES`。

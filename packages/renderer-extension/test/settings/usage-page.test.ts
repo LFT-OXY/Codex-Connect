@@ -134,11 +134,10 @@ afterEach(() => {
 });
 
 describe("Usage settings page", () => {
-  it("expands the dialog and reads new records on open in the local time zone", async () => {
+  it("reads new records on open in the local time zone", async () => {
     const queryLocalUsage = vi.fn().mockResolvedValue(result);
-    const { page, content } = mount({ queryLocalUsage });
+    const { content } = mount({ queryLocalUsage });
     await vi.waitFor(() => expect(queryLocalUsage).toHaveBeenCalledOnce());
-    expect(page.size).toBe("expanded");
     expect(queryLocalUsage).toHaveBeenLastCalledWith({
       period: { kind: "week" },
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,

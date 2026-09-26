@@ -95,11 +95,6 @@
   box-shadow: light-dark(0 16px 42px rgb(0 0 0 / 16%), 0 20px 54px rgb(0 0 0 / 42%));
 }
 
-.codexhost-settings-dialog[data-size="expanded"] {
-  width: calc(100vw - 32px);
-  height: calc(100vh - var(--settings-titlebar-height) - 32px);
-}
-
 .codexhost-settings-dialog::backdrop {
   /* Backdrops do not inherit the shell's custom properties. */
   top: env(titlebar-area-height, 0px);
@@ -312,10 +307,6 @@
 .settings-page__content {
   width: min(930px, calc(100% - 80px));
   margin-inline: auto;
-}
-
-.codexhost-settings-dialog[data-size="expanded"] .settings-page__content {
-  width: min(1400px, calc(100% - 80px));
 }
 
 .settings-page__content {
@@ -1884,8 +1875,7 @@
 }
 
 @media (max-width: 720px) {
-  .codexhost-settings-dialog,
-  .codexhost-settings-dialog[data-size="expanded"] {
+  .codexhost-settings-dialog {
     width: calc(100vw - 16px);
     height: calc(100vh - var(--settings-titlebar-height) - 16px);
     border-radius: 10px;
@@ -1939,8 +1929,7 @@
     border-radius: 10px;
   }
 
-  .settings-page__content,
-  .codexhost-settings-dialog[data-size="expanded"] .settings-page__content {
+  .settings-page__content {
     width: calc(100% - 40px);
   }
 

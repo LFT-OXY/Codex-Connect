@@ -17,10 +17,11 @@ const FETCH_TIMEOUT_MS = 10_000;
 const TEXT_MODES = new Set([undefined, "chat", "responses", "completion"]);
 
 const priceSchema = z.number().nonnegative().finite();
-/** `[input, output, cacheRead, cacheWrite]`, USD per token. */
-const priceTupleSchema = z.tuple([priceSchema, priceSchema, priceSchema, priceSchema]);
+/** `[input, output, cacheRead, cacheWrite, cacheWrite1h]`, USD per token. */
+const priceTupleSchema = z.tuple([priceSchema, priceSchema, priceSchema, priceSchema, priceSchema]);
 const priceRecordSchema = z.strictObject({
-  formatVersion: z.literal(1),
+  // Version 1 had no one-hour cache write price; such a cache is ignored and refetched.
+  formatVersion: z.literal(2),
   fetchedAt: z.number().int().nonnegative().safe(),
   prices: z.record(z.string(), priceTupleSchema),
 });
@@ -40,6 +41,7 @@ const litellmEntrySchema = z.object({
   output_cost_per_token: priceSchema.optional(),
   cache_read_input_token_cost: priceSchema.optional(),
   cache_creation_input_token_cost: priceSchema.optional(),
+  cache_creation_input_token_cost_above_1hr: priceSchema.optional(),
 });
 
 /** Priced text models of LiteLLM's public table, keyed by lowercase name. */
@@ -56,11 +58,14 @@ export function parseLiteLlmPrices(raw: unknown): Map<string, ModelPrice> {
     }
     const key = name.toLowerCase();
     if (prices.has(key)) continue;
+    const cacheWrite = data.cache_creation_input_token_cost ?? 0;
     prices.set(key, {
       input: data.input_cost_per_token ?? 0,
       output: data.output_cost_per_token ?? 0,
       cacheRead: data.cache_read_input_token_cost ?? 0,
-      cacheWrite: data.cache_creation_input_token_cost ?? 0,
+      cacheWrite,
+      // A one-hour write costs at least a five-minute write.
+      cacheWrite1h: data.cache_creation_input_token_cost_above_1hr ?? cacheWrite,
     });
   }
   return prices;
@@ -71,12 +76,12 @@ export function modelPriceRecord(
   fetchedAt: number,
 ): ModelPriceRecord {
   return {
-    formatVersion: 1,
+    formatVersion: 2,
     fetchedAt,
     prices: Object.fromEntries(
       [...prices].map(([name, price]) => [
         name,
-        [price.input, price.output, price.cacheRead, price.cacheWrite],
+        [price.input, price.output, price.cacheRead, price.cacheWrite, price.cacheWrite1h],
       ]),
     ),
   };
@@ -84,10 +89,12 @@ export function modelPriceRecord(
 
 function priceTable(record: ModelPriceRecord): ModelPriceTable {
   return new Map(
-    Object.entries(record.prices).map(([name, [input, output, cacheRead, cacheWrite]]) => [
-      name,
-      { input, output, cacheRead, cacheWrite },
-    ]),
+    Object.entries(record.prices).map(
+      ([name, [input, output, cacheRead, cacheWrite, cacheWrite1h]]) => [
+        name,
+        { input, output, cacheRead, cacheWrite, cacheWrite1h },
+      ],
+    ),
   );
 }
 

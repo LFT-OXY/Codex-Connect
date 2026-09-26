@@ -29,6 +29,7 @@ function litellm(inputPerToken: number) {
       output_cost_per_token: 2e-6,
       cache_read_input_token_cost: 1e-7,
       cache_creation_input_token_cost: 1.25e-6,
+      cache_creation_input_token_cost_above_1hr: 2e-6,
     },
   };
 }
@@ -38,9 +39,9 @@ async function writeCache(dir: string, fetchedAt: number, inputPerToken: number)
   await writeFile(
     path.join(dir, "model-prices.json"),
     JSON.stringify({
-      formatVersion: 1,
+      formatVersion: 2,
       fetchedAt,
-      prices: { "remote-model-1": [inputPerToken, 2e-6, 1e-7, 1.25e-6] },
+      prices: { "remote-model-1": [inputPerToken, 2e-6, 1e-7, 1.25e-6, 2e-6] },
     }),
   );
 }
@@ -54,6 +55,21 @@ describe("LiteLLM price parsing", () => {
     const prices = parseLiteLlmPrices({
       sample_spec: { input_cost_per_token: 0, output_cost_per_token: 0 },
       "Model-A": { mode: "chat", input_cost_per_token: 1e-6, output_cost_per_token: 3e-6 },
+      "claude-x": {
+        mode: "chat",
+        input_cost_per_token: 4e-6,
+        output_cost_per_token: 20e-6,
+        cache_read_input_token_cost: 0.2e-6,
+        cache_creation_input_token_cost: 5e-6,
+        cache_creation_input_token_cost_above_1hr: 8e-6,
+      },
+      // Without a one-hour price, one-hour writes cost what five-minute writes cost.
+      "claude-y": {
+        mode: "chat",
+        input_cost_per_token: 1e-6,
+        output_cost_per_token: 5e-6,
+        cache_creation_input_token_cost: 1.25e-6,
+      },
       "model-b": { output_cost_per_token: 4e-6 },
       "embed-1": { mode: "embedding", input_cost_per_token: 1e-8 },
       "free-text": { mode: "responses" },
@@ -61,8 +77,16 @@ describe("LiteLLM price parsing", () => {
       broken: "not an entry",
     });
     expect([...prices]).toEqual([
-      ["model-a", { input: 1e-6, output: 3e-6, cacheRead: 0, cacheWrite: 0 }],
-      ["model-b", { input: 0, output: 4e-6, cacheRead: 0, cacheWrite: 0 }],
+      ["model-a", { input: 1e-6, output: 3e-6, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0 }],
+      [
+        "claude-x",
+        { input: 4e-6, output: 20e-6, cacheRead: 0.2e-6, cacheWrite: 5e-6, cacheWrite1h: 8e-6 },
+      ],
+      [
+        "claude-y",
+        { input: 1e-6, output: 5e-6, cacheRead: 0, cacheWrite: 1.25e-6, cacheWrite1h: 1.25e-6 },
+      ],
+      ["model-b", { input: 0, output: 4e-6, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0 }],
     ]);
   });
 });
@@ -91,10 +115,11 @@ describe("model price sources", () => {
       output: 2e-6,
       cacheRead: 1e-7,
       cacheWrite: 1.25e-6,
+      cacheWrite1h: 2e-6,
     });
     expect(loaded.refreshAfter).toBe(NOW + 24 * HOUR);
     const cached = JSON.parse(await readFile(path.join(dir, "model-prices.json"), "utf8"));
-    expect(cached).toMatchObject({ formatVersion: 1, fetchedAt: NOW });
+    expect(cached).toMatchObject({ formatVersion: 2, fetchedAt: NOW });
     const offline = await load(dir, () => Promise.reject(new Error("offline")));
     expect(offline.prices.get("remote-model-1")?.input).toBe(9e-6);
   });
@@ -142,5 +167,22 @@ describe("model price sources", () => {
 
     expect(loaded.prices.get("remote-model-1")?.input).toBe(9e-6);
     expect(diagnose).toHaveBeenCalled();
+  });
+
+  it("refetches over a fresh cache written before one-hour cache write prices", async () => {
+    const dir = await directory();
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      path.join(dir, "model-prices.json"),
+      JSON.stringify({
+        formatVersion: 1,
+        fetchedAt: NOW - HOUR,
+        prices: { "remote-model-1": [3e-6, 2e-6, 1e-7, 1.25e-6] },
+      }),
+    );
+
+    const loaded = await load(dir, async () => litellm(9e-6));
+
+    expect(loaded.prices.get("remote-model-1")).toMatchObject({ input: 9e-6, cacheWrite1h: 2e-6 });
   });
 });
